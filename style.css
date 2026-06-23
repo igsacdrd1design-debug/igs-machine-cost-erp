@@ -870,3 +870,41 @@ td small { color: var(--muted); }
     height: 320px;
   }
 }
+
+
+/* =====================================================
+ * v2.0.5 淺色功能橫幅文字可讀性修正
+ * ===================================================== */
+.priceIntro,
+.estimateIntro,
+.optimizeIntro {
+  color: var(--deep);
+}
+.priceIntro h2,
+.estimateIntro h2,
+.optimizeIntro h2 {
+  color: var(--deep);
+}
+.priceIntro p,
+.estimateIntro p,
+.optimizeIntro p {
+  color: var(--muted);
+  opacity: 1;
+}
+.priceIntro .eyebrow { color: #b77a19; }
+.estimateIntro .eyebrow { color: #31766d; }
+.optimizeIntro .eyebrow { color: #7a4f92; }
+.priceIntro .apiBadge,
+.estimateIntro .apiBadge,
+.optimizeIntro .apiBadge {
+  color: var(--navy-dark);
+  border: 1px solid rgba(73,111,123,.18);
+  background: rgba(255,255,255,.72);
+}
+.priceIntro .apiBadge.connected,
+.estimateIntro .apiBadge.connected,
+.optimizeIntro .apiBadge.connected {
+  color: #2f6b4f;
+  border-color: rgba(47,107,79,.18);
+  background: #e7f4e9;
+}
