@@ -155,10 +155,18 @@ async function fetchAction(action) {
 
 async function optionalFetch(action) {
   try {
-    return await fetchAction(action);
+    return {
+      ok: true,
+      data: await fetchAction(action),
+      error: "",
+    };
   } catch (error) {
     console.info(`${action} 尚未啟用：`, error.message);
-    return [];
+    return {
+      ok: false,
+      data: [],
+      error: error.message || String(error),
+    };
   }
 }
 
@@ -301,11 +309,15 @@ async function loadData() {
       fetchAction("getMachines"),
       fetchAction("getSettings"),
     ]);
-    const [costOrderRows, costItemRows, supplierRows] = await Promise.all([
+    const [costOrderResult, costItemResult, supplierResult] = await Promise.all([
       optionalFetch("getCostOrders"),
       optionalFetch("getCostItems"),
       optionalFetch("getSuppliers"),
     ]);
+
+    const costOrderRows = costOrderResult.data;
+    const costItemRows = costItemResult.data;
+    const supplierRows = supplierResult.data;
 
     const offline = window.IGS_OFFLINE_DATA || {};
     state.machines = (machineRows.length ? machineRows : offline.machines || []).map(normalizeMachine);
@@ -317,10 +329,16 @@ async function loadData() {
     populateControls();
     renderAll();
     setDataStatus("Google Sheet 已同步", "ok");
-    if (costOrderRows.length || costItemRows.length || supplierRows.length) {
-      hideNotice();
+
+    const unavailableApis = [];
+    if (!costOrderResult.ok) unavailableApis.push("成本單");
+    if (!costItemResult.ok) unavailableApis.push("成本明細");
+    if (!supplierResult.ok) unavailableApis.push("供應商");
+
+    if (unavailableApis.length) {
+      showNotice(`機台主檔已連線，但${unavailableApis.join("、")} API 尚未啟用。`, "warn");
     } else {
-      showNotice("機台主檔已連線。成本單、成本明細與供應商 API 會在下一個後端步驟開通。", "warn");
+      hideNotice();
     }
   } catch (error) {
     console.error(error);
