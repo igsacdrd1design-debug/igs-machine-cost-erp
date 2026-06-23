@@ -1,5 +1,5 @@
 // =====================================================
-// IGS 機台材料成本 ERP — 前端 v1.2
+// IGS 機台材料成本 ERP — 前端 v1.3
 // 1. ERP 密碼登入
 // 2. 工作階段驗證
 // 3. 私人 Google Sheet 安全讀取
@@ -199,7 +199,22 @@ function secureApiRequest(payload, options = {}) {
     };
 
     const onMessage = (event) => {
-      if (event.source !== iframe.contentWindow) return;
+      // Apps Script HTML Service 會把回應放在額外的沙箱 iframe 中，
+      // 因此 event.source 不一定等於外層 iframe.contentWindow。
+      // 改以 Google 回應網域、隨機 requestId 與固定 source 三重驗證。
+      let trustedOrigin = false;
+      try {
+        const hostname = new URL(event.origin).hostname;
+        trustedOrigin =
+          hostname === "script.google.com" ||
+          hostname === "script.googleusercontent.com" ||
+          hostname.endsWith(".googleusercontent.com");
+      } catch (error) {
+        trustedOrigin = false;
+      }
+
+      if (!trustedOrigin) return;
+
       const data = event.data;
       if (!data || data.source !== API_MESSAGE_SOURCE || data.requestId !== requestId) return;
 
