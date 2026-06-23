@@ -1,5 +1,5 @@
 // =====================================================
-// IGS 機台材料成本 ERP — 前端 v1.3
+// IGS 機台材料成本 ERP — 前端 v1.4
 // 1. ERP 密碼登入
 // 2. 工作階段驗證
 // 3. 私人 Google Sheet 安全讀取
@@ -429,10 +429,7 @@ function setupDialog() {
 }
 
 function setupForms() {
-  $("machineForm").addEventListener("submit", (event) => {
-    event.preventDefault();
-    showNotice("機台草稿已完成。下一步更新 Apps Script 後，這個按鈕才會正式寫入 Google Sheet。", "warn");
-  });
+  $("machineForm").addEventListener("submit", handleCreateMachine);
   $("resetMachineForm").addEventListener("click", () => $("machineForm").reset());
   $("quotationForm").addEventListener("submit", (event) => {
     event.preventDefault();
@@ -442,6 +439,54 @@ function setupForms() {
     }
     showNotice("成本單草稿已整理完成。下一步更新 Apps Script 後即可連同圖片寫入 Google Sheet。", "warn");
   });
+}
+
+async function handleCreateMachine(event) {
+  event.preventDefault();
+
+  const code = $("machineCode").value.trim();
+  const name = $("machineName").value.trim();
+  const category = $("machineCategory").value.trim();
+  const imageUrl = $("machineImageUrl").value.trim();
+  const note = $("machineNote").value.trim();
+
+  if (!code || !name || !category) {
+    showNotice("請填寫機台代碼、機台名稱與機台分類。", "warn");
+    return;
+  }
+
+  if (imageUrl && !imageUrl.startsWith("https://")) {
+    showNotice("機台圖片網址必須以 https:// 開頭。", "warn");
+    return;
+  }
+
+  const button = $("createMachineButton");
+  const originalText = button.textContent;
+  button.disabled = true;
+  button.textContent = "建立中…";
+
+  try {
+    const response = await secureApiRequest(
+      {
+        action: "createMachine",
+        machine: { code, name, category, imageUrl, note },
+      },
+      { includeToken: true, timeoutMs: 60000 }
+    );
+
+    const created = response.result?.machine || {};
+    $("machineForm").reset();
+    await loadData();
+    showNotice(`已建立機台「${created["機台名稱"] || name}」（${created["機台ID"] || ""}）。`);
+
+    const machineNav = document.querySelector('[data-view="machines"]');
+    if (machineNav) machineNav.click();
+  } catch (error) {
+    showNotice(`建立機台失敗：${error.message}`, "error");
+  } finally {
+    button.disabled = false;
+    button.textContent = originalText;
+  }
 }
 
 function setupQuotationPreview() {
