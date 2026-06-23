@@ -595,6 +595,9 @@ td small { color: var(--muted); }
 .viewDropPlaceholder { color: #55747c; font-weight: 700; text-align: center; padding: 30px; }
 .viewUploadMeta { display: flex; justify-content: space-between; gap: 12px; align-items: center; margin-top: 10px; min-height: 28px; }
 .viewUploadMeta > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); font-size: 13px; }
+.viewUploadButtons { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
+.dangerText { color: #b64032 !important; }
+.dangerText:hover { color: #8d2f25 !important; }
 .machine360Actions { display: flex; justify-content: space-between; gap: 20px; align-items: center; margin-top: 20px; padding-top: 18px; border-top: 1px solid #e3eaec; }
 .machine360Actions p { margin: 4px 0 0; }
 .machine360NextPanel { margin-top: 18px; }
@@ -615,3 +618,26 @@ td small { color: var(--muted); }
   .machine360Actions { align-items: stretch; flex-direction: column; }
   .v19Roadmap { grid-template-columns: 1fr; }
 }
+
+/* =====================================================
+ * v2.0 價格中心、智能估價、AI 美術降本
+ * ===================================================== */
+.navPrice::before{content:"＄"}.navEstimate::before{content:"∑"}.navOptimize::before{content:"AI"}
+.priceIntro{background:linear-gradient(135deg,#fff7df,#fff)}
+.estimateIntro{background:linear-gradient(135deg,#e9f5f4,#fff)}
+.optimizeIntro{background:linear-gradient(135deg,#f7eefe,#fff)}
+.v20Grid{display:grid;gap:16px}.v20Grid.twoCol{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}
+.compactForm{grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.compactForm label.wide,.compactForm .wide{grid-column:1/-1}
+.fileButton{cursor:pointer}.inlineSearch{min-width:280px;max-width:420px;border:1px solid var(--line);border-radius:10px;padding:10px 12px;background:#fff}
+.v20Table{min-width:1000px}.v20Table td,.v20Table th{vertical-align:top}.v20Table .rowActions{display:flex;gap:6px;white-space:nowrap}
+.marketResearchResult{min-height:180px;border:1px dashed #b9cad0;border-radius:12px;padding:16px;background:#f8fbfb}.marketResearchResult h3{margin:0 0 8px}.marketResearchResult .sourceList{display:grid;gap:8px;margin-top:12px}.marketResearchResult a{color:#2a6675;word-break:break-all}
+.marketTrend{display:flex;gap:14px;align-items:baseline;margin:12px 0}.marketTrend strong{font-size:30px}.marketTrend .up{color:#b84c2f}.marketTrend .down{color:#2d7a69}
+.estimateTableWrap{overflow:auto}.estimateTable{min-width:1550px}.estimateTable input,.estimateTable select{min-width:82px}.estimateTable .wideInput{min-width:150px}.estimateTable .priceSelect{min-width:210px}.estimateTable .toggleCell{min-width:145px}
+.estimateTotals{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-top:18px}.estimateTotals>div{border:1px solid var(--line);border-radius:12px;padding:14px;background:#fff}.estimateTotals span{display:block;color:var(--muted);font-size:13px}.estimateTotals strong{display:block;font-size:24px;margin-top:6px}.estimateTotals .highlight{border-color:#d8b36f;background:#fff9e9}
+.recommendationGrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(310px,1fr));gap:14px}.recommendationCard{border:1px solid var(--line);border-radius:14px;background:#fff;padding:16px;display:grid;gap:12px}.recommendationCard h3{margin:0;font-size:17px}.recommendationCard .recommendationMeta{display:flex;flex-wrap:wrap;gap:6px}.recommendationCard .recommendationCost{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}.recommendationCard .recommendationCost div{background:#f5f8f8;border-radius:9px;padding:9px}.recommendationCard .recommendationCost span{display:block;font-size:11px;color:var(--muted)}.recommendationCard .recommendationCost strong{display:block;margin-top:3px}.recommendationCard dl{display:grid;grid-template-columns:90px 1fr;gap:6px 10px;margin:0}.recommendationCard dt{color:var(--muted)}.recommendationCard dd{margin:0}.recommendationActions{display:flex;flex-wrap:wrap;gap:7px}
+.simulationPreview{min-height:360px;border:1px dashed #b9cad0;border-radius:14px;background:#f5f8f8;display:flex;align-items:center;justify-content:center;overflow:hidden}.simulationPreview img{width:100%;height:100%;max-height:520px;object-fit:contain;background:#fff}.simulationCompare{display:grid;grid-template-columns:1fr 1fr;gap:8px;width:100%;padding:8px}.simulationCompare figure{margin:0}.simulationCompare figcaption{text-align:center;font-size:12px;color:var(--muted);margin-top:5px}.simulationCompare img{height:330px}
+.fieldLabel{display:grid;gap:6px;margin-bottom:12px}.fieldLabel>span{font-size:13px;font-weight:700}.fieldLabel select{border:1px solid var(--line);border-radius:10px;padding:10px;background:#fff}
+.confidenceHigh{color:#23745f}.confidenceMedium{color:#a36c1c}.confidenceLow{color:#b34a3c}.statusPill{display:inline-flex;align-items:center;border-radius:999px;padding:3px 8px;font-size:11px;background:#edf3f4}.statusPill.accepted{background:#e3f3ea;color:#21694f}.statusPill.review{background:#fff2d8;color:#8a5c13}.statusPill.ignored{background:#f1eeee;color:#775f5f}
+.tinyText{font-size:12px}.dangerButton{color:#a4382a;border-color:#e7b8b1}.dangerButton:hover{background:#fff0ed}
+@media(max-width:1050px){.v20Grid.twoCol{grid-template-columns:1fr}.estimateTotals{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:700px){.compactForm{grid-template-columns:1fr}.estimateTotals{grid-template-columns:1fr}.inlineSearch{min-width:0;width:100%}.recommendationCost{grid-template-columns:1fr!important}.simulationCompare{grid-template-columns:1fr}}

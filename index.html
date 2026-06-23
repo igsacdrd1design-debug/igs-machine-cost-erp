@@ -8,7 +8,7 @@
   <meta name="googlebot" content="noindex, nofollow, noarchive, nosnippet">
   <meta name="referrer" content="no-referrer">
   <title>IGS 機台材料成本 ERP</title>
-  <link rel="stylesheet" href="style.css?v=20260623-igs-v1-9">
+  <link rel="stylesheet" href="style.css?v=20260623-igs-v2-0">
 </head>
 <body class="authLocked">
   <section id="authGate" class="authGate" aria-labelledby="loginTitle">
@@ -43,6 +43,9 @@
       <button class="nav navPhoto" data-view="quotationEntry" data-title="估價單建檔">估價單建檔</button>
       <button class="nav navAccent" data-view="quickMachine" data-title="快速建立機台">快速建立機台</button>
       <button class="nav nav360" data-view="machine360Setup" data-title="360° 機台建置">360° 機台建置</button>
+      <button class="nav navPrice" data-view="priceCenter" data-title="價格中心">價格中心</button>
+      <button class="nav navEstimate" data-view="smartEstimate" data-title="智能成本估算">智能成本估算</button>
+      <button class="nav navOptimize" data-view="artOptimization" data-title="AI 美術降本中心">AI 美術降本中心</button>
       <button class="nav" data-view="suppliers" data-title="供應商">供應商</button>
     </nav>
 
@@ -423,9 +426,9 @@
     <section id="machine360Setup" class="view">
       <div class="quickIntro view360Intro">
         <div>
-          <span class="eyebrow">v1.9 · 少量圖片建立 360° 視覺</span>
-          <h2>先提供四張基準角度圖，再建立可旋轉的主管成本頁</h2>
-          <p>不需要提供原始 3D 模型。先選擇既有機台，分別上傳正面、右 45°、背面與左 45° 圖片；後續 AI 補角度會以這四張基準圖為來源。</p>
+          <span class="eyebrow">v2.0 · 少量圖片建立 360° 視覺</span>
+          <h2>提供一至四張基準角度圖，逐步建立可旋轉的主管成本頁</h2>
+          <p>不需要提供原始 3D 模型。上傳 1 張即可使用單圖模式，2 張可交叉比對；正面、右 45°、背面與左 45° 可分次補齊。</p>
         </div>
         <div id="machine360CompletionBadge" class="apiBadge">尚未選擇機台</div>
       </div>
@@ -434,7 +437,7 @@
         <div class="panelHead">
           <div>
             <h2>1. 選擇機台</h2>
-            <p class="muted">四張角度圖會儲存在私人 Google Drive，並綁定到這台機台。</p>
+            <p class="muted">基準角度圖會儲存在私人 Google Drive，並綁定到這台機台。</p>
           </div>
         </div>
         <div class="machine360SelectorRow">
@@ -453,7 +456,7 @@
       <div class="panel">
         <div class="panelHead">
           <div>
-            <h2>2. 上傳四張基準角度圖</h2>
+            <h2>2. 上傳一至四張基準角度圖</h2>
             <p class="muted">可分次儲存，不必一次備齊。格式支援 JPG、PNG、WebP；建議所有圖片尺寸與機台中心一致。</p>
           </div>
         </div>
@@ -465,7 +468,14 @@
               <img id="machine360FrontPreview" alt="正面圖預覽" hidden>
               <span class="viewDropPlaceholder">＋ 上傳正面圖</span>
             </label>
-            <div class="viewUploadMeta"><span id="machine360FrontName">尚未上傳</span><button type="button" class="linkButton" data-clear-360="FRONT">清除新選擇</button></div>
+            <div class="viewUploadMeta">
+              <span id="machine360FrontName">尚未上傳</span>
+              <div class="viewUploadButtons">
+                <button type="button" class="linkButton" data-replace-360="FRONT" hidden>更換圖片</button>
+                <button type="button" class="linkButton" data-clear-360="FRONT" hidden>清除新選擇</button>
+                <button type="button" class="linkButton dangerText" data-delete-360="FRONT" hidden>刪除已存圖片</button>
+              </div>
+            </div>
           </article>
 
           <article class="viewUploadCard" data-view-key="RIGHT45">
@@ -475,7 +485,14 @@
               <img id="machine360Right45Preview" alt="右 45 度圖預覽" hidden>
               <span class="viewDropPlaceholder">＋ 上傳右 45° 圖</span>
             </label>
-            <div class="viewUploadMeta"><span id="machine360Right45Name">尚未上傳</span><button type="button" class="linkButton" data-clear-360="RIGHT45">清除新選擇</button></div>
+            <div class="viewUploadMeta">
+              <span id="machine360Right45Name">尚未上傳</span>
+              <div class="viewUploadButtons">
+                <button type="button" class="linkButton" data-replace-360="RIGHT45" hidden>更換圖片</button>
+                <button type="button" class="linkButton" data-clear-360="RIGHT45" hidden>清除新選擇</button>
+                <button type="button" class="linkButton dangerText" data-delete-360="RIGHT45" hidden>刪除已存圖片</button>
+              </div>
+            </div>
           </article>
 
           <article class="viewUploadCard" data-view-key="BACK">
@@ -485,7 +502,14 @@
               <img id="machine360BackPreview" alt="背面圖預覽" hidden>
               <span class="viewDropPlaceholder">＋ 上傳背面圖</span>
             </label>
-            <div class="viewUploadMeta"><span id="machine360BackName">尚未上傳</span><button type="button" class="linkButton" data-clear-360="BACK">清除新選擇</button></div>
+            <div class="viewUploadMeta">
+              <span id="machine360BackName">尚未上傳</span>
+              <div class="viewUploadButtons">
+                <button type="button" class="linkButton" data-replace-360="BACK" hidden>更換圖片</button>
+                <button type="button" class="linkButton" data-clear-360="BACK" hidden>清除新選擇</button>
+                <button type="button" class="linkButton dangerText" data-delete-360="BACK" hidden>刪除已存圖片</button>
+              </div>
+            </div>
           </article>
 
           <article class="viewUploadCard" data-view-key="LEFT45">
@@ -495,13 +519,20 @@
               <img id="machine360Left45Preview" alt="左 45 度圖預覽" hidden>
               <span class="viewDropPlaceholder">＋ 上傳左 45° 圖</span>
             </label>
-            <div class="viewUploadMeta"><span id="machine360Left45Name">尚未上傳</span><button type="button" class="linkButton" data-clear-360="LEFT45">清除新選擇</button></div>
+            <div class="viewUploadMeta">
+              <span id="machine360Left45Name">尚未上傳</span>
+              <div class="viewUploadButtons">
+                <button type="button" class="linkButton" data-replace-360="LEFT45" hidden>更換圖片</button>
+                <button type="button" class="linkButton" data-clear-360="LEFT45" hidden>清除新選擇</button>
+                <button type="button" class="linkButton dangerText" data-delete-360="LEFT45" hidden>刪除已存圖片</button>
+              </div>
+            </div>
           </article>
         </div>
         <div class="machine360Actions">
           <div>
             <strong>可分次完成</strong>
-            <p class="muted">先上傳現有的正面與右 45° 也可以；之後再補左 45°與背面。</p>
+            <p class="muted">上傳 1 張即可使用單圖偵測；2 張可使用雙圖交叉偵測。其餘角度可之後補上。</p>
           </div>
           <button id="saveMachine360Views" class="button primary" type="button">儲存基準角度圖</button>
         </div>
@@ -525,6 +556,145 @@
       </div>
     </section>
 
+
+    <section id="priceCenter" class="view">
+      <div class="quickIntro priceIntro">
+        <div>
+          <span class="eyebrow">v2.0 · 公司價格＋市場趨勢</span>
+          <h2>建立材料價格主檔，保留歷史報價並查詢網路浮動</h2>
+          <p>公司成交價永遠優先；網路資料只作市場調整參考，查詢結果必須人工確認後才會保存。</p>
+        </div>
+        <div class="apiBadge connected">Gemini 3.5 Flash Grounding</div>
+      </div>
+
+      <div class="v20Grid twoCol">
+        <div class="panel">
+          <div class="panelHead">
+            <div><h2>1. 材料價格主檔</h2><p class="muted">新增、修改、刪除或匯入公司既有價格。</p></div>
+            <div class="panelActions">
+              <label class="button secondary fileButton">匯入 CSV<input id="materialPriceCsv" type="file" accept=".csv,text/csv" hidden></label>
+              <button id="exportMaterialPrices" class="button ghost" type="button">匯出 CSV</button>
+            </div>
+          </div>
+          <form id="materialPriceForm" class="entryForm compactForm">
+            <input id="materialPriceId" type="hidden">
+            <label><span>材料代碼</span><input id="materialCode" type="text" placeholder="例如：ACR-3T"></label>
+            <label><span>材料名稱 *</span><input id="materialName" type="text" required placeholder="例如：透明壓克力"></label>
+            <label><span>材質分類 *</span><input id="materialCategory" type="text" required placeholder="壓克力／PVC／貼紙"></label>
+            <label><span>規格</span><input id="materialSpec" type="text" placeholder="板材、印刷或加工規格"></label>
+            <label><span>厚度</span><input id="materialThickness" type="text" placeholder="例如：3mm"></label>
+            <label><span>計價單位 *</span><select id="materialUnit" required><option>件</option><option>平方公尺</option><option>平方公分</option><option>才</option><option>張</option><option>公斤</option><option>公尺</option></select></label>
+            <label><span>基準單價 *</span><input id="materialBasePrice" type="number" min="0" step="0.01" required></label>
+            <label><span>幣別</span><input id="materialCurrency" type="text" value="TWD"></label>
+            <label><span>供應商</span><input id="materialSupplier" type="text" list="supplierOptions"></label>
+            <label><span>價格日期</span><input id="materialPriceDate" type="date"></label>
+            <label><span>加工費</span><input id="materialProcessingFee" type="number" min="0" step="0.01" value="0"></label>
+            <label><span>最低費用</span><input id="materialMinimumFee" type="number" min="0" step="0.01" value="0"></label>
+            <label><span>最低採購量</span><input id="materialMinimumQty" type="number" min="0" step="0.01" value="0"></label>
+            <label><span>信心等級</span><select id="materialConfidence"><option>高</option><option selected>中</option><option>低</option></select></label>
+            <label><span>價格來源</span><select id="materialSource"><option>公司成交價</option><option>供應商報價</option><option>歷史平均</option><option>網路參考</option><option>人工估算</option></select></label>
+            <label class="wide"><span>備註</span><textarea id="materialNote" rows="2"></textarea></label>
+            <div class="formActions wide">
+              <button id="saveMaterialPrice" class="button primary" type="submit">儲存價格</button>
+              <button id="resetMaterialPrice" class="button ghost" type="button">清空</button>
+            </div>
+          </form>
+        </div>
+
+        <div class="panel">
+          <div class="panelHead"><div><h2>2. 網路市場浮動查詢</h2><p class="muted">查詢原料或印刷市場趨勢，不直接覆蓋公司價格。</p></div></div>
+          <form id="marketResearchForm" class="entryForm compactForm">
+            <label><span>材質分類 *</span><input id="marketCategory" type="text" required placeholder="例如：壓克力、PVC、鋁材"></label>
+            <label><span>查詢關鍵字 *</span><input id="marketQuery" type="text" required placeholder="例如：台灣 透明壓克力 板材 價格 趨勢"></label>
+            <label><span>基準指數</span><input id="marketBaseValue" type="number" step="0.01" value="100"></label>
+            <label><span>查詢期間</span><select id="marketPeriod"><option value="3">近 3 個月</option><option value="6">近 6 個月</option><option value="12">近 12 個月</option></select></label>
+            <label class="checkboxField"><input id="marketAutoUpdate" type="checkbox"><span>保存後每週自動更新</span></label>
+            <div class="formActions wide"><button id="researchMarket" class="button primary" type="submit">查詢網路浮動</button><button id="enableMarketAutoUpdate" class="button ghost" type="button">啟用每週更新排程</button></div>
+          </form>
+          <div id="marketResearchResult" class="marketResearchResult empty">尚未查詢。</div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="panelHead"><div><h2>價格資料</h2><p id="materialPriceCount" class="muted">共 0 筆</p></div><input id="materialPriceSearch" class="inlineSearch" type="search" placeholder="搜尋材料、分類、厚度、供應商"></div>
+        <div class="tableWrap"><table class="v20Table"><thead><tr><th>材料</th><th>分類</th><th>厚度／規格</th><th>單位</th><th>單價</th><th>供應商</th><th>日期</th><th>來源</th><th>信心</th><th></th></tr></thead><tbody id="materialPriceRows"></tbody></table></div>
+      </div>
+      <div class="panel">
+        <div class="panelHead"><div><h2>市場指數紀錄</h2><p class="muted">經人工確認後保存的市場參考。</p></div></div>
+        <div class="tableWrap"><table class="v20Table"><thead><tr><th>日期</th><th>分類</th><th>指數</th><th>變動率</th><th>來源</th><th>自動</th><th>摘要</th><th></th></tr></thead><tbody id="marketIndexRows"></tbody></table></div>
+      </div>
+    </section>
+
+    <section id="smartEstimate" class="view">
+      <div class="quickIntro estimateIntro">
+        <div><span class="eyebrow">v2.0 · 智能估價</span><h2>用公司價格、尺寸、用量與市場指數產生三段估價</h2><p>估價結果分為樂觀、基準、保守，並顯示價格來源與信心度。</p></div>
+        <div id="estimateStatusBadge" class="apiBadge">尚未建立估價</div>
+      </div>
+      <div class="panel">
+        <div class="panelHead"><div><h2>1. 估價專案</h2><p class="muted">可從既有機台實際成本載入，也可建立全新估價。</p></div><div class="panelActions"><button id="newEstimate" class="button ghost" type="button">新增估價</button><button id="loadMachineActualItems" class="button secondary" type="button">載入該機台實際品項</button></div></div>
+        <form id="estimateProjectForm" class="entryForm compactForm">
+          <input id="estimateId" type="hidden">
+          <label><span>機台</span><select id="estimateMachine"></select></label>
+          <label><span>估價名稱 *</span><input id="estimateName" type="text" required placeholder="例如：蟹霸量產版美術件估價"></label>
+          <label><span>版本</span><input id="estimateVersion" type="text" value="V1"></label>
+          <label><span>估價日期</span><input id="estimateDate" type="date"></label>
+          <label><span>狀態</span><select id="estimateStatus"><option>草稿</option><option>待確認</option><option>已核准</option><option>已作廢</option></select></label>
+          <label class="wide"><span>備註</span><textarea id="estimateNote" rows="2"></textarea></label>
+        </form>
+      </div>
+      <div class="panel">
+        <div class="panelHead"><div><h2>2. 估價明細</h2><p class="muted">寬高可自動換算平方公尺或才；用量仍可人工覆寫。</p></div><div class="panelActions"><button id="addEstimateItem" class="button secondary" type="button">新增品項</button><button id="recalculateEstimate" class="button ghost" type="button">重新計算</button></div></div>
+        <div class="tableWrap estimateTableWrap"><table class="estimateTable"><thead><tr><th>#</th><th>品項</th><th>材質／厚度</th><th>尺寸 mm</th><th>數量</th><th>價格來源</th><th>用量</th><th>損耗%</th><th>市場%</th><th>加工／其他</th><th>基準成本</th><th>美術優化</th><th></th></tr></thead><tbody id="estimateItemRows"></tbody></table></div>
+        <div class="estimateTotals">
+          <div><span>樂觀估價</span><strong id="estimateOptimistic">$0</strong></div>
+          <div class="highlight"><span>基準估價</span><strong id="estimateBaseline">$0</strong></div>
+          <div><span>保守估價</span><strong id="estimateConservative">$0</strong></div>
+          <div><span>整體信心度</span><strong id="estimateConfidence">0%</strong></div>
+        </div>
+        <div class="formActions"><button id="saveEstimate" class="button primary" type="button">儲存估價版本</button></div>
+      </div>
+      <div class="panel">
+        <div class="panelHead"><div><h2>已儲存估價</h2><p class="muted">可載入、修改、複製或刪除。</p></div></div>
+        <div class="tableWrap"><table class="v20Table"><thead><tr><th>日期</th><th>估價名稱</th><th>機台</th><th>版本</th><th>樂觀</th><th>基準</th><th>保守</th><th>信心</th><th>狀態</th><th></th></tr></thead><tbody id="estimateProjectRows"></tbody></table></div>
+      </div>
+    </section>
+
+    <section id="artOptimization" class="view">
+      <div class="quickIntro optimizeIntro">
+        <div><span class="eyebrow">v2.0 · 僅限美術端</span><h2>AI 材質與印刷降本，不修改機構、工設、運送或包裝</h2><p>AI 只分析美術材料、印刷方式、白墨、特殊效果、併版與板材利用率；所有方案均需美術打樣確認。</p></div>
+        <div class="apiBadge connected">Gemini 3.5 Flash＋Gemini 3.1 Flash Image</div>
+      </div>
+      <div class="v20Grid twoCol">
+        <div class="panel">
+          <div class="panelHead"><div><h2>1. 建立降本分析</h2><p class="muted">可使用已儲存估價，或直接分析機台的實際費用品項。</p></div></div>
+          <form id="optimizationForm" class="entryForm compactForm">
+            <label><span>機台 *</span><select id="optimizationMachine" required></select></label>
+            <label><span>估價版本</span><select id="optimizationEstimate"><option value="">使用實際費用</option></select></label>
+            <label><span>目標降本比例</span><input id="optimizationTarget" type="number" min="1" max="40" step="1" value="10"></label>
+            <label><span>方案強度</span><select id="optimizationLevel"><option value="保守">保守</option><option value="平衡" selected>平衡</option><option value="積極">積極</option></select></label>
+            <label class="wide"><span>不可變更條件</span><textarea id="optimizationConstraints" rows="5">僅限美術材料與印刷製程優化。不得修改機台輪廓、尺寸、零件數量、安裝方式、孔位、機構、工業設計、電子、燈具、運送、包裝與品牌主視覺。</textarea></label>
+            <div class="formActions wide"><button id="generateOptimization" class="button primary" type="submit">AI 產生降本方案</button></div>
+          </form>
+          <p id="optimizationStatus" class="photoStatus muted">請先選擇機台。</p>
+        </div>
+        <div class="panel">
+          <div class="panelHead"><div><h2>2. 視覺概念模擬</h2><p class="muted">使用機台基準圖產生材質／印刷優化概念圖，不是正式完稿。</p></div></div>
+          <label class="fieldLabel"><span>模擬視角</span><select id="simulationView"></select></label>
+          <div id="simulationPreview" class="simulationPreview empty">尚未產生模擬圖。</div>
+          <div class="formActions"><button id="generateSimulation" class="button secondary" type="button" disabled>產生目前方案概念圖</button></div>
+          <p class="muted tinyText">產生圖片可能需要付費額度；結果含 SynthID，且必須經美術與打樣確認。</p>
+        </div>
+      </div>
+      <div class="panel">
+        <div class="panelHead"><div><h2>AI 美術降本建議</h2><p id="optimizationSummary" class="muted">尚未分析。</p></div></div>
+        <div id="optimizationRecommendations" class="recommendationGrid"><div class="empty">尚未產生建議。</div></div>
+      </div>
+      <div class="panel">
+        <div class="panelHead"><div><h2>歷史建議與追蹤</h2><p class="muted">記錄接受、送美術打樣、送採購詢價或忽略。</p></div></div>
+        <div class="tableWrap"><table class="v20Table"><thead><tr><th>機台</th><th>品項</th><th>類型</th><th>原始成本</th><th>優化區間</th><th>節省區間</th><th>信心</th><th>狀態</th><th></th></tr></thead><tbody id="optimizationHistoryRows"></tbody></table></div>
+      </div>
+    </section>
+
     <section id="suppliers" class="view">
       <div class="panel">
         <div class="panelHead">
@@ -545,7 +715,7 @@
 
   <datalist id="supplierOptions"></datalist>
   <datalist id="machineAreaOptions"></datalist>
-  <script src="data.js?v=20260623-igs-v1-9"></script>
-  <script src="app.js?v=20260623-igs-v1-9"></script>
+  <script src="data.js?v=20260623-igs-v2-0"></script>
+  <script src="app.js?v=20260623-igs-v2-0"></script>
 </body>
 </html>
