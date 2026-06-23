@@ -8,7 +8,7 @@
   <meta name="googlebot" content="noindex, nofollow, noarchive, nosnippet">
   <meta name="referrer" content="no-referrer">
   <title>IGS 機台材料成本 ERP</title>
-  <link rel="stylesheet" href="style.css?v=20260623-igs-v1-7-1">
+  <link rel="stylesheet" href="style.css?v=20260623-igs-v1-9">
 </head>
 <body class="authLocked">
   <section id="authGate" class="authGate" aria-labelledby="loginTitle">
@@ -42,6 +42,7 @@
       <button class="nav" data-view="machineTotals" data-title="機台成本總覽">機台成本總覽</button>
       <button class="nav navPhoto" data-view="quotationEntry" data-title="估價單建檔">估價單建檔</button>
       <button class="nav navAccent" data-view="quickMachine" data-title="快速建立機台">快速建立機台</button>
+      <button class="nav nav360" data-view="machine360Setup" data-title="360° 機台建置">360° 機台建置</button>
       <button class="nav" data-view="suppliers" data-title="供應商">供應商</button>
     </nav>
 
@@ -191,10 +192,10 @@
       <div class="quickIntro photoIntro">
         <div>
           <span class="eyebrow">AI 估價單辨識與圖片附件</span>
-          <h2>上傳原始估價單，確認後寫入機台材料成本</h2>
-          <p>AI 只會先填入可辨識欄位；所有資料與品項圖片仍需人工確認後才會寫入。</p>
+          <h2>把估價單歸入既有機台，確認後建立材料成本</h2>
+          <p>支援 JPG、JPEG、PNG、WebP 與 PDF；AI 只會先填入可辨識欄位，所有內容仍需人工確認。</p>
         </div>
-        <div class="apiBadge connected">Gemini AI 與 Drive 已連接</div>
+        <div class="apiBadge connected">Gemini AI、PDF 與 Drive 已連接</div>
       </div>
 
       <div class="entryGrid">
@@ -202,17 +203,18 @@
           <div class="panelHead">
             <div>
               <h2>1. 上傳估價單</h2>
-              <p class="muted">支援 JPG、PNG、WebP；圖片會壓縮後送到 AI，原圖於建檔時保存至私人 Google Drive。</p>
+              <p class="muted">可上傳圖片或 PDF，不支援 Word。原始檔會在正式建檔時保存到私人 Google Drive。</p>
             </div>
           </div>
           <label class="photoDrop" for="quotationFile">
-            <input id="quotationFile" type="file" accept="image/jpeg,image/png,image/webp" hidden>
+            <input id="quotationFile" type="file" accept=".jpg,.jpeg,.png,.webp,.pdf,image/jpeg,image/png,image/webp,application/pdf" hidden>
             <span class="photoDropIcon">📄</span>
-            <strong>點這裡選擇估價單圖片</strong>
-            <span>請盡量上傳完整、清楚且避免反光的圖片。</span>
+            <strong>點這裡選擇估價單圖片或 PDF</strong>
+            <span>圖片請避免反光；PDF 建議控制在 10 MB 內。</span>
           </label>
           <div id="quotationPreviewWrap" class="receiptPreviewWrap" hidden>
-            <img id="quotationPreview" alt="估價單圖片預覽">
+            <img id="quotationPreview" alt="估價單圖片預覽" hidden>
+            <iframe id="quotationPdfPreview" class="pdfPreview" title="估價單 PDF 預覽" hidden></iframe>
             <div class="previewMeta">
               <span id="quotationFileName"></span>
               <button id="clearQuotation" class="linkButton" type="button">清除</button>
@@ -221,20 +223,20 @@
           <div class="formActions imageActions">
             <button id="analyzeQuotation" class="button primary" type="button" disabled>AI 智慧辨識</button>
           </div>
-          <p id="quotationAiStatus" class="photoStatus muted">尚未選擇估價單圖片</p>
+          <p id="quotationAiStatus" class="photoStatus muted">尚未選擇估價單檔案</p>
         </div>
 
         <div class="panel">
           <div class="panelHead">
             <div>
-              <h2>2. 建檔基本資料</h2>
-              <p class="muted">選擇機台與費用類型，確認 AI 帶入內容後再寫入。</p>
+              <h2>2. 成本歸屬</h2>
+              <p class="muted">這裡只選擇成本要歸入哪一台既有機台，不會重複建立機台主檔。</p>
             </div>
             <span id="quotationAiBadge" class="analysisBadge">尚未辨識</span>
           </div>
-          <form id="quotationForm" class="entryForm">
+          <form id="quotationForm" class="entryForm costAttributionForm">
             <label>
-              <span>機台 *</span>
+              <span>歸屬機台 *</span>
               <select id="quotationMachine" required></select>
             </label>
             <label>
@@ -253,21 +255,29 @@
               <span>供應商</span>
               <input id="quotationSupplier" type="text" list="supplierOptions" placeholder="供應商名稱">
             </label>
-            <label class="wide">
-              <span>專案名稱</span>
-              <input id="quotationProject" type="text" placeholder="例如：街霸 6">
+            <label>
+              <span>報價單號</span>
+              <input id="quotationNumber" type="text" placeholder="例如：QT-2026-001">
             </label>
             <label>
-              <span>稅額</span>
-              <input id="quotationTax" type="number" min="0" step="0.01" value="0">
+              <span>專案／估價單名稱</span>
+              <input id="quotationProject" type="text" placeholder="例如：街霸 6 壓克力加工">
             </label>
             <label>
-              <span>其他費用</span>
-              <input id="quotationOther" type="number" min="0" step="0.01" value="0">
+              <span>報價方式 *</span>
+              <select id="quotationMode" required>
+                <option value="未稅">未稅報價</option>
+                <option value="含稅">含稅報價</option>
+                <option value="不計稅">不計稅</option>
+              </select>
+            </label>
+            <label>
+              <span>稅率（%）</span>
+              <input id="quotationTaxRate" type="number" min="0" max="100" step="0.01" value="5">
             </label>
             <label class="wide">
               <span>備註</span>
-              <textarea id="quotationNote" rows="4" placeholder="估價單說明、含稅或其他注意事項"></textarea>
+              <textarea id="quotationNote" rows="4" placeholder="估價單說明、付款條件或其他注意事項"></textarea>
             </label>
             <details class="wide rawTextPanel">
               <summary>查看 AI 辨識原文</summary>
@@ -284,16 +294,19 @@
       <div class="panel">
         <div class="panelHead">
           <div>
-            <h2>3. 材料品項明細</h2>
-            <p class="muted">每個品項可各自上傳一張圖片，方便後續在機台頁查看。</p>
+            <h2>3. 品項與附加費用</h2>
+            <p class="muted">材料可上傳圖片並指定安裝區域；運費、版費、加工費等請用「新增附加費用」建立。</p>
           </div>
-          <button id="addDraftItem" class="button ghost" type="button">新增品項</button>
+          <div class="panelActions">
+            <button id="addDraftItem" class="button ghost" type="button">新增材料</button>
+            <button id="addFeeItem" class="button secondary" type="button">新增附加費用</button>
+          </div>
         </div>
         <div class="tableWrap">
           <table class="draftItemsTable">
             <thead>
               <tr>
-                <th>項次</th>
+                <th>類型</th>
                 <th>圖片</th>
                 <th>品項名稱</th>
                 <th>規格／包裝</th>
@@ -303,6 +316,8 @@
                 <th>材質</th>
                 <th>厚度</th>
                 <th>檔案名稱</th>
+                <th>安裝區域</th>
+                <th>區域狀態</th>
                 <th>小計</th>
                 <th>備註</th>
                 <th></th>
@@ -311,10 +326,13 @@
             <tbody id="draftItemRows"></tbody>
           </table>
         </div>
-        <div class="draftSummary costSummary">
+        <div class="costSummaryGrid">
           <div><span>材料小計</span><strong id="draftSubtotal">$0</strong></div>
-          <div><span>階段總成本</span><strong id="draftGrandTotal">$0</strong></div>
+          <div><span>附加費用</span><strong id="draftAdditionalTotal">$0</strong></div>
+          <div><span id="draftTaxLabel">稅額 5%</span><strong id="draftTaxTotal">$0</strong></div>
+          <div class="total"><span>階段總成本</span><strong id="draftGrandTotal">$0</strong></div>
         </div>
+        <p id="taxCalculationHint" class="taxHint muted">未稅報價：系統會以材料與附加費用合計計算稅額。</p>
       </div>
     </section>
 
@@ -401,6 +419,112 @@
       </div>
     </section>
 
+
+    <section id="machine360Setup" class="view">
+      <div class="quickIntro view360Intro">
+        <div>
+          <span class="eyebrow">v1.9 · 少量圖片建立 360° 視覺</span>
+          <h2>先提供四張基準角度圖，再建立可旋轉的主管成本頁</h2>
+          <p>不需要提供原始 3D 模型。先選擇既有機台，分別上傳正面、右 45°、背面與左 45° 圖片；後續 AI 補角度會以這四張基準圖為來源。</p>
+        </div>
+        <div id="machine360CompletionBadge" class="apiBadge">尚未選擇機台</div>
+      </div>
+
+      <div class="panel machine360SelectorPanel">
+        <div class="panelHead">
+          <div>
+            <h2>1. 選擇機台</h2>
+            <p class="muted">四張角度圖會儲存在私人 Google Drive，並綁定到這台機台。</p>
+          </div>
+        </div>
+        <div class="machine360SelectorRow">
+          <label>
+            <span>機台 *</span>
+            <select id="machine360Machine"></select>
+          </label>
+          <div class="machine360Progress">
+            <span>基準圖完成度</span>
+            <strong id="machine360ProgressText">0 / 4</strong>
+            <div class="progressTrack"><div id="machine360ProgressBar" class="progressFill" style="width:0%"></div></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="panelHead">
+          <div>
+            <h2>2. 上傳四張基準角度圖</h2>
+            <p class="muted">可分次儲存，不必一次備齊。格式支援 JPG、PNG、WebP；建議所有圖片尺寸與機台中心一致。</p>
+          </div>
+        </div>
+        <div id="machine360UploadGrid" class="machine360UploadGrid">
+          <article class="viewUploadCard" data-view-key="FRONT">
+            <div class="viewUploadHead"><span class="angleBadge">0°</span><div><strong>正面</strong><small>FRONT</small></div></div>
+            <label class="viewImageDrop" for="machine360FrontFile">
+              <input id="machine360FrontFile" data-machine360-view="FRONT" type="file" accept="image/jpeg,image/png,image/webp" hidden>
+              <img id="machine360FrontPreview" alt="正面圖預覽" hidden>
+              <span class="viewDropPlaceholder">＋ 上傳正面圖</span>
+            </label>
+            <div class="viewUploadMeta"><span id="machine360FrontName">尚未上傳</span><button type="button" class="linkButton" data-clear-360="FRONT">清除新選擇</button></div>
+          </article>
+
+          <article class="viewUploadCard" data-view-key="RIGHT45">
+            <div class="viewUploadHead"><span class="angleBadge">45°</span><div><strong>右 45°</strong><small>RIGHT 45</small></div></div>
+            <label class="viewImageDrop" for="machine360Right45File">
+              <input id="machine360Right45File" data-machine360-view="RIGHT45" type="file" accept="image/jpeg,image/png,image/webp" hidden>
+              <img id="machine360Right45Preview" alt="右 45 度圖預覽" hidden>
+              <span class="viewDropPlaceholder">＋ 上傳右 45° 圖</span>
+            </label>
+            <div class="viewUploadMeta"><span id="machine360Right45Name">尚未上傳</span><button type="button" class="linkButton" data-clear-360="RIGHT45">清除新選擇</button></div>
+          </article>
+
+          <article class="viewUploadCard" data-view-key="BACK">
+            <div class="viewUploadHead"><span class="angleBadge">180°</span><div><strong>背面</strong><small>BACK</small></div></div>
+            <label class="viewImageDrop" for="machine360BackFile">
+              <input id="machine360BackFile" data-machine360-view="BACK" type="file" accept="image/jpeg,image/png,image/webp" hidden>
+              <img id="machine360BackPreview" alt="背面圖預覽" hidden>
+              <span class="viewDropPlaceholder">＋ 上傳背面圖</span>
+            </label>
+            <div class="viewUploadMeta"><span id="machine360BackName">尚未上傳</span><button type="button" class="linkButton" data-clear-360="BACK">清除新選擇</button></div>
+          </article>
+
+          <article class="viewUploadCard" data-view-key="LEFT45">
+            <div class="viewUploadHead"><span class="angleBadge">315°</span><div><strong>左 45°</strong><small>LEFT 45</small></div></div>
+            <label class="viewImageDrop" for="machine360Left45File">
+              <input id="machine360Left45File" data-machine360-view="LEFT45" type="file" accept="image/jpeg,image/png,image/webp" hidden>
+              <img id="machine360Left45Preview" alt="左 45 度圖預覽" hidden>
+              <span class="viewDropPlaceholder">＋ 上傳左 45° 圖</span>
+            </label>
+            <div class="viewUploadMeta"><span id="machine360Left45Name">尚未上傳</span><button type="button" class="linkButton" data-clear-360="LEFT45">清除新選擇</button></div>
+          </article>
+        </div>
+        <div class="machine360Actions">
+          <div>
+            <strong>可分次完成</strong>
+            <p class="muted">先上傳現有的正面與右 45° 也可以；之後再補左 45°與背面。</p>
+          </div>
+          <button id="saveMachine360Views" class="button primary" type="button">儲存基準角度圖</button>
+        </div>
+        <p id="machine360Status" class="photoStatus muted">請先選擇機台，再上傳至少一張基準圖。</p>
+      </div>
+
+      <div class="panel machine360NextPanel">
+        <div class="panelHead">
+          <div>
+            <h2>3. 後續建立旋轉草稿</h2>
+            <p class="muted">四張基準圖完成後，下一階段會在此提供 AI 補中間角度、旋轉預覽、異常影格審核與成本標記。</p>
+          </div>
+          <span class="analysisBadge">規劃中：AI 補角度</span>
+        </div>
+        <div class="v19Roadmap">
+          <div><span>1</span><strong>四張基準圖</strong><small>目前版本</small></div>
+          <div><span>2</span><strong>AI 補中間角度</strong><small>人工審核</small></div>
+          <div><span>3</span><strong>成本區域標記</strong><small>點擊查看</small></div>
+          <div><span>4</span><strong>主管唯讀頁</strong><small>旋轉與比較</small></div>
+        </div>
+      </div>
+    </section>
+
     <section id="suppliers" class="view">
       <div class="panel">
         <div class="panelHead">
@@ -420,7 +544,8 @@
   </dialog>
 
   <datalist id="supplierOptions"></datalist>
-  <script src="data.js?v=20260623-igs-v1-7-1"></script>
-  <script src="app.js?v=20260623-igs-v1-7-1"></script>
+  <datalist id="machineAreaOptions"></datalist>
+  <script src="data.js?v=20260623-igs-v1-9"></script>
+  <script src="app.js?v=20260623-igs-v1-9"></script>
 </body>
 </html>

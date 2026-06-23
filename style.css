@@ -425,3 +425,193 @@ td small { color: var(--muted); }
 .thicknessInput { min-width: 100px; }
 .fileNameInput { min-width: 220px; }
 .noteInput { min-width: 220px; }
+
+
+/* v1.8 成本歸屬、PDF、稅額與機台熱區 */
+.pdfPreview {
+  display: block;
+  width: 100%;
+  height: 520px;
+  border: 0;
+  background: #fff;
+}
+.pdfPreview[hidden], .receiptPreviewWrap img[hidden] { display: none; }
+.costAttributionForm select,
+.costAttributionForm input,
+.draftItemsTable select {
+  width: 100%;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  color: var(--deep);
+  background: #fff;
+  outline: none;
+}
+.costAttributionForm select,
+.costAttributionForm input { padding: 11px 12px; }
+.draftItemsTable { min-width: 2220px; }
+.itemTypeInput { min-width: 105px; }
+.areaInput { min-width: 160px; }
+.areaStatusInput { min-width: 110px; }
+.feeRow { background: #fff9ee; }
+.feeRow input:disabled,
+.feeRow select:disabled { opacity: .55; background: #f4f0e8; }
+.tinyText { display: grid; place-items: center; width: 78px; height: 58px; font-size: 11px; text-align: center; }
+.costSummaryGrid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(150px, 1fr));
+  gap: 10px;
+  margin-top: 16px;
+}
+.costSummaryGrid > div {
+  padding: 13px 15px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: #f8f5ee;
+}
+.costSummaryGrid span { display: block; color: var(--muted); font-size: 12px; }
+.costSummaryGrid strong { display: block; margin-top: 5px; color: var(--navy); font-size: 21px; }
+.costSummaryGrid .total { background: #fff1e3; border-color: #efcba7; }
+.costSummaryGrid .total strong { color: var(--orange); }
+.taxHint { margin: 10px 0 0; font-size: 12px; text-align: right; }
+.machineAreaExplorer {
+  display: grid;
+  grid-template-columns: minmax(300px, 1.15fr) minmax(280px, .85fr);
+  gap: 14px;
+  margin: 18px 0;
+}
+.machineAreaCanvas {
+  position: relative;
+  min-height: 320px;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: #ece8df;
+}
+.machineAreaCanvas > img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  min-height: 320px;
+  max-height: 520px;
+  object-fit: contain;
+}
+.machineAreaCanvas > span {
+  min-height: 320px;
+  display: grid;
+  place-items: center;
+  color: #fff;
+  background: linear-gradient(135deg, var(--navy), #77949b);
+  font-size: 34px;
+  font-weight: 900;
+}
+.machineHotspot {
+  position: absolute;
+  min-width: 34px;
+  min-height: 28px;
+  border: 2px solid rgba(216,121,63,.9);
+  border-radius: 8px;
+  color: #fff;
+  background: rgba(216,121,63,.22);
+  cursor: pointer;
+  transition: .18s ease;
+}
+.machineHotspot.suggested { border-style: dashed; }
+.machineHotspot.confirmed { border-color: rgba(73,111,123,.95); background: rgba(73,111,123,.24); }
+.machineHotspot:hover, .machineHotspot.active { transform: scale(1.02); box-shadow: 0 0 0 3px rgba(255,255,255,.8); }
+.machineHotspot span {
+  position: absolute;
+  left: 50%;
+  bottom: calc(100% + 5px);
+  transform: translateX(-50%);
+  max-width: 180px;
+  padding: 4px 7px;
+  border-radius: 7px;
+  color: #fff;
+  background: rgba(20,35,42,.88);
+  font-size: 11px;
+  white-space: nowrap;
+}
+.machineAreaCostPanel {
+  min-height: 220px;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: #faf8f2;
+  color: var(--muted);
+}
+.areaPanelHead { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
+.areaPanelHead h3 { margin: 5px 0 0; color: var(--deep); }
+.areaPanelHead strong { color: var(--orange); font-size: 23px; }
+.areaItemList { display: grid; gap: 8px; }
+.areaItem {
+  display: grid;
+  grid-template-columns: 52px 1fr auto;
+  align-items: center;
+  gap: 10px;
+  padding: 9px;
+  border-radius: 12px;
+  background: #fff;
+}
+.areaItem img { width: 52px; height: 42px; object-fit: cover; border-radius: 8px; }
+.areaItem div { min-width: 0; }
+.areaItem strong, .areaItem small { display: block; }
+.areaItem small { margin-top: 3px; overflow: hidden; color: var(--muted); text-overflow: ellipsis; white-space: nowrap; }
+.areaItem > span { color: var(--blue); font-weight: 800; }
+@media (max-width: 900px) {
+  .machineAreaExplorer { grid-template-columns: 1fr; }
+  .costSummaryGrid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 520px) {
+  .costSummaryGrid { grid-template-columns: 1fr; }
+  .pdfPreview { height: 420px; }
+}
+
+/* =====================================================
+ * v1.9 — 360° 機台基準圖建置
+ * ===================================================== */
+.nav360::before { content: "360"; font-size: 10px; font-weight: 800; letter-spacing: -.03em; }
+.view360Intro { background: linear-gradient(135deg, #173f52 0%, #245f70 55%, #2f7f80 100%); }
+.machine360SelectorPanel { margin-bottom: 18px; }
+.machine360SelectorRow { display: grid; grid-template-columns: minmax(240px, 1fr) minmax(260px, 1fr); gap: 24px; align-items: end; }
+.machine360SelectorRow label { display: grid; gap: 8px; font-weight: 700; color: var(--ink); }
+.machine360SelectorRow select { width: 100%; }
+.machine360Progress { display: grid; gap: 7px; }
+.machine360Progress > span { color: var(--muted); font-size: 13px; }
+.machine360Progress > strong { font-size: 22px; color: var(--ink); }
+.progressTrack { height: 10px; border-radius: 99px; overflow: hidden; background: #e6ecee; }
+.progressFill { height: 100%; border-radius: inherit; background: linear-gradient(90deg, #2b7185, #35a18a); transition: width .25s ease; }
+.machine360UploadGrid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; }
+.viewUploadCard { border: 1px solid #dbe4e7; border-radius: 16px; padding: 14px; background: #fbfdfd; transition: border-color .2s ease, box-shadow .2s ease, transform .2s ease; }
+.viewUploadCard:hover { transform: translateY(-1px); box-shadow: 0 10px 26px rgba(24, 67, 79, .08); }
+.viewUploadCard.hasImage { border-color: #86bdb6; background: #f7fcfb; }
+.viewUploadHead { display: flex; gap: 10px; align-items: center; margin-bottom: 12px; }
+.viewUploadHead div { display: grid; gap: 2px; }
+.viewUploadHead strong { font-size: 16px; }
+.viewUploadHead small { color: var(--muted); font-size: 11px; letter-spacing: .08em; }
+.angleBadge { display: grid; place-items: center; min-width: 52px; height: 32px; padding: 0 10px; border-radius: 99px; background: #e7f1f3; color: #235b69; font-size: 13px; font-weight: 800; }
+.viewImageDrop { position: relative; display: grid; place-items: center; min-height: 260px; overflow: hidden; border: 2px dashed #bfd0d5; border-radius: 14px; background: radial-gradient(circle at 50% 42%, #fff, #edf4f5); cursor: pointer; }
+.viewImageDrop:hover { border-color: #4c8998; }
+.viewImageDrop img { width: 100%; height: 260px; object-fit: contain; background: #fff; }
+.viewDropPlaceholder { color: #55747c; font-weight: 700; text-align: center; padding: 30px; }
+.viewUploadMeta { display: flex; justify-content: space-between; gap: 12px; align-items: center; margin-top: 10px; min-height: 28px; }
+.viewUploadMeta > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); font-size: 13px; }
+.machine360Actions { display: flex; justify-content: space-between; gap: 20px; align-items: center; margin-top: 20px; padding-top: 18px; border-top: 1px solid #e3eaec; }
+.machine360Actions p { margin: 4px 0 0; }
+.machine360NextPanel { margin-top: 18px; }
+.v19Roadmap { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+.v19Roadmap > div { display: grid; grid-template-columns: 34px 1fr; column-gap: 10px; align-items: center; padding: 14px; border: 1px solid #dde7e9; border-radius: 14px; background: #fbfdfd; }
+.v19Roadmap span { grid-row: 1 / 3; display: grid; place-items: center; width: 34px; height: 34px; border-radius: 50%; background: #264f5b; color: #fff; font-weight: 800; }
+.v19Roadmap strong { font-size: 14px; }
+.v19Roadmap small { color: var(--muted); }
+
+@media (max-width: 900px) {
+  .machine360UploadGrid { grid-template-columns: 1fr; }
+  .machine360SelectorRow { grid-template-columns: 1fr; }
+  .v19Roadmap { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+@media (max-width: 560px) {
+  .viewImageDrop, .viewImageDrop img { min-height: 220px; height: 220px; }
+  .machine360Actions { align-items: stretch; flex-direction: column; }
+  .v19Roadmap { grid-template-columns: 1fr; }
+}

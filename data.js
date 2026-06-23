@@ -5,4 +5,5 @@ window.IGS_OFFLINE_DATA = {
   costItems: [],
   suppliers: [],
   settings: [],
+  machineAreas: [],
 };

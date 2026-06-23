@@ -1,5 +1,5 @@
 // =====================================================
-// IGS 機台材料成本 ERP — 前端 v1.6
+// IGS 機台材料成本 ERP — 前端 v1.9
 // 1. ERP 密碼登入
 // 2. 工作階段驗證
 // 3. 私人 Google Sheet 安全讀取
@@ -24,9 +24,10 @@ const pageDescriptions = {
   machines: "搜尋機台並查看打樣版、測試台與實際費用。",
   costRecords: "查看各機台的成本單與原始估價單。",
   machineTotals: "彙整每台機台的個別成本總和。",
-  quotationEntry: "上傳估價單圖片並建立材料成本草稿。",
+  quotationEntry: "上傳圖片或 PDF，將成本歸入既有機台並確認稅額與安裝區域。",
   quickMachine: "快速建立新的機台主檔。",
   suppliers: "查看供應商與成本單金額。",
+  machine360Setup: "上傳四張基準角度圖，建立少量圖片驅動的 360° 機台成本視覺。",
 };
 
 let authToken = sessionStorage.getItem(AUTH_TOKEN_KEY) || "";
@@ -38,13 +39,18 @@ let state = {
   costItems: [],
   suppliers: [],
   settings: [],
+  machineAreas: [],
+  machine360Views: [],
+  machine360Draft: {},
   draftItems: [],
   stagedMachines: loadStagedMachines(),
   selectedMachineId: "",
   machineImagePayload: null,
-  quotationImagePayload: null,
+  quotationDocumentPayload: null,
   quotationAiStatus: "未辨識",
   quotationRawText: "",
+  selectedMachineStage: COST_TYPES[0],
+  selectedMachineArea: "",
 };
 
 const secureImageCache = new Map();
@@ -116,6 +122,9 @@ function normalizeCostOrder(row) {
     supplierId: String(firstValue(row, ["供應商ID", "supplierId"])),
     supplier: String(firstValue(row, ["供應商名稱", "供應商", "supplier"])),
     project: String(firstValue(row, ["專案名稱", "project"])),
+    quotationNumber: String(firstValue(row, ["報價單號", "quotationNumber"])),
+    quotationMode: String(firstValue(row, ["報價方式", "quotationMode"], "未稅")),
+    taxRate: toNumber(firstValue(row, ["稅率", "taxRate"], 5)),
     materialSubtotal: toNumber(firstValue(row, ["材料小計", "materialSubtotal"])),
     tax: toNumber(firstValue(row, ["稅額", "tax"])),
     other: toNumber(firstValue(row, ["其他費用", "other"])),
@@ -139,6 +148,7 @@ function normalizeCostItem(row) {
     id: String(firstValue(row, ["明細ID", "itemId", "id"])),
     costOrderId: String(firstValue(row, ["成本單ID", "costOrderId"])),
     index: firstValue(row, ["項次", "index"]),
+    itemType: String(firstValue(row, ["品項類型", "itemType"], "材料")),
     name: String(firstValue(row, ["品項名稱", "品項", "name"])),
     spec: String(firstValue(row, ["規格", "規格/包裝", "規格／包裝", "spec"])),
     qty,
@@ -148,9 +158,44 @@ function normalizeCostItem(row) {
     thickness: String(firstValue(row, ["厚度", "thickness"])),
     fileName: String(firstValue(row, ["檔案名稱", "fileName"])),
     subtotal: subtotal || qty * price,
+    areaId: String(firstValue(row, ["區域ID", "areaId"])),
+    areaName: String(firstValue(row, ["安裝區域", "areaName"], "未指定")),
+    areaStatus: String(firstValue(row, ["區域狀態", "areaStatus"], "未指定")),
+    hotspot: String(firstValue(row, ["熱區座標", "hotspot"])),
     imageUrl: String(firstValue(row, ["品項圖片URL", "imageUrl"])),
     imageFileId: String(firstValue(row, ["品項圖片檔案ID", "imageFileId"])),
     note: String(firstValue(row, ["備註", "note"])),
+  };
+}
+
+function normalizeMachineArea(row) {
+  return {
+    id: String(firstValue(row, ["區域ID", "areaId", "id"])),
+    machineId: String(firstValue(row, ["機台ID", "machineId"])),
+    name: String(firstValue(row, ["區域名稱", "areaName", "name"])),
+    x: toNumber(firstValue(row, ["X百分比", "x"])),
+    y: toNumber(firstValue(row, ["Y百分比", "y"])),
+    width: toNumber(firstValue(row, ["寬度百分比", "width"])),
+    height: toNumber(firstValue(row, ["高度百分比", "height"])),
+    status: String(firstValue(row, ["區域狀態", "status"], "AI建議")),
+    note: String(firstValue(row, ["備註", "note"])),
+  };
+}
+
+
+function normalizeMachine360View(row) {
+  return {
+    id: String(firstValue(row, ["視圖ID", "viewId", "id"])),
+    machineId: String(firstValue(row, ["機台ID", "machineId"])),
+    viewKey: String(firstValue(row, ["視角代碼", "viewKey"])),
+    viewName: String(firstValue(row, ["視角名稱", "viewName"])),
+    angle: toNumber(firstValue(row, ["角度", "angle"])),
+    imageUrl: String(firstValue(row, ["圖片URL", "imageUrl"])),
+    imageFileId: String(firstValue(row, ["圖片檔案ID", "imageFileId"])),
+    originalName: String(firstValue(row, ["原始檔名", "originalName"])),
+    status: String(firstValue(row, ["圖片狀態", "status"], "基準圖")),
+    createdAt: String(firstValue(row, ["建立時間", "createdAt"])),
+    updatedAt: String(firstValue(row, ["更新時間", "updatedAt"])),
   };
 }
 
@@ -272,6 +317,7 @@ document.addEventListener("DOMContentLoaded", () => {
   setupForms();
   setupQuotationPreview();
   setupDraftItems();
+  setupMachine360();
   setupExport();
   setupSecureImageActions();
   $("quotationDate").value = todayValue();
@@ -376,9 +422,14 @@ function resetPrivateState() {
   state.costItems = [];
   state.suppliers = [];
   state.settings = [];
+  state.machineAreas = [];
+  state.machine360Views = [];
+  state.machine360Draft = {};
   state.selectedMachineId = "";
   state.machineImagePayload = null;
-  state.quotationImagePayload = null;
+  state.quotationDocumentPayload = null;
+  state.selectedMachineStage = COST_TYPES[0];
+  state.selectedMachineArea = "";
   state.quotationAiStatus = "未辨識";
   state.quotationRawText = "";
   secureImageCache.clear();
@@ -427,7 +478,7 @@ function setupNavigation() {
       $(viewId)?.classList.add("active");
       $("pageTitle").textContent = button.dataset.title || button.textContent.trim();
       $("pageDescription").textContent = pageDescriptions[viewId] || "";
-      $("globalSearch").style.display = ["quotationEntry", "quickMachine"].includes(viewId) ? "none" : "block";
+      $("globalSearch").style.display = ["quotationEntry", "quickMachine", "machine360Setup"].includes(viewId) ? "none" : "block";
       window.scrollTo({ top: 0, behavior: "smooth" });
     });
   });
@@ -464,10 +515,21 @@ function setupForms() {
 
   $("quotationForm").addEventListener("submit", handleCreateCostOrder);
   $("resetQuotationForm").addEventListener("click", resetQuotationForm);
-  $("quotationTax").addEventListener("input", renderDraftSubtotal);
-  $("quotationOther").addEventListener("input", renderDraftSubtotal);
-  $("analyzeQuotation").addEventListener("click", analyzeQuotationImage);
+  $("quotationMode").addEventListener("change", handleQuotationModeChange);
+  $("quotationTaxRate").addEventListener("input", renderDraftSubtotal);
+  $("quotationMachine").addEventListener("change", populateMachineAreaOptions);
+  $("analyzeQuotation").addEventListener("click", analyzeQuotationDocument);
 }
+
+function handleQuotationModeChange() {
+  const mode = $("quotationMode").value;
+  const taxRate = $("quotationTaxRate");
+  taxRate.disabled = mode === "不計稅";
+  if (mode === "不計稅") taxRate.value = 0;
+  if (mode !== "不計稅" && toNumber(taxRate.value) <= 0) taxRate.value = 5;
+  renderDraftSubtotal();
+}
+
 function addMachineToStaged(event) {
   event.preventDefault();
 
@@ -696,36 +758,55 @@ function setupQuotationPreview() {
     const file = event.target.files?.[0];
     if (!file) return;
     try {
-      state.quotationImagePayload = await compressImageFile(file, 1800, 0.86);
-      $("quotationPreview").src = state.quotationImagePayload.dataUrl;
-      $("quotationFileName").textContent = state.quotationImagePayload.name;
+      state.quotationDocumentPayload = await prepareQuotationDocument(file);
+      $("quotationFileName").textContent = state.quotationDocumentPayload.name;
       $("quotationPreviewWrap").hidden = false;
+
+      const isPdf = state.quotationDocumentPayload.mimeType === "application/pdf";
+      $("quotationPreview").hidden = isPdf;
+      $("quotationPdfPreview").hidden = !isPdf;
+      if (isPdf) {
+        $("quotationPdfPreview").src = state.quotationDocumentPayload.dataUrl;
+        $("quotationPreview").removeAttribute("src");
+      } else {
+        $("quotationPreview").src = state.quotationDocumentPayload.dataUrl;
+        $("quotationPdfPreview").removeAttribute("src");
+      }
+
       $("analyzeQuotation").disabled = false;
-      setQuotationAiStatus("圖片已準備完成，可進行 AI 智慧辨識。", "ready");
+      setQuotationAiStatus(`${isPdf ? "PDF" : "圖片"}已準備完成，可進行 AI 智慧辨識。`, "ready");
     } catch (error) {
-      clearQuotationImage();
-      showNotice(`估價單圖片處理失敗：${error.message}`, "error");
+      clearQuotationDocument();
+      showNotice(`估價單檔案處理失敗：${error.message}`, "error");
     }
   });
-  $("clearQuotation").addEventListener("click", clearQuotationImage);
+  $("clearQuotation").addEventListener("click", clearQuotationDocument);
 }
 
-function clearQuotationImage() {
-  state.quotationImagePayload = null;
+function clearQuotationDocument() {
+  state.quotationDocumentPayload = null;
   state.quotationAiStatus = "未辨識";
   state.quotationRawText = "";
   $("quotationFile").value = "";
   $("quotationPreview").removeAttribute("src");
+  $("quotationPdfPreview").removeAttribute("src");
+  $("quotationPreview").hidden = true;
+  $("quotationPdfPreview").hidden = true;
   $("quotationPreviewWrap").hidden = true;
   $("analyzeQuotation").disabled = true;
   $("quotationRawText").value = "";
   $("quotationAiBadge").textContent = "尚未辨識";
-  setQuotationAiStatus("尚未選擇估價單圖片");
+  setQuotationAiStatus("尚未選擇估價單檔案");
 }
 
-async function analyzeQuotationImage() {
-  if (!state.quotationImagePayload) {
-    showNotice("請先上傳估價單圖片。", "warn");
+// 保留舊函式名稱，避免舊快取事件呼叫失敗。
+function clearQuotationImage() {
+  clearQuotationDocument();
+}
+
+async function analyzeQuotationDocument() {
+  if (!state.quotationDocumentPayload) {
+    showNotice("請先上傳估價單圖片或 PDF。", "warn");
     return;
   }
 
@@ -736,15 +817,17 @@ async function analyzeQuotationImage() {
   setQuotationAiStatus("Gemini 正在讀取估價單；模型忙碌時會自動重試，請稍候…", "loading");
 
   try {
+    const machineImage = await getSelectedMachineImagePayload();
     const response = await secureApiRequest({
       action: "analyzeQuotation",
-      image: stripDataUrl(state.quotationImagePayload),
-    }, { includeToken: true, timeoutMs: 180000 });
+      document: stripDataUrl(state.quotationDocumentPayload),
+      machineImage,
+    }, { includeToken: true, timeoutMs: 240000 });
     const result = response.result || {};
     applyQuotationAnalysis(result);
     state.quotationAiStatus = "已辨識";
     $("quotationAiBadge").textContent = "AI 已辨識，待人工確認";
-    setQuotationAiStatus(`辨識完成，共帶入 ${state.draftItems.length} 個品項。請確認材質、厚度與檔案名稱。`, "success");
+    setQuotationAiStatus(`辨識完成，共帶入 ${state.draftItems.length} 筆明細。安裝區域若無足夠依據會保留「未指定」。`, "success");
     showNotice("AI 已先填入可辨識資料；請確認後再寫入 Google Sheet。");
   } catch (error) {
     state.quotationAiStatus = "辨識失敗";
@@ -757,19 +840,50 @@ async function analyzeQuotationImage() {
   }
 }
 
+// 保留舊函式名稱。
+function analyzeQuotationImage() {
+  return analyzeQuotationDocument();
+}
+
+async function getSelectedMachineImagePayload() {
+  const machine = machineById($("quotationMachine").value);
+  if (!machine?.imageFileId) return null;
+  try {
+    const response = await secureApiRequest(
+      { action: "getImageData", fileId: machine.imageFileId },
+      { includeToken: true, timeoutMs: 60000 }
+    );
+    const result = response.result || {};
+    if (!String(result.mimeType || "").startsWith("image/")) return null;
+    return {
+      name: String(result.name || "machine.jpg"),
+      mimeType: String(result.mimeType || "image/jpeg"),
+      base64: String(result.base64 || ""),
+    };
+  } catch (error) {
+    console.info("無法附加機台圖片供 AI 比對：", error.message);
+    return null;
+  }
+}
+
 function applyQuotationAnalysis(result) {
   if (result.date) $("quotationDate").value = normalizeDate(result.date);
   if (result.supplier) $("quotationSupplier").value = String(result.supplier);
   if (result.project) $("quotationProject").value = String(result.project);
-  if (toNumber(result.tax) >= 0) $("quotationTax").value = toNumber(result.tax);
-  if (toNumber(result.other) >= 0) $("quotationOther").value = toNumber(result.other);
+  if (result.quotationNumber) $("quotationNumber").value = String(result.quotationNumber);
+  if (["未稅", "含稅", "不計稅"].includes(String(result.quotationMode || ""))) {
+    $("quotationMode").value = String(result.quotationMode);
+  }
+  if (toNumber(result.taxRate) >= 0) $("quotationTaxRate").value = toNumber(result.taxRate);
   if (result.note) $("quotationNote").value = String(result.note);
   state.quotationRawText = String(result.rawText || "");
   $("quotationRawText").value = state.quotationRawText;
 
-  const items = Array.isArray(result.items) ? result.items : [];
-  if (items.length) {
-    state.draftItems = items.map((item) => ({
+  const materialItems = Array.isArray(result.items) ? result.items : [];
+  const feeItems = Array.isArray(result.otherFees) ? result.otherFees : [];
+  const rows = [
+    ...materialItems.map((item) => ({
+      itemType: "材料",
       name: String(item.name || ""),
       spec: String(item.spec || ""),
       qty: toNumber(item.qty) || 1,
@@ -778,12 +892,37 @@ function applyQuotationAnalysis(result) {
       material: String(item.material || ""),
       thickness: String(item.thickness || ""),
       fileName: String(item.fileName || ""),
+      areaName: String(item.areaName || "未指定") || "未指定",
+      areaStatus: ["AI建議", "已確認"].includes(String(item.areaStatus || "")) ? String(item.areaStatus) : "未指定",
+      hotspot: normalizeHotspotValue(item.areaBox || item.hotspot),
       note: String(item.note || ""),
       image: null,
       confidence: toNumber(item.confidence),
-    }));
+    })),
+    ...feeItems.map((fee) => ({
+      ...emptyDraftItem("附加費用"),
+      name: String(fee.name || "其他費用"),
+      price: toNumber(fee.amount),
+      note: String(fee.note || ""),
+    })),
+  ];
+
+  if (rows.length) {
+    state.draftItems = rows;
     renderDraftItems();
   }
+  handleQuotationModeChange();
+}
+
+function normalizeHotspotValue(value) {
+  if (!value) return "";
+  if (typeof value === "string") return value;
+  const x = toNumber(value.x);
+  const y = toNumber(value.y);
+  const width = toNumber(value.width);
+  const height = toNumber(value.height);
+  if (width <= 0 || height <= 0) return "";
+  return [x, y, width, height].join(",");
 }
 
 function setQuotationAiStatus(message, type = "") {
@@ -793,29 +932,26 @@ function setQuotationAiStatus(message, type = "") {
 }
 function setupDraftItems() {
   $("addDraftItem").addEventListener("click", () => {
-    state.draftItems.push(emptyDraftItem());
+    state.draftItems.push(emptyDraftItem("材料"));
     renderDraftItems();
   });
-  $("draftItemRows").addEventListener("input", (event) => {
-    const input = event.target.closest("[data-field]");
-    const row = event.target.closest("[data-index]");
-    if (!input || !row) return;
-    const item = state.draftItems[Number(row.dataset.index)];
-    if (!item) return;
-    const field = input.dataset.field;
-    item[field] = ["qty", "price"].includes(field) ? toNumber(input.value) : input.value;
-    renderDraftSubtotal();
-    if (["qty", "price"].includes(field)) {
-      const subtotalCell = row.querySelector("[data-subtotal]");
-      if (subtotalCell) subtotalCell.textContent = money(item.qty * item.price);
-    }
+  $("addFeeItem").addEventListener("click", () => {
+    state.draftItems.push(emptyDraftItem("附加費用"));
+    renderDraftItems();
   });
-  $("draftItemRows").addEventListener("change", handleDraftItemImageChange);
+  $("draftItemRows").addEventListener("input", handleDraftRowInput);
+  $("draftItemRows").addEventListener("change", (event) => {
+    if (event.target.matches("[data-item-image]")) {
+      handleDraftItemImageChange(event);
+      return;
+    }
+    handleDraftRowInput(event);
+  });
   $("draftItemRows").addEventListener("click", (event) => {
     const remove = event.target.closest("[data-remove]");
     if (remove) {
       state.draftItems.splice(Number(remove.dataset.remove), 1);
-      if (!state.draftItems.length) state.draftItems.push(emptyDraftItem());
+      if (!state.draftItems.length) state.draftItems.push(emptyDraftItem("材料"));
       renderDraftItems();
       return;
     }
@@ -826,12 +962,59 @@ function setupDraftItems() {
       renderDraftItems();
     }
   });
-  state.draftItems = [emptyDraftItem()];
+  state.draftItems = [emptyDraftItem("材料")];
   renderDraftItems();
 }
 
-function emptyDraftItem() {
-  return { name: "", spec: "", qty: 1, unit: "", price: 0, material: "", thickness: "", fileName: "", note: "", image: null, confidence: 0 };
+function handleDraftRowInput(event) {
+  const input = event.target.closest("[data-field]");
+  const row = event.target.closest("[data-index]");
+  if (!input || !row) return;
+  const item = state.draftItems[Number(row.dataset.index)];
+  if (!item) return;
+  const field = input.dataset.field;
+  item[field] = ["qty", "price"].includes(field) ? toNumber(input.value) : input.value;
+
+  if (field === "itemType" && item.itemType === "附加費用") {
+    item.qty = 1;
+    item.unit = "";
+    item.spec = "";
+    item.material = "";
+    item.thickness = "";
+    item.fileName = "";
+    item.areaName = "未指定";
+    item.areaStatus = "未指定";
+    item.hotspot = "";
+    item.image = null;
+    renderDraftItems();
+    return;
+  }
+
+  renderDraftSubtotal();
+  if (["qty", "price"].includes(field)) {
+    const subtotalCell = row.querySelector("[data-subtotal]");
+    if (subtotalCell) subtotalCell.textContent = money(item.qty * item.price);
+  }
+}
+
+function emptyDraftItem(itemType = "材料") {
+  return {
+    itemType,
+    name: "",
+    spec: "",
+    qty: 1,
+    unit: "",
+    price: 0,
+    material: "",
+    thickness: "",
+    fileName: "",
+    areaName: "未指定",
+    areaStatus: "未指定",
+    hotspot: "",
+    note: "",
+    image: null,
+    confidence: 0,
+  };
 }
 
 async function handleDraftItemImageChange(event) {
@@ -852,24 +1035,28 @@ async function handleCreateCostOrder(event) {
 
   const validItems = state.draftItems.filter((item) => String(item.name || "").trim());
   if (!validItems.length) {
-    showNotice("請至少填寫一個材料品項。", "warn");
+    showNotice("請至少填寫一個材料或附加費用。", "warn");
     return;
   }
   if (!$("quotationMachine").value) {
-    showNotice("請先選擇機台。", "warn");
+    showNotice("請先選擇成本要歸入的機台。", "warn");
     return;
   }
 
-  const invalidItem = validItems.find((item) => toNumber(item.qty) <= 0 || toNumber(item.price) < 0);
+  const invalidItem = validItems.find((item) =>
+    item.itemType === "材料"
+      ? toNumber(item.qty) <= 0 || toNumber(item.price) < 0
+      : toNumber(item.price) < 0
+  );
   if (invalidItem) {
-    showNotice(`品項「${invalidItem.name}」的數量或單價不正確。`, "warn");
+    showNotice(`品項「${invalidItem.name}」的數量或金額不正確。`, "warn");
     return;
   }
 
   const button = $("submitCostOrder");
   const originalText = button.textContent;
   button.disabled = true;
-  button.textContent = "圖片上傳與寫入中…";
+  button.textContent = "檔案上傳與寫入中…";
 
   try {
     const response = await secureApiRequest({
@@ -880,29 +1067,34 @@ async function handleCreateCostOrder(event) {
         date: $("quotationDate").value,
         supplier: $("quotationSupplier").value.trim(),
         project: $("quotationProject").value.trim(),
-        tax: toNumber($("quotationTax").value),
-        other: toNumber($("quotationOther").value),
+        quotationNumber: $("quotationNumber").value.trim(),
+        quotationMode: $("quotationMode").value,
+        taxRate: toNumber($("quotationTaxRate").value),
         note: $("quotationNote").value.trim(),
         aiStatus: state.quotationAiStatus === "已辨識" ? "人工確認" : state.quotationAiStatus,
         aiRawText: state.quotationRawText,
-        quotationImage: state.quotationImagePayload ? stripDataUrl(state.quotationImagePayload) : null,
+        quotationFile: state.quotationDocumentPayload ? stripDataUrl(state.quotationDocumentPayload) : null,
       },
       items: validItems.map((item) => ({
+        itemType: item.itemType === "附加費用" ? "附加費用" : "材料",
         name: String(item.name || "").trim(),
         spec: String(item.spec || "").trim(),
-        qty: toNumber(item.qty),
+        qty: item.itemType === "附加費用" ? 1 : toNumber(item.qty),
         unit: String(item.unit || "").trim(),
         price: toNumber(item.price),
         material: String(item.material || "").trim(),
         thickness: String(item.thickness || "").trim(),
         fileName: String(item.fileName || "").trim(),
+        areaName: String(item.areaName || "未指定").trim() || "未指定",
+        areaStatus: String(item.areaStatus || "未指定").trim() || "未指定",
+        hotspot: String(item.hotspot || "").trim(),
         note: String(item.note || "").trim(),
         image: item.image ? stripDataUrl(item.image) : null,
       })),
-    }, { includeToken: true, timeoutMs: 240000 });
+    }, { includeToken: true, timeoutMs: 300000 });
 
     const result = response.result || {};
-    showNotice(`成本單 ${result.costOrderId || ""} 已建立，共 ${result.itemCount || validItems.length} 個品項。`);
+    showNotice(`成本單 ${result.costOrderId || ""} 已建立，共 ${result.itemCount || validItems.length} 筆明細，總成本 ${money(result.total)}。`);
     resetQuotationForm();
     await loadData();
     document.querySelector('[data-view="costRecords"]')?.click();
@@ -921,21 +1113,49 @@ function resetQuotationForm() {
     $("quotationMachine").value = machineValue;
   }
   $("quotationDate").value = todayValue();
-  $("quotationTax").value = 0;
-  $("quotationOther").value = 0;
-  state.draftItems = [emptyDraftItem()];
+  $("quotationMode").value = "未稅";
+  $("quotationTaxRate").value = 5;
+  state.draftItems = [emptyDraftItem("材料")];
   state.quotationRawText = "";
-  clearQuotationImage();
+  clearQuotationDocument();
+  populateMachineAreaOptions();
   renderDraftItems();
+  handleQuotationModeChange();
 }
 
 function stripDataUrl(payload) {
   if (!payload) return null;
   return {
-    name: String(payload.name || "image.jpg"),
-    mimeType: String(payload.mimeType || "image/jpeg"),
+    name: String(payload.name || "file"),
+    mimeType: String(payload.mimeType || "application/octet-stream"),
     base64: String(payload.base64 || ""),
   };
+}
+
+async function prepareQuotationDocument(file) {
+  const type = String(file?.type || "").toLowerCase();
+  const extension = String(file?.name || "").toLowerCase().split(".").pop();
+  const isPdf = type === "application/pdf" || extension === "pdf";
+  const isImage = ["image/jpeg", "image/png", "image/webp"].includes(type) || ["jpg", "jpeg", "png", "webp"].includes(extension);
+
+  if (!isPdf && !isImage) {
+    throw new Error("估價單僅支援 JPG、JPEG、PNG、WebP 或 PDF，不支援 Word");
+  }
+
+  if (isPdf) {
+    if (file.size > 10 * 1024 * 1024) {
+      throw new Error("PDF 不可超過 10 MB");
+    }
+    const dataUrl = await readFileAsDataUrl(file);
+    return {
+      name: String(file.name || "quotation.pdf"),
+      mimeType: "application/pdf",
+      base64: dataUrl.split(",")[1] || "",
+      dataUrl,
+    };
+  }
+
+  return compressImageFile(file, 1800, 0.86);
 }
 
 async function compressImageFile(file, maxSide = 1400, quality = 0.82) {
@@ -974,7 +1194,7 @@ function readFileAsDataUrl(file) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = () => resolve(String(reader.result || ""));
-    reader.onerror = () => reject(new Error("無法讀取圖片"));
+    reader.onerror = () => reject(new Error("無法讀取檔案"));
     reader.readAsDataURL(file);
   });
 }
@@ -1010,28 +1230,210 @@ async function hydrateSecureImages(root = document) {
   }));
 }
 
-async function getPrivateImageDataUrl(fileId) {
+async function getPrivateFileData(fileId) {
   if (secureImageCache.has(fileId)) return secureImageCache.get(fileId);
   const response = await secureApiRequest({ action: "getImageData", fileId }, { includeToken: true, timeoutMs: 60000 });
   const result = response.result || {};
-  const dataUrl = `data:${result.mimeType || "image/jpeg"};base64,${result.base64 || ""}`;
-  secureImageCache.set(fileId, dataUrl);
-  return dataUrl;
+  const fileData = {
+    name: String(result.name || "IGS 檔案"),
+    mimeType: String(result.mimeType || "application/octet-stream"),
+    base64: String(result.base64 || ""),
+  };
+  fileData.dataUrl = `data:${fileData.mimeType};base64,${fileData.base64}`;
+  secureImageCache.set(fileId, fileData);
+  return fileData;
+}
+
+async function getPrivateImageDataUrl(fileId) {
+  const file = await getPrivateFileData(fileId);
+  return file.dataUrl;
 }
 
 async function viewPrivateImage(fileId, title) {
   const viewer = window.open("", "_blank");
   try {
-    const dataUrl = await getPrivateImageDataUrl(fileId);
+    const file = await getPrivateFileData(fileId);
     if (viewer) {
       viewer.document.title = title;
       viewer.document.body.style.margin = "0";
       viewer.document.body.style.background = "#111";
-      viewer.document.body.innerHTML = `<img src="${dataUrl}" alt="${escapeHTML(title)}" style="display:block;max-width:100%;max-height:100vh;margin:auto;object-fit:contain">`;
+      if (file.mimeType === "application/pdf") {
+        viewer.document.body.innerHTML = `<iframe src="${file.dataUrl}" title="${escapeHTML(title)}" style="width:100vw;height:100vh;border:0;background:#fff"></iframe>`;
+      } else {
+        viewer.document.body.innerHTML = `<img src="${file.dataUrl}" alt="${escapeHTML(title)}" style="display:block;max-width:100%;max-height:100vh;margin:auto;object-fit:contain">`;
+      }
     }
   } catch (error) {
     if (viewer) viewer.close();
-    showNotice(`圖片讀取失敗：${error.message}`, "error");
+    showNotice(`檔案讀取失敗：${error.message}`, "error");
+  }
+}
+
+
+const MACHINE_360_VIEW_CONFIG = Object.freeze({
+  FRONT: { label: "正面", angle: 0, inputId: "machine360FrontFile", previewId: "machine360FrontPreview", nameId: "machine360FrontName" },
+  RIGHT45: { label: "右 45°", angle: 45, inputId: "machine360Right45File", previewId: "machine360Right45Preview", nameId: "machine360Right45Name" },
+  BACK: { label: "背面", angle: 180, inputId: "machine360BackFile", previewId: "machine360BackPreview", nameId: "machine360BackName" },
+  LEFT45: { label: "左 45°", angle: 315, inputId: "machine360Left45File", previewId: "machine360Left45Preview", nameId: "machine360Left45Name" },
+});
+
+function setupMachine360() {
+  const machineSelect = $("machine360Machine");
+  if (!machineSelect) return;
+  machineSelect.addEventListener("change", () => {
+    state.machine360Draft = {};
+    renderMachine360Setup();
+  });
+  document.querySelectorAll("[data-machine360-view]").forEach((input) => {
+    input.addEventListener("change", handleMachine360FileSelection);
+  });
+  document.querySelectorAll("[data-clear-360]").forEach((button) => {
+    button.addEventListener("click", () => clearMachine360Draft(button.dataset.clear360));
+  });
+  $("saveMachine360Views").addEventListener("click", saveMachine360Views);
+  renderMachine360Setup();
+}
+
+function machine360ViewsForMachine(machineId) {
+  return state.machine360Views.filter((view) => view.machineId === machineId);
+}
+
+function existingMachine360View(machineId, viewKey) {
+  return state.machine360Views.find((view) => view.machineId === machineId && view.viewKey === viewKey) || null;
+}
+
+async function handleMachine360FileSelection(event) {
+  const input = event.currentTarget;
+  const viewKey = input.dataset.machine360View;
+  const file = input.files?.[0];
+  if (!viewKey || !file) return;
+  try {
+    const payload = await compressImageFile(file, 2000, 0.88);
+    state.machine360Draft[viewKey] = payload;
+    renderMachine360Setup();
+  } catch (error) {
+    input.value = "";
+    showNotice(`角度圖片讀取失敗：${error.message}`, "error");
+  }
+}
+
+function clearMachine360Draft(viewKey) {
+  const config = MACHINE_360_VIEW_CONFIG[viewKey];
+  if (!config) return;
+  delete state.machine360Draft[viewKey];
+  const input = $(config.inputId);
+  if (input) input.value = "";
+  renderMachine360Setup();
+}
+
+async function renderMachine360Setup() {
+  const machineSelect = $("machine360Machine");
+  if (!machineSelect) return;
+  const machineId = machineSelect.value || "";
+  const existingViews = machine360ViewsForMachine(machineId);
+  let completed = 0;
+
+  for (const [viewKey, config] of Object.entries(MACHINE_360_VIEW_CONFIG)) {
+    const preview = $(config.previewId);
+    const name = $(config.nameId);
+    const card = document.querySelector(`.viewUploadCard[data-view-key="${viewKey}"]`);
+    const placeholder = card?.querySelector(".viewDropPlaceholder");
+    const draft = state.machine360Draft[viewKey];
+    const existing = existingViews.find((view) => view.viewKey === viewKey);
+    card?.classList.toggle("hasImage", Boolean(draft || existing));
+
+    if (draft) {
+      preview.src = draft.dataUrl;
+      preview.hidden = false;
+      if (placeholder) placeholder.hidden = true;
+      name.textContent = `${draft.name}（尚未儲存）`;
+      completed += 1;
+      continue;
+    }
+
+    if (existing?.imageFileId) {
+      preview.hidden = false;
+      if (placeholder) placeholder.hidden = true;
+      name.textContent = existing.originalName || `${config.label}基準圖`;
+      if (preview.dataset.fileId !== existing.imageFileId) {
+        preview.dataset.fileId = existing.imageFileId;
+        preview.removeAttribute("src");
+        try {
+          preview.src = await getPrivateImageDataUrl(existing.imageFileId);
+        } catch (error) {
+          preview.hidden = true;
+          if (placeholder) {
+            placeholder.hidden = false;
+            placeholder.textContent = "圖片讀取失敗，請重新上傳";
+          }
+        }
+      }
+      completed += 1;
+      continue;
+    }
+
+    preview.hidden = true;
+    preview.removeAttribute("src");
+    delete preview.dataset.fileId;
+    if (placeholder) {
+      placeholder.hidden = false;
+      placeholder.textContent = `＋ 上傳${config.label}圖`;
+    }
+    name.textContent = "尚未上傳";
+  }
+
+  const percent = Math.round((completed / 4) * 100);
+  $("machine360ProgressText").textContent = `${completed} / 4`;
+  $("machine360ProgressBar").style.width = `${percent}%`;
+  const badge = $("machine360CompletionBadge");
+  badge.textContent = machineId ? (completed === 4 ? "四張基準圖已完成" : `已完成 ${completed} / 4 張`) : "尚未選擇機台";
+  badge.classList.toggle("connected", completed === 4);
+  $("machine360Status").textContent = machineId
+    ? (completed === 4 ? "基準角度已齊全，下一階段可建立 AI 旋轉草稿。" : "可先儲存目前已有的圖片，之後再補齊其餘角度。")
+    : "請先選擇機台，再上傳至少一張基準圖。";
+}
+
+async function saveMachine360Views() {
+  const machineId = $("machine360Machine").value;
+  if (!machineId) {
+    showNotice("請先選擇要綁定的機台。", "warn");
+    return;
+  }
+  const views = Object.entries(state.machine360Draft).map(([viewKey, image]) => ({
+    viewKey,
+    image: stripDataUrl(image),
+  }));
+  if (!views.length) {
+    showNotice("目前沒有新選擇的角度圖片。", "warn");
+    return;
+  }
+
+  const button = $("saveMachine360Views");
+  button.disabled = true;
+  button.textContent = "正在儲存…";
+  $("machine360Status").textContent = "正在將基準圖保存到私人 Google Drive…";
+  try {
+    const response = await secureApiRequest(
+      { action: "saveMachine360Views", machineId, views },
+      { includeToken: true, timeoutMs: 120000 }
+    );
+    const saved = (response.result?.views || []).map(normalizeMachine360View);
+    const savedKeys = new Set(saved.map((view) => `${view.machineId}|${view.viewKey}`));
+    state.machine360Views = state.machine360Views.filter((view) => !savedKeys.has(`${view.machineId}|${view.viewKey}`));
+    state.machine360Views.push(...saved);
+    state.machine360Draft = {};
+    Object.values(MACHINE_360_VIEW_CONFIG).forEach((config) => {
+      const input = $(config.inputId);
+      if (input) input.value = "";
+    });
+    await renderMachine360Setup();
+    showNotice(`已儲存 ${saved.length} 張基準角度圖。`, "success");
+  } catch (error) {
+    showNotice(`基準角度圖儲存失敗：${error.message}`, "error");
+    $("machine360Status").textContent = "儲存失敗，圖片仍保留在目前頁面，可修正後重試。";
+  } finally {
+    button.disabled = false;
+    button.textContent = "儲存基準角度圖";
   }
 }
 
@@ -1042,10 +1444,10 @@ function setupExport() {
       showNotice("目前沒有可匯出的成本紀錄。", "warn");
       return;
     }
-    const header = ["日期", "機台", "費用類型", "供應商", "專案名稱", "材料小計", "稅額", "其他費用", "階段總成本", "估價單圖片URL"];
+    const header = ["日期", "機台", "費用類型", "供應商", "報價單號", "報價方式", "稅率", "專案名稱", "材料小計", "附加費用", "稅額", "階段總成本", "估價單檔案URL"];
     const body = rows.map((order) => {
       const machine = machineById(order.machineId);
-      return [order.date, machine?.name || order.machineId, order.type, order.supplier, order.project, order.materialSubtotal, order.tax, order.other, orderTotal(order), order.quotationUrl];
+      return [order.date, machine?.name || order.machineId, order.type, order.supplier, order.quotationNumber, order.quotationMode, order.taxRate, order.project, order.materialSubtotal, order.other, order.tax, orderTotal(order), order.quotationUrl];
     });
     downloadCsv([header, ...body], "IGS_成本紀錄.csv");
   });
@@ -1069,6 +1471,8 @@ async function loadData() {
     state.costOrders = (Array.isArray(result.costOrders) ? result.costOrders : []).map(normalizeCostOrder);
     state.costItems = (Array.isArray(result.costItems) ? result.costItems : []).map(normalizeCostItem);
     state.suppliers = (Array.isArray(result.suppliers) ? result.suppliers : []).map(normalizeSupplier);
+    state.machineAreas = (Array.isArray(result.machineAreas) ? result.machineAreas : []).map(normalizeMachineArea);
+    state.machine360Views = (Array.isArray(result.machine360Views) ? result.machine360Views : []).map(normalizeMachine360View);
 
     populateControls();
     renderAll();
@@ -1102,11 +1506,42 @@ function populateControls() {
     ? machineOptions.map((item) => `<option value="${escapeHTML(item.value)}">${escapeHTML(item.label)}</option>`).join("")
     : '<option value="">請先建立機台</option>';
 
+  const machine360Machine = $("machine360Machine");
+  if (machine360Machine) {
+    const current360 = machine360Machine.value;
+    machine360Machine.innerHTML = machineOptions.length
+      ? machineOptions.map((item) => `<option value="${escapeHTML(item.value)}">${escapeHTML(item.label)}</option>`).join("")
+      : '<option value="">請先建立機台</option>';
+    if ([...machine360Machine.options].some((option) => option.value === current360)) machine360Machine.value = current360;
+    renderMachine360Setup();
+  }
+
   const supplierNames = unique([
     ...state.suppliers.map((supplier) => supplier.name),
     ...state.costOrders.map((order) => order.supplier),
   ]).filter(Boolean);
   $("supplierOptions").innerHTML = supplierNames.map((name) => `<option value="${escapeHTML(name)}"></option>`).join("");
+  populateMachineAreaOptions();
+}
+
+function areasForMachine(machineId) {
+  const saved = state.machineAreas
+    .filter((area) => area.machineId === machineId && area.name)
+    .map((area) => area.name);
+  const orderIds = state.costOrders.filter((order) => order.machineId === machineId).map((order) => order.id);
+  const fromItems = state.costItems
+    .filter((item) => orderIds.includes(item.costOrderId))
+    .map((item) => item.areaName)
+    .filter((name) => name && name !== "未指定");
+  return unique([...saved, ...fromItems]);
+}
+
+function populateMachineAreaOptions() {
+  const machineId = $("quotationMachine")?.value || "";
+  const areas = areasForMachine(machineId);
+  if ($("machineAreaOptions")) {
+    $("machineAreaOptions").innerHTML = areas.map((name) => `<option value="${escapeHTML(name)}"></option>`).join("");
+  }
 }
 
 function fillSelect(id, values, includeAll, allLabel = "全部") {
@@ -1235,9 +1670,9 @@ function renderCostRecords() {
     ? orders.map((order) => {
       const machine = machineById(order.machineId);
       const link = order.quotationFileId
-        ? `<button class="tableAction" type="button" data-view-file="${escapeHTML(order.quotationFileId)}" data-file-name="${escapeHTML(order.quotationFileName || "估價單")}">查看圖片</button>`
+        ? `<button class="tableAction" type="button" data-view-file="${escapeHTML(order.quotationFileId)}" data-file-name="${escapeHTML(order.quotationFileName || "估價單")}">查看檔案</button>`
         : order.quotationUrl
-          ? `<a class="textLink" href="${escapeHTML(order.quotationUrl)}" target="_blank" rel="noopener">查看圖片</a>`
+          ? `<a class="textLink" href="${escapeHTML(order.quotationUrl)}" target="_blank" rel="noopener">查看檔案</a>`
           : "—";
       return `<tr>
         <td>${escapeHTML(order.date || "—")}</td>
@@ -1313,12 +1748,19 @@ function openMachineDialog(machineId) {
   const machine = machineById(machineId);
   if (!machine) return;
   state.selectedMachineId = machineId;
+  state.selectedMachineStage = COST_TYPES[0];
+  state.selectedMachineArea = "";
   const totals = totalsForMachine(machineId);
+  const areas = state.machineAreas.filter((area) => area.machineId === machineId && isValidMachineArea(area));
+  const imageMarkup = machine.imageFileId
+    ? `<img data-secure-file-id="${escapeHTML(machine.imageFileId)}" alt="${escapeHTML(machine.name)}">`
+    : machine.imageUrl
+      ? `<img src="${escapeHTML(machine.imageUrl)}" alt="${escapeHTML(machine.name)}">`
+      : `<span>${escapeHTML(machine.name.slice(0, 2).toUpperCase())}</span>`;
+
   $("machineDialogContent").innerHTML = `
     <div class="dialogHeader">
-      <div class="dialogMachineImage ${(machine.imageFileId || machine.imageUrl) ? "hasImage" : ""}">
-        ${machine.imageFileId ? `<img data-secure-file-id="${escapeHTML(machine.imageFileId)}" alt="${escapeHTML(machine.name)}">` : machine.imageUrl ? `<img src="${escapeHTML(machine.imageUrl)}" alt="${escapeHTML(machine.name)}">` : `<span>${escapeHTML(machine.name.slice(0, 2).toUpperCase())}</span>`}
-      </div>
+      <div class="dialogMachineImage ${(machine.imageFileId || machine.imageUrl) ? "hasImage" : ""}">${imageMarkup}</div>
       <div>
         <span class="tag">${escapeHTML(machine.category)}</span>
         <h2>${escapeHTML(machine.name)}</h2>
@@ -1331,20 +1773,66 @@ function openMachineDialog(machineId) {
       <div class="actual"><span>實際費用</span><strong>${money(totals.actual)}</strong></div>
       <div><span>開發累積投入</span><strong>${money(totals.development)}</strong></div>
     </div>
+    ${(machine.imageFileId || machine.imageUrl) ? `
+      <div class="machineAreaExplorer">
+        <div class="machineAreaCanvas">
+          ${imageMarkup}
+          ${areas.map((area) => `<button class="machineHotspot ${area.status === "已確認" ? "confirmed" : "suggested"}" type="button" data-machine-hotspot="${escapeHTML(area.name)}" style="left:${area.x}%;top:${area.y}%;width:${area.width}%;height:${area.height}%"><span>${escapeHTML(area.name)}</span></button>`).join("")}
+        </div>
+        <div id="machineAreaCostPanel" class="machineAreaCostPanel">
+          ${areas.length ? "點選機台圖片上的區域，查看該區域的品項與費用。" : "目前沒有可點擊熱區。AI 有足夠依據時會建立建議熱區，也可先用安裝區域文字保存成本。"}
+        </div>
+      </div>` : ""}
     <div class="stageTabs" role="tablist">
       ${COST_TYPES.map((type, index) => `<button class="stageTab ${index === 0 ? "active" : ""}" type="button" data-stage="${escapeHTML(type)}">${escapeHTML(type)}</button>`).join("")}
     </div>
     <div id="dialogStageContent"></div>`;
+
   $("machineDialogContent").querySelectorAll("[data-stage]").forEach((button) => {
     button.addEventListener("click", () => {
       $("machineDialogContent").querySelectorAll("[data-stage]").forEach((item) => item.classList.remove("active"));
       button.classList.add("active");
-      renderDialogStage(machineId, button.dataset.stage);
+      state.selectedMachineStage = button.dataset.stage;
+      renderDialogStage(machineId, state.selectedMachineStage);
+      if (state.selectedMachineArea) renderMachineAreaCostPanel(machineId, state.selectedMachineArea, state.selectedMachineStage);
     });
   });
-  renderDialogStage(machineId, COST_TYPES[0]);
+  $("machineDialogContent").querySelectorAll("[data-machine-hotspot]").forEach((button) => {
+    button.addEventListener("click", () => {
+      state.selectedMachineArea = button.dataset.machineHotspot;
+      $("machineDialogContent").querySelectorAll("[data-machine-hotspot]").forEach((item) => item.classList.remove("active"));
+      button.classList.add("active");
+      renderMachineAreaCostPanel(machineId, state.selectedMachineArea, state.selectedMachineStage);
+    });
+  });
+  renderDialogStage(machineId, state.selectedMachineStage);
   $("machineDialog").showModal();
   hydrateSecureImages($("machineDialogContent"));
+}
+
+function isValidMachineArea(area) {
+  return area && area.name && area.width > 0 && area.height > 0 && area.x >= 0 && area.y >= 0 && area.x + area.width <= 100.5 && area.y + area.height <= 100.5;
+}
+
+function renderMachineAreaCostPanel(machineId, areaName, type) {
+  const panel = $("machineAreaCostPanel");
+  if (!panel) return;
+  const orderIds = state.costOrders
+    .filter((order) => order.machineId === machineId && order.type === type)
+    .map((order) => order.id);
+  const items = state.costItems.filter((item) =>
+    orderIds.includes(item.costOrderId) &&
+    norm(item.areaName) === norm(areaName)
+  );
+  const total = items.reduce((sum, item) => sum + item.subtotal, 0);
+  panel.innerHTML = `
+    <div class="areaPanelHead"><div><span class="tag">${escapeHTML(type)}</span><h3>${escapeHTML(areaName)}</h3></div><strong>${money(total)}</strong></div>
+    ${items.length ? `<div class="areaItemList">${items.map((item) => `<div class="areaItem">
+      ${item.imageFileId ? `<img data-secure-file-id="${escapeHTML(item.imageFileId)}" alt="${escapeHTML(item.name)}">` : item.imageUrl ? `<img src="${escapeHTML(item.imageUrl)}" alt="${escapeHTML(item.name)}">` : ""}
+      <div><strong>${escapeHTML(item.name)}</strong><small>${escapeHTML([item.spec, item.material, item.thickness].filter(Boolean).join("｜") || "未填規格")}</small></div>
+      <span>${money(item.subtotal)}</span>
+    </div>`).join("")}</div>` : '<div class="empty">這個費用階段尚無對應品項。</div>'}`;
+  hydrateSecureImages(panel);
 }
 
 function renderDialogStage(machineId, type) {
@@ -1359,13 +1847,14 @@ function renderDialogStage(machineId, type) {
   }
   content.innerHTML = `
     <div class="dialogStageSummary">
-      <span>${escapeHTML(type)}共 ${orders.length} 張成本單、${items.length} 個品項</span>
+      <span>${escapeHTML(type)}共 ${orders.length} 張成本單、${items.length} 筆明細</span>
       <strong>${money(total)}</strong>
     </div>
     <div class="tableWrap">
       <table class="dialogTable">
-        <thead><tr><th>圖片</th><th>品項</th><th>規格／包裝</th><th>數量</th><th>單位</th><th>單價</th><th>材質</th><th>厚度</th><th>檔案名稱</th><th>小計</th><th>備註</th></tr></thead>
+        <thead><tr><th>類型</th><th>圖片</th><th>品項</th><th>規格／包裝</th><th>數量</th><th>單位</th><th>單價</th><th>材質</th><th>厚度</th><th>檔案名稱</th><th>安裝區域</th><th>小計</th><th>備註</th></tr></thead>
         <tbody>${items.length ? items.map((item) => `<tr>
+          <td><span class="tag">${escapeHTML(item.itemType || "材料")}</span></td>
           <td>${item.imageFileId ? `<img class="dialogItemThumb" data-secure-file-id="${escapeHTML(item.imageFileId)}" alt="${escapeHTML(item.name)}">` : item.imageUrl ? `<img class="dialogItemThumb" src="${escapeHTML(item.imageUrl)}" alt="${escapeHTML(item.name)}">` : "—"}</td>
           <td>${escapeHTML(item.name || "—")}</td>
           <td>${escapeHTML(item.spec || "—")}</td>
@@ -1375,41 +1864,77 @@ function renderDialogStage(machineId, type) {
           <td>${escapeHTML(item.material || "—")}</td>
           <td>${escapeHTML(item.thickness || "—")}</td>
           <td>${escapeHTML(item.fileName || "—")}</td>
+          <td>${escapeHTML(item.areaName || "未指定")}<br><small>${escapeHTML(item.areaStatus || "未指定")}</small></td>
           <td><strong>${money(item.subtotal)}</strong></td>
           <td>${escapeHTML(item.note || "—")}</td>
-        </tr>`).join("") : '<tr><td colspan="11" class="empty">成本單已建立，但尚無材料明細</td></tr>'}</tbody>
+        </tr>`).join("") : '<tr><td colspan="13" class="empty">成本單已建立，但尚無明細</td></tr>'}</tbody>
       </table>
     </div>`;
   hydrateSecureImages(content);
 }
 
+
 function renderDraftItems() {
-  $("draftItemRows").innerHTML = state.draftItems.map((item, index) => `<tr data-index="${index}">
-    <td>${index + 1}</td>
-    <td><div class="itemImageEditor">
-      ${item.image?.dataUrl ? `<img src="${escapeHTML(item.image.dataUrl)}" alt="品項圖片"><button type="button" class="miniClear" data-clear-item-image="${index}">移除</button>` : `<label class="miniUpload">上傳<input type="file" accept="image/jpeg,image/png,image/webp" data-item-image="${index}" hidden></label>`}
-    </div></td>
-    <td><input class="tableInput itemNameInput" data-field="name" value="${escapeHTML(item.name)}" placeholder="品項名稱"></td>
-    <td><input class="tableInput specInput" data-field="spec" value="${escapeHTML(item.spec)}" placeholder="例如：w204.9 × h168 / mm"></td>
-    <td><input class="tableInput numberInput" data-field="qty" type="number" min="0" step="0.01" value="${item.qty}"></td>
-    <td><input class="tableInput unitInput" data-field="unit" value="${escapeHTML(item.unit)}" placeholder="可留空"></td>
-    <td><input class="tableInput numberInput" data-field="price" type="number" min="0" step="0.01" value="${item.price || ""}"></td>
-    <td><input class="tableInput materialInput" data-field="material" value="${escapeHTML(item.material || "")}" placeholder="例如：透明壓克力"></td>
-    <td><input class="tableInput thicknessInput" data-field="thickness" value="${escapeHTML(item.thickness || "")}" placeholder="例如：3mm"></td>
-    <td><input class="tableInput fileNameInput" data-field="fileName" value="${escapeHTML(item.fileName || "")}" placeholder="例如：A20_...ai"></td>
-    <td data-subtotal><strong>${money(item.qty * item.price)}</strong></td>
-    <td><input class="tableInput noteInput" data-field="note" value="${escapeHTML(item.note)}" placeholder="備註"></td>
-    <td><button class="removeRow" type="button" data-remove="${index}">刪除</button></td>
-  </tr>`).join("");
+  $("draftItemRows").innerHTML = state.draftItems.map((item, index) => {
+    const isFee = item.itemType === "附加費用";
+    return `<tr data-index="${index}" class="${isFee ? "feeRow" : "materialRow"}">
+      <td><select class="tableInput itemTypeInput" data-field="itemType"><option value="材料" ${!isFee ? "selected" : ""}>材料</option><option value="附加費用" ${isFee ? "selected" : ""}>附加費用</option></select></td>
+      <td><div class="itemImageEditor">
+        ${isFee ? '<span class="muted tinyText">不需圖片</span>' : item.image?.dataUrl ? `<img src="${escapeHTML(item.image.dataUrl)}" alt="品項圖片"><button type="button" class="miniClear" data-clear-item-image="${index}">移除</button>` : `<label class="miniUpload">上傳<input type="file" accept="image/jpeg,image/png,image/webp" data-item-image="${index}" hidden></label>`}
+      </div></td>
+      <td><input class="tableInput itemNameInput" data-field="name" value="${escapeHTML(item.name)}" placeholder="${isFee ? "例如：運費／版費" : "品項名稱"}"></td>
+      <td><input class="tableInput specInput" data-field="spec" value="${escapeHTML(item.spec)}" placeholder="規格／包裝" ${isFee ? "disabled" : ""}></td>
+      <td><input class="tableInput numberInput" data-field="qty" type="number" min="0" step="0.01" value="${isFee ? 1 : item.qty}" ${isFee ? "disabled" : ""}></td>
+      <td><input class="tableInput unitInput" data-field="unit" value="${escapeHTML(item.unit)}" placeholder="可留空" ${isFee ? "disabled" : ""}></td>
+      <td><input class="tableInput numberInput" data-field="price" type="number" min="0" step="0.01" value="${item.price || ""}" placeholder="${isFee ? "費用金額" : "單價"}"></td>
+      <td><input class="tableInput materialInput" data-field="material" value="${escapeHTML(item.material || "")}" placeholder="材質" ${isFee ? "disabled" : ""}></td>
+      <td><input class="tableInput thicknessInput" data-field="thickness" value="${escapeHTML(item.thickness || "")}" placeholder="厚度" ${isFee ? "disabled" : ""}></td>
+      <td><input class="tableInput fileNameInput" data-field="fileName" value="${escapeHTML(item.fileName || "")}" placeholder="檔案名稱" ${isFee ? "disabled" : ""}></td>
+      <td><input class="tableInput areaInput" data-field="areaName" list="machineAreaOptions" value="${escapeHTML(item.areaName || "未指定")}" placeholder="未指定" ${isFee ? "disabled" : ""}></td>
+      <td><select class="tableInput areaStatusInput" data-field="areaStatus" ${isFee ? "disabled" : ""}><option value="未指定" ${item.areaStatus === "未指定" ? "selected" : ""}>未指定</option><option value="AI建議" ${item.areaStatus === "AI建議" ? "selected" : ""}>AI建議</option><option value="已確認" ${item.areaStatus === "已確認" ? "selected" : ""}>已確認</option></select></td>
+      <td data-subtotal><strong>${money((isFee ? 1 : item.qty) * item.price)}</strong></td>
+      <td><input class="tableInput noteInput" data-field="note" value="${escapeHTML(item.note)}" placeholder="備註"></td>
+      <td><button class="removeRow" type="button" data-remove="${index}">刪除</button></td>
+    </tr>`;
+  }).join("");
   renderDraftSubtotal();
 }
 
-function renderDraftSubtotal() {
-  const subtotal = state.draftItems.reduce((sum, item) => sum + toNumber(item.qty) * toNumber(item.price), 0);
-  const grandTotal = subtotal + toNumber($("quotationTax")?.value) + toNumber($("quotationOther")?.value);
-  $("draftSubtotal").textContent = money(subtotal);
-  if ($("draftGrandTotal")) $("draftGrandTotal").textContent = money(grandTotal);
+function calculateDraftTotals() {
+  const materialSubtotal = state.draftItems
+    .filter((item) => item.itemType !== "附加費用")
+    .reduce((sum, item) => sum + toNumber(item.qty) * toNumber(item.price), 0);
+  const additionalTotal = state.draftItems
+    .filter((item) => item.itemType === "附加費用")
+    .reduce((sum, item) => sum + toNumber(item.price), 0);
+  const base = materialSubtotal + additionalTotal;
+  const mode = $("quotationMode")?.value || "未稅";
+  const rate = Math.max(0, toNumber($("quotationTaxRate")?.value));
+  let tax = 0;
+  let total = base;
+  if (mode === "未稅") {
+    tax = base * rate / 100;
+    total = base + tax;
+  } else if (mode === "含稅" && rate > 0) {
+    tax = base * rate / (100 + rate);
+  }
+  return { materialSubtotal, additionalTotal, base, tax, total, mode, rate };
 }
+
+function renderDraftSubtotal() {
+  const totals = calculateDraftTotals();
+  $("draftSubtotal").textContent = money(totals.materialSubtotal);
+  $("draftAdditionalTotal").textContent = money(totals.additionalTotal);
+  $("draftTaxTotal").textContent = money(totals.tax);
+  $("draftGrandTotal").textContent = money(totals.total);
+  $("draftTaxLabel").textContent = totals.mode === "不計稅" ? "稅額" : totals.mode === "含稅" ? `內含稅額 ${totals.rate}%` : `稅額 ${totals.rate}%`;
+  $("taxCalculationHint").textContent = totals.mode === "未稅"
+    ? "未稅報價：稅額會加在材料與附加費用合計之後。"
+    : totals.mode === "含稅"
+      ? "含稅報價：階段總成本不會再加一次稅；畫面僅拆出內含稅額供查核。"
+      : "不計稅：稅額固定為 0。";
+}
+
 
 function machineById(machineId) {
   return state.machines.find((machine) => machine.id === machineId);
