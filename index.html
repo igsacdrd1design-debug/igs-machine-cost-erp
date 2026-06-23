@@ -8,9 +8,24 @@
   <meta name="googlebot" content="noindex, nofollow, noarchive, nosnippet">
   <meta name="referrer" content="no-referrer">
   <title>IGS 機台材料成本 ERP</title>
-  <link rel="stylesheet" href="style.css?v=20260623-igs-v1-1">
+  <link rel="stylesheet" href="style.css?v=20260623-igs-v1-2">
 </head>
-<body>
+<body class="authLocked">
+  <section id="authGate" class="authGate" aria-labelledby="loginTitle">
+    <div class="loginCard">
+      <div class="loginLogo">IGS</div>
+      <p class="loginEyebrow">IGS PRIVATE ERP</p>
+      <h1 id="loginTitle">機台材料成本系統</h1>
+      <p class="loginDescription">此系統僅供授權人員使用。請輸入內部登入密碼後繼續。</p>
+      <form id="loginForm" class="loginForm">
+        <label for="loginPassword">登入密碼</label>
+        <input id="loginPassword" type="password" autocomplete="current-password" required autofocus>
+        <button id="loginButton" class="button primary" type="submit">登入 ERP</button>
+      </form>
+      <p id="loginError" class="loginError" role="alert" hidden></p>
+      <p class="loginPrivacy">資料由私人 Google Sheet 讀取；工作階段約 6 小時，失效後需重新登入。</p>
+    </div>
+  </section>
   <aside class="sidebar">
     <div class="brand">
       <div class="logo">IGS</div>
@@ -33,6 +48,7 @@
     <div class="sidebarFoot">
       <span id="dataStatus" class="statusDot">資料準備中</span>
       <button id="reloadData" class="sideAction" type="button">重新讀取資料</button>
+      <button id="logoutButton" class="sideAction logoutAction" type="button">登出</button>
     </div>
   </aside>
 
@@ -339,7 +355,7 @@
   </dialog>
 
   <datalist id="supplierOptions"></datalist>
-  <script src="data.js?v=20260623-igs-v1-1"></script>
-  <script src="app.js?v=20260623-igs-v1-1"></script>
+  <script src="data.js?v=20260623-igs-v1-2"></script>
+  <script src="app.js?v=20260623-igs-v1-2"></script>
 </body>
 </html>

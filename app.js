@@ -1,10 +1,13 @@
 // =====================================================
-// IGS 機台材料成本 ERP — 前端 v1
-// 目前支援 Apps Script GET：getMachines、getSettings。
-// 成本單、成本明細、供應商 API 會自動嘗試讀取；後端尚未建立時保持空白。
+// IGS 機台材料成本 ERP — 前端 v1.2
+// 1. ERP 密碼登入
+// 2. 工作階段驗證
+// 3. 私人 Google Sheet 安全讀取
 // =====================================================
 
 const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwwDS05GM-oWngHd2GOslFPTrr0ab8O3kamuoSloY-_1QJJHu7jFDH4hDI_-J3qF9In/exec";
+const AUTH_TOKEN_KEY = "igs-erp-auth-token";
+const API_MESSAGE_SOURCE = "igs-erp-api";
 const $ = (id) => document.getElementById(id);
 
 const COST_TYPES = ["打樣版費用", "測試台費用", "實際費用"];
@@ -24,6 +27,9 @@ const pageDescriptions = {
   quickMachine: "快速建立新的機台主檔。",
   suppliers: "查看供應商與成本單金額。",
 };
+
+let authToken = sessionStorage.getItem(AUTH_TOKEN_KEY) || "";
+let authenticationReady = false;
 
 let state = {
   machines: [],
@@ -142,35 +148,91 @@ function normalizeSupplier(row) {
   };
 }
 
-async function fetchAction(action) {
-  if (!APPS_SCRIPT_URL.includes("/exec")) throw new Error("尚未設定 Apps Script 網址");
-  const separator = APPS_SCRIPT_URL.includes("?") ? "&" : "?";
-  const url = `${APPS_SCRIPT_URL}${separator}action=${encodeURIComponent(action)}&t=${Date.now()}`;
-  const response = await fetch(url, { cache: "no-store", redirect: "follow" });
-  if (!response.ok) throw new Error(`${action} 讀取失敗：${response.status}`);
-  const result = await response.json();
-  if (!result.success) throw new Error(result.error || `${action} 讀取失敗`);
-  return Array.isArray(result.data) ? result.data : [];
-}
-
-async function optionalFetch(action) {
-  try {
-    return {
-      ok: true,
-      data: await fetchAction(action),
-      error: "",
-    };
-  } catch (error) {
-    console.info(`${action} 尚未啟用：`, error.message);
-    return {
-      ok: false,
-      data: [],
-      error: error.message || String(error),
-    };
+function secureApiRequest(payload, options = {}) {
+  if (!APPS_SCRIPT_URL || !APPS_SCRIPT_URL.includes("/exec")) {
+    return Promise.reject(new Error("尚未設定 Apps Script 網址"));
   }
+
+  const requestId = `igs-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+  const includeToken = options.includeToken !== false;
+  const requestPayload = {
+    ...payload,
+    requestId,
+    origin: window.location.origin,
+  };
+
+  if (includeToken) requestPayload.token = authToken;
+
+  return new Promise((resolve, reject) => {
+    const iframeName = `igs-api-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+    const iframe = document.createElement("iframe");
+    iframe.name = iframeName;
+    iframe.hidden = true;
+    iframe.setAttribute("aria-hidden", "true");
+
+    const form = document.createElement("form");
+    form.method = "POST";
+    form.action = APPS_SCRIPT_URL;
+    form.target = iframeName;
+    form.hidden = true;
+
+    const field = document.createElement("input");
+    field.type = "hidden";
+    field.name = "payload";
+    field.value = JSON.stringify(requestPayload);
+    form.appendChild(field);
+
+    let finished = false;
+
+    const cleanup = () => {
+      window.removeEventListener("message", onMessage);
+      form.remove();
+      iframe.remove();
+    };
+
+    const finish = (callback) => {
+      if (finished) return;
+      finished = true;
+      clearTimeout(timeout);
+      cleanup();
+      callback();
+    };
+
+    const onMessage = (event) => {
+      if (event.source !== iframe.contentWindow) return;
+      const data = event.data;
+      if (!data || data.source !== API_MESSAGE_SOURCE || data.requestId !== requestId) return;
+
+      finish(() => {
+        if (data.ok) {
+          resolve(data);
+          return;
+        }
+
+        if (data.code === "AUTH_REQUIRED") {
+          handleAuthenticationFailure(data.error);
+        }
+
+        reject(new Error(data.error || "伺服器沒有完成要求"));
+      });
+    };
+
+    const timeout = setTimeout(() => {
+      finish(() => reject(new Error("連線逾時，請稍後再試")));
+    }, options.timeoutMs || 45000);
+
+    iframe.addEventListener("error", () => {
+      finish(() => reject(new Error("無法連線到 Apps Script")));
+    });
+
+    window.addEventListener("message", onMessage);
+    document.body.append(iframe, form);
+    form.submit();
+  });
 }
 
 document.addEventListener("DOMContentLoaded", () => {
+  setupAuthentication();
   setupNavigation();
   setupSearch();
   setupFilters();
@@ -180,8 +242,142 @@ document.addEventListener("DOMContentLoaded", () => {
   setupDraftItems();
   setupExport();
   $("quotationDate").value = todayValue();
-  loadData();
+  restoreAuthentication();
 });
+
+function setupAuthentication() {
+  $("loginForm").addEventListener("submit", handleLoginSubmit);
+  $("logoutButton").addEventListener("click", logoutErp);
+}
+
+async function restoreAuthentication() {
+  lockErp();
+  setDataStatus("等待登入", "");
+  if (!authToken) return;
+
+  setLoginBusy(true, "正在驗證登入…");
+  try {
+    await secureApiRequest(
+      { action: "validateSession" },
+      { includeToken: true, timeoutMs: 30000 }
+    );
+    unlockErp();
+    await loadData();
+  } catch (error) {
+    clearAuthentication();
+    showLoginError("登入已失效，請重新輸入密碼。");
+  } finally {
+    setLoginBusy(false);
+  }
+}
+
+async function handleLoginSubmit(event) {
+  event.preventDefault();
+  const password = $("loginPassword").value;
+  if (!password) return;
+
+  hideLoginError();
+  setLoginBusy(true, "登入驗證中…");
+
+  try {
+    const response = await secureApiRequest(
+      { action: "login", password },
+      { includeToken: false, timeoutMs: 30000 }
+    );
+
+    authToken = String(response.token || "");
+    if (!authToken) throw new Error("伺服器沒有回傳登入憑證");
+
+    sessionStorage.setItem(AUTH_TOKEN_KEY, authToken);
+    $("loginPassword").value = "";
+    unlockErp();
+    await loadData();
+  } catch (error) {
+    clearAuthentication();
+    showLoginError(error.message || "登入失敗");
+    $("loginPassword").focus();
+  } finally {
+    setLoginBusy(false);
+  }
+}
+
+function unlockErp() {
+  authenticationReady = true;
+  document.body.classList.remove("authLocked");
+  $("authGate").hidden = true;
+}
+
+function lockErp() {
+  authenticationReady = false;
+  document.body.classList.add("authLocked");
+  $("authGate").hidden = false;
+}
+
+async function logoutErp() {
+  const currentToken = authToken;
+  clearAuthentication();
+  resetPrivateState();
+  lockErp();
+  $("loginPassword").value = "";
+  hideNotice();
+  setDataStatus("等待登入", "");
+  window.scrollTo({ top: 0 });
+
+  if (currentToken) {
+    try {
+      authToken = currentToken;
+      await secureApiRequest({ action: "logout" }, { includeToken: true, timeoutMs: 15000 });
+    } catch (error) {
+      console.info("後端登出未完成：", error.message);
+    } finally {
+      clearAuthentication();
+    }
+  }
+
+  setTimeout(() => $("loginPassword").focus(), 50);
+}
+
+function resetPrivateState() {
+  state.machines = [];
+  state.costOrders = [];
+  state.costItems = [];
+  state.suppliers = [];
+  state.settings = [];
+  state.selectedMachineId = "";
+  renderAll();
+}
+
+function clearAuthentication() {
+  authToken = "";
+  authenticationReady = false;
+  sessionStorage.removeItem(AUTH_TOKEN_KEY);
+}
+
+function setLoginBusy(isBusy, text = "登入 ERP") {
+  const button = $("loginButton");
+  button.disabled = isBusy;
+  button.textContent = isBusy ? text : "登入 ERP";
+  $("loginPassword").disabled = isBusy;
+}
+
+function showLoginError(message) {
+  const errorBox = $("loginError");
+  errorBox.textContent = message;
+  errorBox.hidden = false;
+}
+
+function hideLoginError() {
+  $("loginError").hidden = true;
+}
+
+function handleAuthenticationFailure(message) {
+  clearAuthentication();
+  resetPrivateState();
+  lockErp();
+  showLoginError(message || "登入已失效，請重新輸入密碼。");
+  setDataStatus("等待登入", "");
+  setTimeout(() => $("loginPassword").focus(), 50);
+}
 
 function setupNavigation() {
   document.querySelectorAll(".nav").forEach((button) => {
@@ -197,7 +393,9 @@ function setupNavigation() {
       window.scrollTo({ top: 0, behavior: "smooth" });
     });
   });
-  $("reloadData").addEventListener("click", loadData);
+  $("reloadData").addEventListener("click", () => {
+    if (authenticationReady && authToken) loadData();
+  });
 }
 
 function setupSearch() {
@@ -302,56 +500,35 @@ function setupExport() {
 }
 
 async function loadData() {
-  setDataStatus("資料讀取中", "");
-  showNotice("正在讀取 Google Sheet…");
+  if (!authenticationReady || !authToken) return;
+
+  setDataStatus("私人資料讀取中", "");
+  showNotice("正在安全讀取 Google Sheet…");
+
   try {
-    const [machineRows, settingRows] = await Promise.all([
-      fetchAction("getMachines"),
-      fetchAction("getSettings"),
-    ]);
-    const [costOrderResult, costItemResult, supplierResult] = await Promise.all([
-      optionalFetch("getCostOrders"),
-      optionalFetch("getCostItems"),
-      optionalFetch("getSuppliers"),
-    ]);
+    const response = await secureApiRequest(
+      { action: "readData" },
+      { includeToken: true, timeoutMs: 60000 }
+    );
 
-    const costOrderRows = costOrderResult.data;
-    const costItemRows = costItemResult.data;
-    const supplierRows = supplierResult.data;
-
-    const offline = window.IGS_OFFLINE_DATA || {};
-    state.machines = (machineRows.length ? machineRows : offline.machines || []).map(normalizeMachine);
-    state.settings = settingRows.length ? settingRows : offline.settings || [];
-    state.costOrders = (costOrderRows.length ? costOrderRows : offline.costOrders || []).map(normalizeCostOrder);
-    state.costItems = (costItemRows.length ? costItemRows : offline.costItems || []).map(normalizeCostItem);
-    state.suppliers = (supplierRows.length ? supplierRows : offline.suppliers || []).map(normalizeSupplier);
+    const result = response.result || {};
+    state.machines = (Array.isArray(result.machines) ? result.machines : []).map(normalizeMachine);
+    state.settings = Array.isArray(result.settings) ? result.settings : [];
+    state.costOrders = (Array.isArray(result.costOrders) ? result.costOrders : []).map(normalizeCostOrder);
+    state.costItems = (Array.isArray(result.costItems) ? result.costItems : []).map(normalizeCostItem);
+    state.suppliers = (Array.isArray(result.suppliers) ? result.suppliers : []).map(normalizeSupplier);
 
     populateControls();
     renderAll();
-    setDataStatus("Google Sheet 已同步", "ok");
-
-    const unavailableApis = [];
-    if (!costOrderResult.ok) unavailableApis.push("成本單");
-    if (!costItemResult.ok) unavailableApis.push("成本明細");
-    if (!supplierResult.ok) unavailableApis.push("供應商");
-
-    if (unavailableApis.length) {
-      showNotice(`機台主檔已連線，但${unavailableApis.join("、")} API 尚未啟用。`, "warn");
-    } else {
-      hideNotice();
-    }
+    setDataStatus("私人 Google Sheet 已同步", "ok");
+    hideNotice();
   } catch (error) {
+    if (!authenticationReady) return;
     console.error(error);
-    const offline = window.IGS_OFFLINE_DATA || {};
-    state.machines = (offline.machines || []).map(normalizeMachine);
-    state.costOrders = (offline.costOrders || []).map(normalizeCostOrder);
-    state.costItems = (offline.costItems || []).map(normalizeCostItem);
-    state.suppliers = (offline.suppliers || []).map(normalizeSupplier);
-    state.settings = offline.settings || [];
+    resetPrivateState();
     populateControls();
-    renderAll();
     setDataStatus("資料讀取失敗", "error");
-    showNotice(`Google Sheet 讀取失敗：${error.message}`, "error");
+    showNotice(`私人 Google Sheet 讀取失敗：${error.message}`, "error");
   }
 }
 

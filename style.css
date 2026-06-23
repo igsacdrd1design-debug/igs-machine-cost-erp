@@ -284,3 +284,85 @@ td small { color: var(--muted); }
 @media (max-width: 430px) {
   .cards, .dialogCostCards { grid-template-columns: 1fr; }
 }
+
+
+/* ===== 私人登入與防窺視 ===== */
+.authLocked > .sidebar,
+.authLocked > main,
+.authLocked > dialog,
+.authLocked > datalist {
+  display: none !important;
+}
+
+.authGate {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background:
+    radial-gradient(circle at top left, rgba(200,144,63,.16), transparent 34%),
+    linear-gradient(145deg, #122832, #172e38 58%, #496f7b);
+}
+
+.authGate[hidden] { display: none; }
+
+.loginCard {
+  width: min(100%, 430px);
+  padding: 34px;
+  border: 1px solid rgba(255,255,255,.18);
+  border-radius: 28px;
+  background: rgba(255,253,248,.98);
+  box-shadow: 0 28px 80px rgba(8,24,31,.38);
+  text-align: center;
+}
+
+.loginLogo {
+  width: 72px;
+  height: 66px;
+  display: grid;
+  place-items: center;
+  margin: 0 auto 17px;
+  border-radius: 21px;
+  color: #fff;
+  background: var(--navy-dark);
+  font-size: 22px;
+  font-weight: 900;
+  letter-spacing: .04em;
+}
+
+.loginEyebrow {
+  margin-bottom: 8px;
+  color: var(--gold);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: .15em;
+}
+
+.loginCard h1 { margin-bottom: 10px; }
+.loginDescription { margin: 0 auto 24px; color: var(--muted); line-height: 1.65; }
+.loginForm { display: grid; gap: 10px; text-align: left; }
+.loginForm label { color: var(--muted); font-size: 13px; }
+.loginForm input {
+  width: 100%;
+  padding: 13px 14px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  color: var(--deep);
+  background: #fff;
+  outline: none;
+}
+.loginForm input:focus { border-color: var(--blue); box-shadow: 0 0 0 3px rgba(73,111,123,.13); }
+.loginForm .button { margin-top: 4px; padding: 13px 16px; }
+.loginError {
+  margin: 14px 0 0;
+  padding: 11px 12px;
+  border: 1px solid #e3baba;
+  border-radius: 12px;
+  color: #8d3535;
+  background: #fff0f0;
+  font-size: 13px;
+}
+.loginPrivacy { margin: 18px 0 0; color: var(--muted); font-size: 12px; line-height: 1.5; }
+.logoutAction { color: #ffd9c0; }
