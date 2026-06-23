@@ -1,5 +1,5 @@
 // =====================================================
-// IGS 機台材料成本 ERP — 前端 v2.0.2
+// IGS 機台材料成本 ERP — 前端 v2.0.4
 // 1. ERP 密碼登入
 // 2. 工作階段驗證
 // 3. 私人 Google Sheet 安全讀取
@@ -68,6 +68,8 @@ let state = {
   selectedMachineArea: "",
   machine360ViewerIndex: 0,
   machine360ViewerPointerX: null,
+  dialogMachine360Index: 0,
+  dialogMachine360PointerX: null,
 };
 
 const secureImageCache = new Map();
@@ -1956,6 +1958,8 @@ function openMachineDialog(machineId) {
   state.selectedMachineArea = "";
   const totals = totalsForMachine(machineId);
   const areas = state.machineAreas.filter((area) => area.machineId === machineId && isValidMachineArea(area));
+  const machineViews = sortedMachine360Views(machineId);
+  state.dialogMachine360Index = 0;
   const imageMarkup = machine.imageFileId
     ? `<img data-secure-file-id="${escapeHTML(machine.imageFileId)}" alt="${escapeHTML(machine.name)}">`
     : machine.imageUrl
@@ -1977,6 +1981,27 @@ function openMachineDialog(machineId) {
       <div class="actual"><span>實際費用</span><strong>${money(totals.actual)}</strong></div>
       <div><span>開發累積投入</span><strong>${money(totals.development)}</strong></div>
     </div>
+    ${machineViews.length ? `
+      <section class="dialog360Section">
+        <div class="dialog360Head">
+          <div>
+            <h3>多角度機台預覽</h3>
+            <p>目前顯示已上傳的 ${machineViews.length} 張基準角度圖；尚未包含 AI 補出的中間角度。</p>
+          </div>
+          <span id="dialogMachine360Badge" class="apiBadge connected">${machineViews.length === 1 ? "單圖模式" : `${machineViews.length} 圖切換`}</span>
+        </div>
+        <div id="dialogMachine360Viewer" class="machine360Viewer dialogMachine360Viewer" tabindex="0" aria-label="機台多角度預覽">
+          <img id="dialogMachine360Image" alt="${escapeHTML(machine.name)} 多角度預覽" hidden>
+          <div id="dialogMachine360Empty" class="viewerEmpty">正在載入圖片…</div>
+          <button id="dialogMachine360Prev" class="viewerArrow prev" type="button" aria-label="上一個角度" ${machineViews.length < 2 ? "hidden" : ""}>‹</button>
+          <button id="dialogMachine360Next" class="viewerArrow next" type="button" aria-label="下一個角度" ${machineViews.length < 2 ? "hidden" : ""}>›</button>
+          <div class="viewerOverlay">
+            <strong id="dialogMachine360Angle">—</strong>
+            <span id="dialogMachine360Hint">${machineViews.length < 2 ? "目前為單圖檢視" : "左右拖曳、方向鍵或按鈕切換角度"}</span>
+          </div>
+        </div>
+        <div id="dialogMachine360Dots" class="viewerDots" aria-label="角度選擇"></div>
+      </section>` : ""}
     ${(machine.imageFileId || machine.imageUrl) ? `
       <div class="machineAreaExplorer">
         <div class="machineAreaCanvas">
@@ -2010,8 +2035,67 @@ function openMachineDialog(machineId) {
     });
   });
   renderDialogStage(machineId, state.selectedMachineStage);
+  setupDialogMachine360Viewer(machineId);
   $("machineDialog").showModal();
   hydrateSecureImages($("machineDialogContent"));
+}
+
+function setupDialogMachine360Viewer(machineId) {
+  const viewer = $("dialogMachine360Viewer");
+  if (!viewer) return;
+  $("dialogMachine360Prev")?.addEventListener("click", () => stepDialogMachine360Viewer(machineId, -1));
+  $("dialogMachine360Next")?.addEventListener("click", () => stepDialogMachine360Viewer(machineId, 1));
+  viewer.addEventListener("pointerdown", (event) => {
+    state.dialogMachine360PointerX = event.clientX;
+    viewer.setPointerCapture?.(event.pointerId);
+  });
+  viewer.addEventListener("pointerup", (event) => {
+    const start = state.dialogMachine360PointerX;
+    state.dialogMachine360PointerX = null;
+    if (start === null) return;
+    const delta = event.clientX - start;
+    if (Math.abs(delta) >= 28) stepDialogMachine360Viewer(machineId, delta < 0 ? 1 : -1);
+  });
+  viewer.addEventListener("keydown", (event) => {
+    if (event.key === "ArrowLeft") stepDialogMachine360Viewer(machineId, -1);
+    if (event.key === "ArrowRight") stepDialogMachine360Viewer(machineId, 1);
+  });
+  renderDialogMachine360Viewer(machineId);
+}
+
+function stepDialogMachine360Viewer(machineId, delta) {
+  const views = sortedMachine360Views(machineId);
+  if (views.length < 2) return;
+  state.dialogMachine360Index = (state.dialogMachine360Index + delta + views.length) % views.length;
+  renderDialogMachine360Viewer(machineId);
+}
+
+async function renderDialogMachine360Viewer(machineId) {
+  const image = $("dialogMachine360Image");
+  const empty = $("dialogMachine360Empty");
+  const dots = $("dialogMachine360Dots");
+  if (!image || !empty || !dots) return;
+  const views = sortedMachine360Views(machineId);
+  if (!views.length) return;
+  state.dialogMachine360Index = Math.max(0, Math.min(state.dialogMachine360Index, views.length - 1));
+  const view = views[state.dialogMachine360Index];
+  image.hidden = true;
+  empty.hidden = false;
+  empty.textContent = "正在載入圖片…";
+  try {
+    image.src = await getPrivateImageDataUrl(view.imageFileId);
+    image.hidden = false;
+    empty.hidden = true;
+  } catch (error) {
+    empty.textContent = "圖片讀取失敗";
+  }
+  const label = view.viewName || MACHINE_360_VIEW_CONFIG[view.viewKey]?.label || view.viewKey;
+  if ($("dialogMachine360Angle")) $("dialogMachine360Angle").textContent = `${label}｜${toNumber(view.angle)}°`;
+  dots.innerHTML = views.map((item, index) => `<button type="button" class="viewerDot ${index === state.dialogMachine360Index ? "active" : ""}" data-dialog-viewer-index="${index}" title="${escapeHTML(item.viewName || item.viewKey)}"></button>`).join("");
+  dots.querySelectorAll("[data-dialog-viewer-index]").forEach((button) => button.addEventListener("click", () => {
+    state.dialogMachine360Index = Number(button.dataset.dialogViewerIndex) || 0;
+    renderDialogMachine360Viewer(machineId);
+  }));
 }
 
 function isValidMachineArea(area) {
