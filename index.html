@@ -1,0 +1,345 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#243f4b">
+  <meta name="robots" content="noindex, nofollow, noarchive, nosnippet">
+  <meta name="googlebot" content="noindex, nofollow, noarchive, nosnippet">
+  <meta name="referrer" content="no-referrer">
+  <title>IGS 機台材料成本 ERP</title>
+  <link rel="stylesheet" href="style.css?v=20260623-igs-v1">
+</head>
+<body>
+  <aside class="sidebar">
+    <div class="brand">
+      <div class="logo">IGS</div>
+      <div>
+        <strong>IGS ERP</strong>
+        <span>機台材料成本系統</span>
+      </div>
+    </div>
+
+    <nav class="navList" aria-label="主要功能">
+      <button class="nav active" data-view="dashboard" data-title="Dashboard">Dashboard</button>
+      <button class="nav" data-view="machines" data-title="機台搜尋">機台搜尋</button>
+      <button class="nav" data-view="costRecords" data-title="成本紀錄">成本紀錄</button>
+      <button class="nav" data-view="machineTotals" data-title="機台成本總覽">機台成本總覽</button>
+      <button class="nav navPhoto" data-view="quotationEntry" data-title="估價單建檔">估價單建檔</button>
+      <button class="nav navAccent" data-view="quickMachine" data-title="快速建立機台">快速建立機台</button>
+      <button class="nav" data-view="suppliers" data-title="供應商">供應商</button>
+    </nav>
+
+    <div class="sidebarFoot">
+      <span id="dataStatus" class="statusDot">資料準備中</span>
+      <button id="reloadData" class="sideAction" type="button">重新讀取資料</button>
+    </div>
+  </aside>
+
+  <main>
+    <section class="topbar">
+      <div>
+        <h1 id="pageTitle">Dashboard</h1>
+        <p id="pageDescription">集中查看機台、材料品項與三階段成本。</p>
+      </div>
+      <div class="searchBox">
+        <input id="globalSearch" type="search" placeholder="搜尋：機台名稱、代碼、分類、材料、供應商…" autocomplete="off">
+      </div>
+    </section>
+
+    <div id="notice" class="notice" hidden></div>
+
+    <section id="dashboard" class="view active">
+      <div class="cards dashboardCards">
+        <div class="stat">
+          <span>機台數量</span>
+          <strong id="statMachines">0</strong>
+        </div>
+        <div class="stat">
+          <span>成本單數量</span>
+          <strong id="statCostOrders">0</strong>
+        </div>
+        <div class="stat highlight">
+          <span>實際費用合計</span>
+          <strong id="statActualTotal">$0</strong>
+        </div>
+        <div class="stat">
+          <span>材料品項數</span>
+          <strong id="statItems">0</strong>
+        </div>
+        <div class="stat">
+          <span>供應商數量</span>
+          <strong id="statSuppliers">0</strong>
+        </div>
+      </div>
+
+      <div class="dashboardGrid">
+        <div class="panel">
+          <div class="panelHead">
+            <div>
+              <h2>最近更新機台</h2>
+              <p class="muted">依更新時間或建立時間顯示。</p>
+            </div>
+          </div>
+          <div id="recentMachines" class="list"></div>
+        </div>
+
+        <div class="panel">
+          <div class="panelHead">
+            <div>
+              <h2>實際成本最高機台</h2>
+              <p class="muted">依目前已有的實際費用排序。</p>
+            </div>
+          </div>
+          <div id="actualCostBars" class="barList"></div>
+        </div>
+      </div>
+    </section>
+
+    <section id="machines" class="view">
+      <div class="panel filterPanel">
+        <div>
+          <h2>機台搜尋</h2>
+          <p class="muted">可用機台名稱、代碼、分類或材料品項搜尋。</p>
+        </div>
+        <div class="filterControls">
+          <label for="categoryFilter">機台分類</label>
+          <select id="categoryFilter">
+            <option value="">全部分類</option>
+          </select>
+        </div>
+      </div>
+      <div id="machineCards" class="machineGrid"></div>
+    </section>
+
+    <section id="costRecords" class="view">
+      <div class="panel">
+        <div class="panelHead">
+          <div>
+            <h2>成本紀錄</h2>
+            <p id="costRecordCount" class="muted">共 0 筆</p>
+          </div>
+          <button id="exportCostsCsv" class="button secondary" type="button">匯出 CSV</button>
+        </div>
+        <div class="tableWrap">
+          <table>
+            <thead>
+              <tr>
+                <th>日期</th>
+                <th>機台</th>
+                <th>費用類型</th>
+                <th>供應商</th>
+                <th>專案名稱</th>
+                <th>材料小計</th>
+                <th>稅額</th>
+                <th>其他費用</th>
+                <th>階段總成本</th>
+                <th>估價單</th>
+              </tr>
+            </thead>
+            <tbody id="costRecordRows"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <section id="machineTotals" class="view">
+      <div class="panel">
+        <div class="panelHead">
+          <div>
+            <h2>每台機台的個別成本總和</h2>
+            <p class="muted">分別顯示打樣版、測試台與實際費用，不依月份統計。</p>
+          </div>
+        </div>
+        <div class="tableWrap">
+          <table class="totalsTable">
+            <thead>
+              <tr>
+                <th>機台</th>
+                <th>分類</th>
+                <th>打樣版費用</th>
+                <th>測試台費用</th>
+                <th>實際費用</th>
+                <th>開發累積投入</th>
+                <th>最近更新</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody id="machineTotalRows"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <section id="quotationEntry" class="view">
+      <div class="quickIntro photoIntro">
+        <div>
+          <span class="eyebrow">估價單與圖片附件</span>
+          <h2>先保留原始圖片，再逐項確認材料成本</h2>
+          <p>第一版先完成圖片預覽與表單畫面；資料寫入與 AI 辨識會在後端更新後啟用。</p>
+        </div>
+        <div class="apiBadge">前端畫面已完成</div>
+      </div>
+
+      <div class="entryGrid">
+        <div class="panel">
+          <div class="panelHead">
+            <div>
+              <h2>1. 上傳估價單</h2>
+              <p class="muted">支援 JPG、PNG 與瀏覽器可開啟的圖片格式。</p>
+            </div>
+          </div>
+          <label class="photoDrop" for="quotationFile">
+            <input id="quotationFile" type="file" accept="image/*" hidden>
+            <span class="photoDropIcon">📄</span>
+            <strong>點這裡選擇估價單圖片</strong>
+            <span>圖片會先在瀏覽器中預覽，不會自動上傳。</span>
+          </label>
+          <div id="quotationPreviewWrap" class="receiptPreviewWrap" hidden>
+            <img id="quotationPreview" alt="估價單圖片預覽">
+            <div class="previewMeta">
+              <span id="quotationFileName"></span>
+              <button id="clearQuotation" class="linkButton" type="button">清除</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="panel">
+          <div class="panelHead">
+            <div>
+              <h2>2. 建檔基本資料</h2>
+              <p class="muted">選擇機台與費用類型後，再輸入材料明細。</p>
+            </div>
+          </div>
+          <form id="quotationForm" class="entryForm">
+            <label>
+              <span>機台 *</span>
+              <select id="quotationMachine" required></select>
+            </label>
+            <label>
+              <span>費用類型 *</span>
+              <select id="quotationType" required>
+                <option value="打樣版費用">打樣版費用</option>
+                <option value="測試台費用">測試台費用</option>
+                <option value="實際費用">實際費用</option>
+              </select>
+            </label>
+            <label>
+              <span>日期 *</span>
+              <input id="quotationDate" type="date" required>
+            </label>
+            <label>
+              <span>供應商</span>
+              <input id="quotationSupplier" type="text" list="supplierOptions" placeholder="供應商名稱">
+            </label>
+            <label class="wide">
+              <span>專案名稱</span>
+              <input id="quotationProject" type="text" placeholder="例如：街霸 6">
+            </label>
+            <label class="wide">
+              <span>備註</span>
+              <textarea id="quotationNote" rows="4" placeholder="估價單說明、含稅或其他注意事項"></textarea>
+            </label>
+            <div class="formActions wide">
+              <button class="button primary" type="submit">建立成本單草稿</button>
+            </div>
+          </form>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="panelHead">
+          <div>
+            <h2>材料品項明細</h2>
+            <p class="muted">後續會加入 OCR 自動帶入；目前可先預覽預定欄位。</p>
+          </div>
+          <button id="addDraftItem" class="button ghost" type="button">新增品項</button>
+        </div>
+        <div class="tableWrap">
+          <table>
+            <thead>
+              <tr>
+                <th>項次</th>
+                <th>品項名稱</th>
+                <th>規格</th>
+                <th>數量</th>
+                <th>單位</th>
+                <th>單價</th>
+                <th>小計</th>
+                <th>備註</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody id="draftItemRows"></tbody>
+          </table>
+        </div>
+        <div class="draftSummary">
+          <span>草稿材料小計</span>
+          <strong id="draftSubtotal">$0</strong>
+        </div>
+      </div>
+    </section>
+
+    <section id="quickMachine" class="view">
+      <div class="quickIntro">
+        <div>
+          <span class="eyebrow">快速建立機台</span>
+          <h2>先建立機台主檔，再加入成本資料</h2>
+          <p>這個畫面已依照新的機台主檔欄位完成；正式寫入需下一步更新 Apps Script。</p>
+        </div>
+        <div class="apiBadge">目前為草稿模式</div>
+      </div>
+
+      <div class="panel narrowPanel">
+        <form id="machineForm" class="entryForm">
+          <label>
+            <span>機台代碼 *</span>
+            <input id="machineCode" type="text" required placeholder="例如：SF6">
+          </label>
+          <label>
+            <span>機台名稱 *</span>
+            <input id="machineName" type="text" required placeholder="例如：街霸6">
+          </label>
+          <label>
+            <span>機台分類 *</span>
+            <select id="machineCategory" required></select>
+          </label>
+          <label>
+            <span>機台圖片網址</span>
+            <input id="machineImageUrl" type="url" placeholder="https://...">
+          </label>
+          <label class="wide">
+            <span>備註</span>
+            <textarea id="machineNote" rows="5" placeholder="機台說明或版本資訊"></textarea>
+          </label>
+          <div class="formActions wide">
+            <button class="button primary" type="submit">建立機台草稿</button>
+            <button id="resetMachineForm" class="button ghost" type="button">清除</button>
+          </div>
+        </form>
+      </div>
+    </section>
+
+    <section id="suppliers" class="view">
+      <div class="panel">
+        <div class="panelHead">
+          <div>
+            <h2>供應商</h2>
+            <p class="muted">查看供應商及其成本單金額。</p>
+          </div>
+        </div>
+        <div id="supplierCards" class="machineGrid"></div>
+      </div>
+    </section>
+  </main>
+
+  <dialog id="machineDialog" class="machineDialog">
+    <button id="closeMachineDialog" class="dialogClose" type="button" aria-label="關閉">×</button>
+    <div id="machineDialogContent"></div>
+  </dialog>
+
+  <datalist id="supplierOptions"></datalist>
+  <script src="data.js?v=20260623-igs-v1"></script>
+  <script src="app.js?v=20260623-igs-v1"></script>
+</body>
+</html>
