@@ -366,3 +366,26 @@ td small { color: var(--muted); }
 }
 .loginPrivacy { margin: 18px 0 0; color: var(--muted); font-size: 12px; line-height: 1.5; }
 .logoutAction { color: #ffd9c0; }
+
+
+/* 快速建立機台：待送清單 */
+.machineStagingPanel { margin-top: 14px; }
+.machineStagingHead { align-items: flex-start; }
+.machineStageTable { min-width: 900px; }
+.machineStageTable td { vertical-align: top; }
+.stageNote {
+  max-width: 320px;
+  white-space: normal;
+  line-height: 1.5;
+}
+.tableLink {
+  color: var(--blue);
+  font-weight: 700;
+  text-decoration: none;
+}
+.tableLink:hover { text-decoration: underline; }
+
+@media (max-width: 680px) {
+  .machineStagingHead .panelActions { width: 100%; }
+  .machineStagingHead .button { flex: 1 1 145px; }
+}

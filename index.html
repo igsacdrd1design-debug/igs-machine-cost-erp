@@ -8,7 +8,7 @@
   <meta name="googlebot" content="noindex, nofollow, noarchive, nosnippet">
   <meta name="referrer" content="no-referrer">
   <title>IGS 機台材料成本 ERP</title>
-  <link rel="stylesheet" href="style.css?v=20260623-igs-v1-2">
+  <link rel="stylesheet" href="style.css?v=20260623-igs-v1-5">
 </head>
 <body class="authLocked">
   <section id="authGate" class="authGate" aria-labelledby="loginTitle">
@@ -300,21 +300,27 @@
       <div class="quickIntro">
         <div>
           <span class="eyebrow">快速建立機台</span>
-          <h2>先建立機台主檔，再加入成本資料</h2>
-          <p>輸入基本資料後，會直接寫入私人 Google Sheet 的機台主檔。</p>
+          <h2>先加入待送清單，確認後再批次寫入</h2>
+          <p>操作方式與開拌 ERP 相同：逐筆整理、集中檢查，最後一次寫入私人 Google Sheet。</p>
         </div>
-        <div class="apiBadge connected">機台寫入已連接</div>
+        <div class="apiBadge connected">批次寫入已連接</div>
       </div>
 
       <div class="panel narrowPanel">
+        <div class="panelHead">
+          <div>
+            <h2>1. 輸入機台資料</h2>
+            <p class="muted">加入待送清單不會立即修改 Google Sheet。</p>
+          </div>
+        </div>
         <form id="machineForm" class="entryForm">
           <label>
             <span>機台代碼 *</span>
-            <input id="machineCode" type="text" required placeholder="例如：SF6">
+            <input id="machineCode" type="text" required placeholder="例如：SF6" autocomplete="off">
           </label>
           <label>
             <span>機台名稱 *</span>
-            <input id="machineName" type="text" required placeholder="例如：街霸6">
+            <input id="machineName" type="text" required placeholder="例如：街霸6" autocomplete="off">
           </label>
           <label>
             <span>機台分類 *</span>
@@ -322,17 +328,47 @@
           </label>
           <label>
             <span>機台圖片網址</span>
-            <input id="machineImageUrl" type="url" placeholder="https://...">
+            <input id="machineImageUrl" type="url" placeholder="https://..." autocomplete="off">
           </label>
           <label class="wide">
             <span>備註</span>
             <textarea id="machineNote" rows="5" placeholder="機台說明或版本資訊"></textarea>
           </label>
           <div class="formActions wide">
-            <button id="createMachineButton" class="button primary" type="submit">建立機台</button>
-            <button id="resetMachineForm" class="button ghost" type="button">清除</button>
+            <button id="addMachineToStaged" class="button primary" type="submit">加入待送清單</button>
+            <button id="resetMachineForm" class="button ghost" type="button">清空欄位</button>
           </div>
         </form>
+      </div>
+
+      <div class="panel machineStagingPanel">
+        <div class="panelHead machineStagingHead">
+          <div>
+            <h2>2. 待送清單</h2>
+            <p id="machineStagingCount" class="muted">共 0 筆；確認無誤後再寫入 Google Sheet。</p>
+          </div>
+          <div class="panelActions">
+            <button id="downloadMachineStaged" class="button secondary" type="button">下載備份 CSV</button>
+            <button id="clearMachineStaged" class="button ghost" type="button">全部清除</button>
+            <button id="submitMachineStaged" class="button primary" type="button">寫入 Google Sheet</button>
+          </div>
+        </div>
+        <div class="tableWrap">
+          <table class="machineStageTable">
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>機台代碼</th>
+                <th>機台名稱</th>
+                <th>機台分類</th>
+                <th>圖片</th>
+                <th>備註</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody id="machineStagedRows"></tbody>
+          </table>
+        </div>
       </div>
     </section>
 
@@ -355,7 +391,7 @@
   </dialog>
 
   <datalist id="supplierOptions"></datalist>
-  <script src="data.js?v=20260623-igs-v1-4"></script>
-  <script src="app.js?v=20260623-igs-v1-4"></script>
+  <script src="data.js?v=20260623-igs-v1-5"></script>
+  <script src="app.js?v=20260623-igs-v1-5"></script>
 </body>
 </html>
