@@ -301,9 +301,9 @@
         <div>
           <span class="eyebrow">快速建立機台</span>
           <h2>先建立機台主檔，再加入成本資料</h2>
-          <p>這個畫面已依照新的機台主檔欄位完成；正式寫入需下一步更新 Apps Script。</p>
+          <p>輸入基本資料後，會直接寫入私人 Google Sheet 的機台主檔。</p>
         </div>
-        <div class="apiBadge">目前為草稿模式</div>
+        <div class="apiBadge connected">機台寫入已連接</div>
       </div>
 
       <div class="panel narrowPanel">
@@ -329,7 +329,7 @@
             <textarea id="machineNote" rows="5" placeholder="機台說明或版本資訊"></textarea>
           </label>
           <div class="formActions wide">
-            <button class="button primary" type="submit">建立機台草稿</button>
+            <button id="createMachineButton" class="button primary" type="submit">建立機台</button>
             <button id="resetMachineForm" class="button ghost" type="button">清除</button>
           </div>
         </form>
@@ -355,7 +355,7 @@
   </dialog>
 
   <datalist id="supplierOptions"></datalist>
-  <script src="data.js?v=20260623-igs-v1-2"></script>
-  <script src="app.js?v=20260623-igs-v1-3"></script>
+  <script src="data.js?v=20260623-igs-v1-4"></script>
+  <script src="app.js?v=20260623-igs-v1-4"></script>
 </body>
 </html>
