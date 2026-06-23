@@ -1,5 +1,5 @@
 // =====================================================
-// IGS 機台材料成本 ERP — 前端 v1.5
+// IGS 機台材料成本 ERP — 前端 v1.6
 // 1. ERP 密碼登入
 // 2. 工作階段驗證
 // 3. 私人 Google Sheet 安全讀取
@@ -7,7 +7,7 @@
 
 const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwwDS05GM-oWngHd2GOslFPTrr0ab8O3kamuoSloY-_1QJJHu7jFDH4hDI_-J3qF9In/exec";
 const AUTH_TOKEN_KEY = "igs-erp-auth-token";
-const MACHINE_STAGING_KEY = "igs-erp-machine-staging-v1";
+const MACHINE_STAGING_KEY = "igs-erp-machine-staging-v2";
 const API_MESSAGE_SOURCE = "igs-erp-api";
 const $ = (id) => document.getElementById(id);
 
@@ -41,7 +41,13 @@ let state = {
   draftItems: [],
   stagedMachines: loadStagedMachines(),
   selectedMachineId: "",
+  machineImagePayload: null,
+  quotationImagePayload: null,
+  quotationAiStatus: "未辨識",
+  quotationRawText: "",
 };
+
+const secureImageCache = new Map();
 
 const money = (value) => {
   const number = toNumber(value);
@@ -94,6 +100,7 @@ function normalizeMachine(row) {
     name: String(firstValue(row, ["機台名稱", "machineName", "name"], "未命名機台")),
     category: String(firstValue(row, ["機台分類", "category"], "未分類")),
     imageUrl: String(firstValue(row, ["機台圖片URL", "圖片URL", "imageUrl"])),
+    imageFileId: String(firstValue(row, ["機台圖片檔案ID", "imageFileId"])),
     note: String(firstValue(row, ["備註", "note"])),
     createdAt: String(firstValue(row, ["建立時間", "createdAt"])),
     updatedAt: String(firstValue(row, ["更新時間", "updatedAt"])),
@@ -114,6 +121,10 @@ function normalizeCostOrder(row) {
     other: toNumber(firstValue(row, ["其他費用", "other"])),
     total: toNumber(firstValue(row, ["階段總成本", "含稅總成本", "total"])),
     quotationUrl: String(firstValue(row, ["估價單圖片URL", "原始圖片URL", "quotationUrl"])),
+    quotationFileId: String(firstValue(row, ["估價單檔案ID", "quotationFileId"])),
+    quotationFileName: String(firstValue(row, ["估價單檔名", "quotationFileName"])),
+    aiStatus: String(firstValue(row, ["AI辨識狀態", "aiStatus"])),
+    aiRawText: String(firstValue(row, ["AI辨識原文", "aiRawText"])),
     note: String(firstValue(row, ["備註", "note"])),
     createdAt: String(firstValue(row, ["建立時間", "createdAt"])),
     updatedAt: String(firstValue(row, ["更新時間", "updatedAt"])),
@@ -135,6 +146,7 @@ function normalizeCostItem(row) {
     price,
     subtotal: subtotal || qty * price,
     imageUrl: String(firstValue(row, ["品項圖片URL", "imageUrl"])),
+    imageFileId: String(firstValue(row, ["品項圖片檔案ID", "imageFileId"])),
     note: String(firstValue(row, ["備註", "note"])),
   };
 }
@@ -258,6 +270,7 @@ document.addEventListener("DOMContentLoaded", () => {
   setupQuotationPreview();
   setupDraftItems();
   setupExport();
+  setupSecureImageActions();
   $("quotationDate").value = todayValue();
   restoreAuthentication();
 });
@@ -361,6 +374,11 @@ function resetPrivateState() {
   state.suppliers = [];
   state.settings = [];
   state.selectedMachineId = "";
+  state.machineImagePayload = null;
+  state.quotationImagePayload = null;
+  state.quotationAiStatus = "未辨識";
+  state.quotationRawText = "";
+  secureImageCache.clear();
   renderAll();
 }
 
@@ -432,23 +450,21 @@ function setupDialog() {
 
 function setupForms() {
   $("machineForm").addEventListener("submit", addMachineToStaged);
-  $("resetMachineForm").addEventListener("click", () => $("machineForm").reset());
+  $("resetMachineForm").addEventListener("click", resetMachineForm);
+  $("machineImageFile").addEventListener("change", handleMachineImageSelection);
+  $("clearMachineImage").addEventListener("click", clearMachineImage);
   $("machineStagedRows").addEventListener("click", handleMachineStagedClick);
   $("clearMachineStaged").addEventListener("click", clearMachineStaged);
   $("downloadMachineStaged").addEventListener("click", downloadMachineStagedCsv);
   $("submitMachineStaged").addEventListener("click", submitMachineStaged);
   renderMachineStaged();
 
-  $("quotationForm").addEventListener("submit", (event) => {
-    event.preventDefault();
-    if (!state.draftItems.length) {
-      showNotice("請先新增至少一個材料品項。", "warn");
-      return;
-    }
-    showNotice("成本單草稿已整理完成。下一步更新 Apps Script 後即可連同圖片寫入 Google Sheet。", "warn");
-  });
+  $("quotationForm").addEventListener("submit", handleCreateCostOrder);
+  $("resetQuotationForm").addEventListener("click", resetQuotationForm);
+  $("quotationTax").addEventListener("input", renderDraftSubtotal);
+  $("quotationOther").addEventListener("input", renderDraftSubtotal);
+  $("analyzeQuotation").addEventListener("click", analyzeQuotationImage);
 }
-
 function addMachineToStaged(event) {
   event.preventDefault();
 
@@ -456,17 +472,12 @@ function addMachineToStaged(event) {
     code: $("machineCode").value.trim().toUpperCase(),
     name: $("machineName").value.trim(),
     category: $("machineCategory").value.trim(),
-    imageUrl: $("machineImageUrl").value.trim(),
+    image: state.machineImagePayload ? { ...state.machineImagePayload } : null,
     note: $("machineNote").value.trim(),
   };
 
   if (!machine.code || !machine.name || !machine.category) {
     showNotice("請填寫機台代碼、機台名稱與機台分類。", "warn");
-    return;
-  }
-
-  if (machine.imageUrl && !machine.imageUrl.startsWith("https://")) {
-    showNotice("機台圖片網址必須以 https:// 開頭；沒有圖片時請保持空白。", "warn");
     return;
   }
 
@@ -489,10 +500,35 @@ function addMachineToStaged(event) {
   state.stagedMachines.push(machine);
   saveStagedMachines();
   renderMachineStaged();
-  $("machineForm").reset();
+  resetMachineForm();
   showNotice(`已將「${machine.name}」加入待送清單。`);
 }
 
+async function handleMachineImageSelection(event) {
+  const file = event.target.files?.[0];
+  if (!file) return;
+  try {
+    state.machineImagePayload = await compressImageFile(file, 1200, 0.8);
+    $("machineImagePreview").src = state.machineImagePayload.dataUrl;
+    $("machineImageFileName").textContent = state.machineImagePayload.name;
+    $("machineImagePreviewWrap").hidden = false;
+  } catch (error) {
+    clearMachineImage();
+    showNotice(`機台圖片處理失敗：${error.message}`, "error");
+  }
+}
+
+function clearMachineImage() {
+  state.machineImagePayload = null;
+  $("machineImageFile").value = "";
+  $("machineImagePreview").removeAttribute("src");
+  $("machineImagePreviewWrap").hidden = true;
+}
+
+function resetMachineForm() {
+  $("machineForm").reset();
+  clearMachineImage();
+}
 function handleMachineStagedClick(event) {
   const button = event.target.closest("[data-remove-machine]");
   if (!button) return;
@@ -580,7 +616,7 @@ function renderMachineStaged() {
       <td><strong>${escapeHTML(machine.code)}</strong></td>
       <td>${escapeHTML(machine.name)}</td>
       <td><span class="tag">${escapeHTML(machine.category)}</span></td>
-      <td>${machine.imageUrl ? `<a class="tableLink" href="${escapeHTML(machine.imageUrl)}" target="_blank" rel="noopener noreferrer">查看</a>` : '<span class="muted">無</span>'}</td>
+      <td>${machine.image?.dataUrl ? `<img class="stageThumb" src="${escapeHTML(machine.image.dataUrl)}" alt="${escapeHTML(machine.name)}">` : '<span class="muted">無</span>'}</td>
       <td class="stageNote">${escapeHTML(machine.note || "")}</td>
       <td><button class="removeRow" type="button" data-remove-machine="${index}">刪除</button></td>
     </tr>
@@ -597,7 +633,12 @@ function loadStagedMachines() {
         code: String(item.code || "").trim().toUpperCase(),
         name: String(item.name || "").trim(),
         category: String(item.category || "").trim(),
-        imageUrl: String(item.imageUrl || "").trim(),
+        image: item.image && typeof item.image === "object" ? {
+          name: String(item.image.name || "image.jpg"),
+          mimeType: String(item.image.mimeType || "image/jpeg"),
+          base64: String(item.image.base64 || ""),
+          dataUrl: item.image.base64 ? `data:${item.image.mimeType || "image/jpeg"};base64,${item.image.base64}` : "",
+        } : null,
         note: String(item.note || "").trim(),
       }))
       .filter((item) => item.code && item.name && item.category);
@@ -608,7 +649,23 @@ function loadStagedMachines() {
 }
 
 function saveStagedMachines() {
-  localStorage.setItem(MACHINE_STAGING_KEY, JSON.stringify(state.stagedMachines));
+  const serializable = state.stagedMachines.map((machine) => ({
+    code: machine.code,
+    name: machine.name,
+    category: machine.category,
+    note: machine.note,
+    image: machine.image ? {
+      name: machine.image.name,
+      mimeType: machine.image.mimeType,
+      base64: machine.image.base64,
+    } : null,
+  }));
+  try {
+    localStorage.setItem(MACHINE_STAGING_KEY, JSON.stringify(serializable));
+  } catch (error) {
+    console.warn("待送清單無法完整保存到瀏覽器：", error);
+    showNotice("待送清單圖片較多，重新整理前請先寫入 Google Sheet。", "warn");
+  }
 }
 
 function downloadMachineStagedCsv() {
@@ -618,12 +675,12 @@ function downloadMachineStagedCsv() {
   }
 
   const rows = [
-    ["機台代碼", "機台名稱", "機台分類", "機台圖片URL", "備註"],
+    ["機台代碼", "機台名稱", "機台分類", "機台圖片檔名", "備註"],
     ...state.stagedMachines.map((machine) => [
       machine.code,
       machine.name,
       machine.category,
-      machine.imageUrl,
+      machine.image?.name || "",
       machine.note,
     ]),
   ];
@@ -632,33 +689,105 @@ function downloadMachineStagedCsv() {
 }
 
 function setupQuotationPreview() {
-  $("quotationFile").addEventListener("change", (event) => {
+  $("quotationFile").addEventListener("change", async (event) => {
     const file = event.target.files?.[0];
     if (!file) return;
-    if (!file.type.startsWith("image/")) {
-      showNotice("請選擇圖片檔案。", "error");
-      event.target.value = "";
-      return;
-    }
-    const reader = new FileReader();
-    reader.onload = () => {
-      $("quotationPreview").src = String(reader.result || "");
-      $("quotationFileName").textContent = file.name;
+    try {
+      state.quotationImagePayload = await compressImageFile(file, 1800, 0.86);
+      $("quotationPreview").src = state.quotationImagePayload.dataUrl;
+      $("quotationFileName").textContent = state.quotationImagePayload.name;
       $("quotationPreviewWrap").hidden = false;
-    };
-    reader.onerror = () => showNotice("無法讀取圖片。", "error");
-    reader.readAsDataURL(file);
+      $("analyzeQuotation").disabled = false;
+      setQuotationAiStatus("圖片已準備完成，可進行 AI 智慧辨識。", "ready");
+    } catch (error) {
+      clearQuotationImage();
+      showNotice(`估價單圖片處理失敗：${error.message}`, "error");
+    }
   });
-  $("clearQuotation").addEventListener("click", () => {
-    $("quotationFile").value = "";
-    $("quotationPreview").removeAttribute("src");
-    $("quotationPreviewWrap").hidden = true;
-  });
+  $("clearQuotation").addEventListener("click", clearQuotationImage);
 }
 
+function clearQuotationImage() {
+  state.quotationImagePayload = null;
+  state.quotationAiStatus = "未辨識";
+  state.quotationRawText = "";
+  $("quotationFile").value = "";
+  $("quotationPreview").removeAttribute("src");
+  $("quotationPreviewWrap").hidden = true;
+  $("analyzeQuotation").disabled = true;
+  $("quotationRawText").value = "";
+  $("quotationAiBadge").textContent = "尚未辨識";
+  setQuotationAiStatus("尚未選擇估價單圖片");
+}
+
+async function analyzeQuotationImage() {
+  if (!state.quotationImagePayload) {
+    showNotice("請先上傳估價單圖片。", "warn");
+    return;
+  }
+
+  const button = $("analyzeQuotation");
+  const originalText = button.textContent;
+  button.disabled = true;
+  button.textContent = "AI 辨識中…";
+  setQuotationAiStatus("Gemini 正在讀取估價單，請稍候…", "loading");
+
+  try {
+    const response = await secureApiRequest({
+      action: "analyzeQuotation",
+      image: stripDataUrl(state.quotationImagePayload),
+    }, { includeToken: true, timeoutMs: 180000 });
+    const result = response.result || {};
+    applyQuotationAnalysis(result);
+    state.quotationAiStatus = "已辨識";
+    $("quotationAiBadge").textContent = "AI 已辨識，待人工確認";
+    setQuotationAiStatus(`辨識完成，共帶入 ${state.draftItems.length} 個品項。請逐項確認。`, "success");
+    showNotice("AI 已先填入可辨識資料；請確認後再寫入 Google Sheet。");
+  } catch (error) {
+    state.quotationAiStatus = "辨識失敗";
+    $("quotationAiBadge").textContent = "辨識失敗";
+    setQuotationAiStatus(`AI 辨識失敗：${error.message}`, "error");
+    showNotice(`AI 辨識失敗：${error.message}。仍可手動建檔。`, "error");
+  } finally {
+    button.disabled = false;
+    button.textContent = originalText;
+  }
+}
+
+function applyQuotationAnalysis(result) {
+  if (result.date) $("quotationDate").value = normalizeDate(result.date);
+  if (result.supplier) $("quotationSupplier").value = String(result.supplier);
+  if (result.project) $("quotationProject").value = String(result.project);
+  if (toNumber(result.tax) >= 0) $("quotationTax").value = toNumber(result.tax);
+  if (toNumber(result.other) >= 0) $("quotationOther").value = toNumber(result.other);
+  if (result.note) $("quotationNote").value = String(result.note);
+  state.quotationRawText = String(result.rawText || "");
+  $("quotationRawText").value = state.quotationRawText;
+
+  const items = Array.isArray(result.items) ? result.items : [];
+  if (items.length) {
+    state.draftItems = items.map((item) => ({
+      name: String(item.name || ""),
+      spec: String(item.spec || ""),
+      qty: toNumber(item.qty) || 1,
+      unit: String(item.unit || "件"),
+      price: toNumber(item.price),
+      note: String(item.note || ""),
+      image: null,
+      confidence: toNumber(item.confidence),
+    }));
+    renderDraftItems();
+  }
+}
+
+function setQuotationAiStatus(message, type = "") {
+  const element = $("quotationAiStatus");
+  element.textContent = message;
+  element.className = `photoStatus muted ${type}`.trim();
+}
 function setupDraftItems() {
   $("addDraftItem").addEventListener("click", () => {
-    state.draftItems.push({ name: "", spec: "", qty: 1, unit: "件", price: 0, note: "" });
+    state.draftItems.push(emptyDraftItem());
     renderDraftItems();
   });
   $("draftItemRows").addEventListener("input", (event) => {
@@ -675,14 +804,226 @@ function setupDraftItems() {
       if (subtotalCell) subtotalCell.textContent = money(item.qty * item.price);
     }
   });
+  $("draftItemRows").addEventListener("change", handleDraftItemImageChange);
   $("draftItemRows").addEventListener("click", (event) => {
-    const button = event.target.closest("[data-remove]");
-    if (!button) return;
-    state.draftItems.splice(Number(button.dataset.remove), 1);
-    renderDraftItems();
+    const remove = event.target.closest("[data-remove]");
+    if (remove) {
+      state.draftItems.splice(Number(remove.dataset.remove), 1);
+      if (!state.draftItems.length) state.draftItems.push(emptyDraftItem());
+      renderDraftItems();
+      return;
+    }
+    const clearImage = event.target.closest("[data-clear-item-image]");
+    if (clearImage) {
+      const item = state.draftItems[Number(clearImage.dataset.clearItemImage)];
+      if (item) item.image = null;
+      renderDraftItems();
+    }
   });
-  state.draftItems.push({ name: "", spec: "", qty: 1, unit: "件", price: 0, note: "" });
+  state.draftItems = [emptyDraftItem()];
   renderDraftItems();
+}
+
+function emptyDraftItem() {
+  return { name: "", spec: "", qty: 1, unit: "件", price: 0, note: "", image: null, confidence: 0 };
+}
+
+async function handleDraftItemImageChange(event) {
+  const input = event.target.closest("[data-item-image]");
+  if (!input) return;
+  const index = Number(input.dataset.itemImage);
+  const file = input.files?.[0];
+  if (!file || !state.draftItems[index]) return;
+  try {
+    state.draftItems[index].image = await compressImageFile(file, 1100, 0.8);
+    renderDraftItems();
+  } catch (error) {
+    showNotice(`品項圖片處理失敗：${error.message}`, "error");
+  }
+}
+async function handleCreateCostOrder(event) {
+  event.preventDefault();
+
+  const validItems = state.draftItems.filter((item) => String(item.name || "").trim());
+  if (!validItems.length) {
+    showNotice("請至少填寫一個材料品項。", "warn");
+    return;
+  }
+  if (!$("quotationMachine").value) {
+    showNotice("請先選擇機台。", "warn");
+    return;
+  }
+
+  const invalidItem = validItems.find((item) => toNumber(item.qty) <= 0 || toNumber(item.price) < 0);
+  if (invalidItem) {
+    showNotice(`品項「${invalidItem.name}」的數量或單價不正確。`, "warn");
+    return;
+  }
+
+  const button = $("submitCostOrder");
+  const originalText = button.textContent;
+  button.disabled = true;
+  button.textContent = "圖片上傳與寫入中…";
+
+  try {
+    const response = await secureApiRequest({
+      action: "createCostOrder",
+      order: {
+        machineId: $("quotationMachine").value,
+        type: $("quotationType").value,
+        date: $("quotationDate").value,
+        supplier: $("quotationSupplier").value.trim(),
+        project: $("quotationProject").value.trim(),
+        tax: toNumber($("quotationTax").value),
+        other: toNumber($("quotationOther").value),
+        note: $("quotationNote").value.trim(),
+        aiStatus: state.quotationAiStatus === "已辨識" ? "人工確認" : state.quotationAiStatus,
+        aiRawText: state.quotationRawText,
+        quotationImage: state.quotationImagePayload ? stripDataUrl(state.quotationImagePayload) : null,
+      },
+      items: validItems.map((item) => ({
+        name: String(item.name || "").trim(),
+        spec: String(item.spec || "").trim(),
+        qty: toNumber(item.qty),
+        unit: String(item.unit || "").trim(),
+        price: toNumber(item.price),
+        note: String(item.note || "").trim(),
+        image: item.image ? stripDataUrl(item.image) : null,
+      })),
+    }, { includeToken: true, timeoutMs: 240000 });
+
+    const result = response.result || {};
+    showNotice(`成本單 ${result.costOrderId || ""} 已建立，共 ${result.itemCount || validItems.length} 個品項。`);
+    resetQuotationForm();
+    await loadData();
+    document.querySelector('[data-view="costRecords"]')?.click();
+  } catch (error) {
+    showNotice(`成本資料寫入失敗：${error.message}`, "error");
+  } finally {
+    button.disabled = false;
+    button.textContent = originalText;
+  }
+}
+
+function resetQuotationForm() {
+  const machineValue = $("quotationMachine").value;
+  $("quotationForm").reset();
+  if ([...$("quotationMachine").options].some((option) => option.value === machineValue)) {
+    $("quotationMachine").value = machineValue;
+  }
+  $("quotationDate").value = todayValue();
+  $("quotationTax").value = 0;
+  $("quotationOther").value = 0;
+  state.draftItems = [emptyDraftItem()];
+  state.quotationRawText = "";
+  clearQuotationImage();
+  renderDraftItems();
+}
+
+function stripDataUrl(payload) {
+  if (!payload) return null;
+  return {
+    name: String(payload.name || "image.jpg"),
+    mimeType: String(payload.mimeType || "image/jpeg"),
+    base64: String(payload.base64 || ""),
+  };
+}
+
+async function compressImageFile(file, maxSide = 1400, quality = 0.82) {
+  if (!file || !String(file.type || "").startsWith("image/")) {
+    throw new Error("請選擇 JPG、PNG 或 WebP 圖片");
+  }
+  if (file.size > 15 * 1024 * 1024) {
+    throw new Error("原始圖片不可超過 15 MB");
+  }
+  const source = await readFileAsDataUrl(file);
+  const image = await loadBrowserImage(source);
+  const width0 = image.naturalWidth || image.width;
+  const height0 = image.naturalHeight || image.height;
+  const scale = Math.min(1, maxSide / Math.max(width0, height0));
+  const canvas = document.createElement("canvas");
+  canvas.width = Math.max(1, Math.round(width0 * scale));
+  canvas.height = Math.max(1, Math.round(height0 * scale));
+  const context = canvas.getContext("2d", { alpha: false });
+  context.fillStyle = "#fff";
+  context.fillRect(0, 0, canvas.width, canvas.height);
+  context.drawImage(image, 0, 0, canvas.width, canvas.height);
+  const dataUrl = canvas.toDataURL("image/jpeg", quality);
+  const base64 = dataUrl.split(",")[1] || "";
+  if (base64.length * 0.75 > 4.5 * 1024 * 1024) {
+    throw new Error("壓縮後圖片仍過大，請改用尺寸較小的圖片");
+  }
+  return {
+    name: String(file.name || "image.jpg").replace(/\.[^.]+$/, "") + ".jpg",
+    mimeType: "image/jpeg",
+    base64,
+    dataUrl,
+  };
+}
+
+function readFileAsDataUrl(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || ""));
+    reader.onerror = () => reject(new Error("無法讀取圖片"));
+    reader.readAsDataURL(file);
+  });
+}
+
+function loadBrowserImage(src) {
+  return new Promise((resolve, reject) => {
+    const image = new Image();
+    image.onload = () => resolve(image);
+    image.onerror = () => reject(new Error("瀏覽器無法開啟這張圖片"));
+    image.src = src;
+  });
+}
+
+function setupSecureImageActions() {
+  document.addEventListener("click", (event) => {
+    const button = event.target.closest("[data-view-file]");
+    if (!button) return;
+    viewPrivateImage(button.dataset.viewFile, button.dataset.fileName || "IGS 圖片");
+  });
+}
+
+async function hydrateSecureImages(root = document) {
+  const images = [...root.querySelectorAll("img[data-secure-file-id]")];
+  await Promise.all(images.map(async (img) => {
+    const fileId = img.dataset.secureFileId;
+    if (!fileId || img.dataset.secureLoaded === "1") return;
+    img.dataset.secureLoaded = "1";
+    try {
+      img.src = await getPrivateImageDataUrl(fileId);
+    } catch (error) {
+      img.alt = "圖片讀取失敗";
+    }
+  }));
+}
+
+async function getPrivateImageDataUrl(fileId) {
+  if (secureImageCache.has(fileId)) return secureImageCache.get(fileId);
+  const response = await secureApiRequest({ action: "getImageData", fileId }, { includeToken: true, timeoutMs: 60000 });
+  const result = response.result || {};
+  const dataUrl = `data:${result.mimeType || "image/jpeg"};base64,${result.base64 || ""}`;
+  secureImageCache.set(fileId, dataUrl);
+  return dataUrl;
+}
+
+async function viewPrivateImage(fileId, title) {
+  const viewer = window.open("", "_blank");
+  try {
+    const dataUrl = await getPrivateImageDataUrl(fileId);
+    if (viewer) {
+      viewer.document.title = title;
+      viewer.document.body.style.margin = "0";
+      viewer.document.body.style.background = "#111";
+      viewer.document.body.innerHTML = `<img src="${dataUrl}" alt="${escapeHTML(title)}" style="display:block;max-width:100%;max-height:100vh;margin:auto;object-fit:contain">`;
+    }
+  } catch (error) {
+    if (viewer) viewer.close();
+    showNotice(`圖片讀取失敗：${error.message}`, "error");
+  }
 }
 
 function setupExport() {
@@ -851,8 +1192,8 @@ function renderMachineCards() {
       const totals = totalsForMachine(machine.id);
       const orderCount = state.costOrders.filter((order) => order.machineId === machine.id).length;
       return `<article class="machineCard">
-        <div class="machineImage ${machine.imageUrl ? "hasImage" : ""}">
-          ${machine.imageUrl ? `<img src="${escapeHTML(machine.imageUrl)}" alt="${escapeHTML(machine.name)}" loading="lazy">` : `<span>${escapeHTML(machine.name.slice(0, 2).toUpperCase())}</span>`}
+        <div class="machineImage ${(machine.imageFileId || machine.imageUrl) ? "hasImage" : ""}">
+          ${machine.imageFileId ? `<img data-secure-file-id="${escapeHTML(machine.imageFileId)}" alt="${escapeHTML(machine.name)}" loading="lazy">` : machine.imageUrl ? `<img src="${escapeHTML(machine.imageUrl)}" alt="${escapeHTML(machine.name)}" loading="lazy">` : `<span>${escapeHTML(machine.name.slice(0, 2).toUpperCase())}</span>`}
         </div>
         <div class="machineCardBody">
           <div class="cardTags">
@@ -875,6 +1216,7 @@ function renderMachineCards() {
   $("machineCards").querySelectorAll("[data-open-machine]").forEach((button) => {
     button.addEventListener("click", () => openMachineDialog(button.dataset.openMachine));
   });
+  hydrateSecureImages($("machineCards"));
 }
 
 function renderCostRecords() {
@@ -883,9 +1225,11 @@ function renderCostRecords() {
   $("costRecordRows").innerHTML = orders.length
     ? orders.map((order) => {
       const machine = machineById(order.machineId);
-      const link = order.quotationUrl
-        ? `<a class="textLink" href="${escapeHTML(order.quotationUrl)}" target="_blank" rel="noopener">查看圖片</a>`
-        : "—";
+      const link = order.quotationFileId
+        ? `<button class="tableAction" type="button" data-view-file="${escapeHTML(order.quotationFileId)}" data-file-name="${escapeHTML(order.quotationFileName || "估價單")}">查看圖片</button>`
+        : order.quotationUrl
+          ? `<a class="textLink" href="${escapeHTML(order.quotationUrl)}" target="_blank" rel="noopener">查看圖片</a>`
+          : "—";
       return `<tr>
         <td>${escapeHTML(order.date || "—")}</td>
         <td>${escapeHTML(machine?.name || order.machineId || "—")}</td>
@@ -963,8 +1307,8 @@ function openMachineDialog(machineId) {
   const totals = totalsForMachine(machineId);
   $("machineDialogContent").innerHTML = `
     <div class="dialogHeader">
-      <div class="dialogMachineImage ${machine.imageUrl ? "hasImage" : ""}">
-        ${machine.imageUrl ? `<img src="${escapeHTML(machine.imageUrl)}" alt="${escapeHTML(machine.name)}">` : `<span>${escapeHTML(machine.name.slice(0, 2).toUpperCase())}</span>`}
+      <div class="dialogMachineImage ${(machine.imageFileId || machine.imageUrl) ? "hasImage" : ""}">
+        ${machine.imageFileId ? `<img data-secure-file-id="${escapeHTML(machine.imageFileId)}" alt="${escapeHTML(machine.name)}">` : machine.imageUrl ? `<img src="${escapeHTML(machine.imageUrl)}" alt="${escapeHTML(machine.name)}">` : `<span>${escapeHTML(machine.name.slice(0, 2).toUpperCase())}</span>`}
       </div>
       <div>
         <span class="tag">${escapeHTML(machine.category)}</span>
@@ -991,6 +1335,7 @@ function openMachineDialog(machineId) {
   });
   renderDialogStage(machineId, COST_TYPES[0]);
   $("machineDialog").showModal();
+  hydrateSecureImages($("machineDialogContent"));
 }
 
 function renderDialogStage(machineId, type) {
@@ -1010,8 +1355,9 @@ function renderDialogStage(machineId, type) {
     </div>
     <div class="tableWrap">
       <table class="dialogTable">
-        <thead><tr><th>品項</th><th>規格</th><th>數量</th><th>單位</th><th>單價</th><th>小計</th><th>備註</th></tr></thead>
+        <thead><tr><th>圖片</th><th>品項</th><th>規格</th><th>數量</th><th>單位</th><th>單價</th><th>小計</th><th>備註</th></tr></thead>
         <tbody>${items.length ? items.map((item) => `<tr>
+          <td>${item.imageFileId ? `<img class="dialogItemThumb" data-secure-file-id="${escapeHTML(item.imageFileId)}" alt="${escapeHTML(item.name)}">` : item.imageUrl ? `<img class="dialogItemThumb" src="${escapeHTML(item.imageUrl)}" alt="${escapeHTML(item.name)}">` : "—"}</td>
           <td>${escapeHTML(item.name || "—")}</td>
           <td>${escapeHTML(item.spec || "—")}</td>
           <td>${item.qty}</td>
@@ -1019,14 +1365,18 @@ function renderDialogStage(machineId, type) {
           <td>${money(item.price)}</td>
           <td><strong>${money(item.subtotal)}</strong></td>
           <td>${escapeHTML(item.note || "—")}</td>
-        </tr>`).join("") : '<tr><td colspan="7" class="empty">成本單已建立，但尚無材料明細</td></tr>'}</tbody>
+        </tr>`).join("") : '<tr><td colspan="8" class="empty">成本單已建立，但尚無材料明細</td></tr>'}</tbody>
       </table>
     </div>`;
+  hydrateSecureImages(content);
 }
 
 function renderDraftItems() {
   $("draftItemRows").innerHTML = state.draftItems.map((item, index) => `<tr data-index="${index}">
     <td>${index + 1}</td>
+    <td><div class="itemImageEditor">
+      ${item.image?.dataUrl ? `<img src="${escapeHTML(item.image.dataUrl)}" alt="品項圖片"><button type="button" class="miniClear" data-clear-item-image="${index}">移除</button>` : `<label class="miniUpload">上傳<input type="file" accept="image/jpeg,image/png,image/webp" data-item-image="${index}" hidden></label>`}
+    </div></td>
     <td><input class="tableInput itemNameInput" data-field="name" value="${escapeHTML(item.name)}" placeholder="品項名稱"></td>
     <td><input class="tableInput" data-field="spec" value="${escapeHTML(item.spec)}" placeholder="規格"></td>
     <td><input class="tableInput numberInput" data-field="qty" type="number" min="0" step="0.01" value="${item.qty}"></td>
@@ -1040,8 +1390,10 @@ function renderDraftItems() {
 }
 
 function renderDraftSubtotal() {
-  const total = state.draftItems.reduce((sum, item) => sum + toNumber(item.qty) * toNumber(item.price), 0);
-  $("draftSubtotal").textContent = money(total);
+  const subtotal = state.draftItems.reduce((sum, item) => sum + toNumber(item.qty) * toNumber(item.price), 0);
+  const grandTotal = subtotal + toNumber($("quotationTax")?.value) + toNumber($("quotationOther")?.value);
+  $("draftSubtotal").textContent = money(subtotal);
+  if ($("draftGrandTotal")) $("draftGrandTotal").textContent = money(grandTotal);
 }
 
 function machineById(machineId) {

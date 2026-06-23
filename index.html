@@ -8,7 +8,7 @@
   <meta name="googlebot" content="noindex, nofollow, noarchive, nosnippet">
   <meta name="referrer" content="no-referrer">
   <title>IGS 機台材料成本 ERP</title>
-  <link rel="stylesheet" href="style.css?v=20260623-igs-v1-5">
+  <link rel="stylesheet" href="style.css?v=20260623-igs-v1-6">
 </head>
 <body class="authLocked">
   <section id="authGate" class="authGate" aria-labelledby="loginTitle">
@@ -190,11 +190,11 @@
     <section id="quotationEntry" class="view">
       <div class="quickIntro photoIntro">
         <div>
-          <span class="eyebrow">估價單與圖片附件</span>
-          <h2>先保留原始圖片，再逐項確認材料成本</h2>
-          <p>第一版先完成圖片預覽與表單畫面；資料寫入與 AI 辨識會在後端更新後啟用。</p>
+          <span class="eyebrow">AI 估價單辨識與圖片附件</span>
+          <h2>上傳原始估價單，確認後寫入機台材料成本</h2>
+          <p>AI 只會先填入可辨識欄位；所有資料與品項圖片仍需人工確認後才會寫入。</p>
         </div>
-        <div class="apiBadge">前端畫面已完成</div>
+        <div class="apiBadge connected">Gemini AI 與 Drive 已連接</div>
       </div>
 
       <div class="entryGrid">
@@ -202,14 +202,14 @@
           <div class="panelHead">
             <div>
               <h2>1. 上傳估價單</h2>
-              <p class="muted">支援 JPG、PNG 與瀏覽器可開啟的圖片格式。</p>
+              <p class="muted">支援 JPG、PNG、WebP；圖片會壓縮後送到 AI，原圖於建檔時保存至私人 Google Drive。</p>
             </div>
           </div>
           <label class="photoDrop" for="quotationFile">
-            <input id="quotationFile" type="file" accept="image/*" hidden>
+            <input id="quotationFile" type="file" accept="image/jpeg,image/png,image/webp" hidden>
             <span class="photoDropIcon">📄</span>
             <strong>點這裡選擇估價單圖片</strong>
-            <span>圖片會先在瀏覽器中預覽，不會自動上傳。</span>
+            <span>請盡量上傳完整、清楚且避免反光的圖片。</span>
           </label>
           <div id="quotationPreviewWrap" class="receiptPreviewWrap" hidden>
             <img id="quotationPreview" alt="估價單圖片預覽">
@@ -218,14 +218,19 @@
               <button id="clearQuotation" class="linkButton" type="button">清除</button>
             </div>
           </div>
+          <div class="formActions imageActions">
+            <button id="analyzeQuotation" class="button primary" type="button" disabled>AI 智慧辨識</button>
+          </div>
+          <p id="quotationAiStatus" class="photoStatus muted">尚未選擇估價單圖片</p>
         </div>
 
         <div class="panel">
           <div class="panelHead">
             <div>
               <h2>2. 建檔基本資料</h2>
-              <p class="muted">選擇機台與費用類型後，再輸入材料明細。</p>
+              <p class="muted">選擇機台與費用類型，確認 AI 帶入內容後再寫入。</p>
             </div>
+            <span id="quotationAiBadge" class="analysisBadge">尚未辨識</span>
           </div>
           <form id="quotationForm" class="entryForm">
             <label>
@@ -252,12 +257,25 @@
               <span>專案名稱</span>
               <input id="quotationProject" type="text" placeholder="例如：街霸 6">
             </label>
+            <label>
+              <span>稅額</span>
+              <input id="quotationTax" type="number" min="0" step="0.01" value="0">
+            </label>
+            <label>
+              <span>其他費用</span>
+              <input id="quotationOther" type="number" min="0" step="0.01" value="0">
+            </label>
             <label class="wide">
               <span>備註</span>
               <textarea id="quotationNote" rows="4" placeholder="估價單說明、含稅或其他注意事項"></textarea>
             </label>
+            <details class="wide rawTextPanel">
+              <summary>查看 AI 辨識原文</summary>
+              <textarea id="quotationRawText" rows="6" readonly placeholder="AI 辨識後會顯示原始文字"></textarea>
+            </details>
             <div class="formActions wide">
-              <button class="button primary" type="submit">建立成本單草稿</button>
+              <button id="submitCostOrder" class="button primary" type="submit">寫入成本資料</button>
+              <button id="resetQuotationForm" class="button ghost" type="button">清空表單</button>
             </div>
           </form>
         </div>
@@ -266,16 +284,17 @@
       <div class="panel">
         <div class="panelHead">
           <div>
-            <h2>材料品項明細</h2>
-            <p class="muted">後續會加入 OCR 自動帶入；目前可先預覽預定欄位。</p>
+            <h2>3. 材料品項明細</h2>
+            <p class="muted">每個品項可各自上傳一張圖片，方便後續在機台頁查看。</p>
           </div>
           <button id="addDraftItem" class="button ghost" type="button">新增品項</button>
         </div>
         <div class="tableWrap">
-          <table>
+          <table class="draftItemsTable">
             <thead>
               <tr>
                 <th>項次</th>
+                <th>圖片</th>
                 <th>品項名稱</th>
                 <th>規格</th>
                 <th>數量</th>
@@ -289,9 +308,9 @@
             <tbody id="draftItemRows"></tbody>
           </table>
         </div>
-        <div class="draftSummary">
-          <span>草稿材料小計</span>
-          <strong id="draftSubtotal">$0</strong>
+        <div class="draftSummary costSummary">
+          <div><span>材料小計</span><strong id="draftSubtotal">$0</strong></div>
+          <div><span>階段總成本</span><strong id="draftGrandTotal">$0</strong></div>
         </div>
       </div>
     </section>
@@ -326,10 +345,17 @@
             <span>機台分類 *</span>
             <select id="machineCategory" required></select>
           </label>
-          <label>
-            <span>機台圖片網址</span>
-            <input id="machineImageUrl" type="url" placeholder="https://..." autocomplete="off">
+          <label class="wide">
+            <span>機台代表圖片</span>
+            <input id="machineImageFile" type="file" accept="image/jpeg,image/png,image/webp">
           </label>
+          <div id="machineImagePreviewWrap" class="machineUploadPreview wide" hidden>
+            <img id="machineImagePreview" alt="機台圖片預覽">
+            <div>
+              <strong id="machineImageFileName"></strong>
+              <button id="clearMachineImage" class="linkButton" type="button">清除圖片</button>
+            </div>
+          </div>
           <label class="wide">
             <span>備註</span>
             <textarea id="machineNote" rows="5" placeholder="機台說明或版本資訊"></textarea>
@@ -391,7 +417,7 @@
   </dialog>
 
   <datalist id="supplierOptions"></datalist>
-  <script src="data.js?v=20260623-igs-v1-5"></script>
-  <script src="app.js?v=20260623-igs-v1-5"></script>
+  <script src="data.js?v=20260623-igs-v1-6"></script>
+  <script src="app.js?v=20260623-igs-v1-6"></script>
 </body>
 </html>
