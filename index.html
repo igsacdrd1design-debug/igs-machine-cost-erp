@@ -8,7 +8,7 @@
   <meta name="googlebot" content="noindex, nofollow, noarchive, nosnippet">
   <meta name="referrer" content="no-referrer">
   <title>IGS 機台材料成本 ERP</title>
-  <link rel="stylesheet" href="style.css?v=20260623-igs-v2-0-1">
+  <link rel="stylesheet" href="style.css?v=20260623-igs-v2-0-2">
 </head>
 <body class="authLocked">
   <section id="authGate" class="authGate" aria-labelledby="loginTitle">
@@ -426,9 +426,9 @@
     <section id="machine360Setup" class="view">
       <div class="quickIntro view360Intro">
         <div>
-          <span class="eyebrow">v2.0 · 少量圖片建立 360° 視覺</span>
-          <h2>提供一至四張基準角度圖，逐步建立可旋轉的主管成本頁</h2>
-          <p>不需要提供原始 3D 模型。上傳 1 張即可使用單圖模式，2 張可交叉比對；正面、右 45°、背面與左 45° 可分次補齊。</p>
+          <span class="eyebrow">v2.0.2 · 少量圖片自適應旋轉</span>
+          <h2>提供一至四張基準圖，依現有角度立即建立自適應檢視</h2>
+          <p>不需要提供原始 3D 模型。1 張可檢視與標記；2 張以上可拖曳切換角度，不再要求四張才能開啟預覽。</p>
         </div>
         <div id="machine360CompletionBadge" class="apiBadge">尚未選擇機台</div>
       </div>
@@ -539,20 +539,23 @@
         <p id="machine360Status" class="photoStatus muted">請先選擇機台，再上傳至少一張基準圖。</p>
       </div>
 
-      <div class="panel machine360NextPanel">
+      <div class="panel machine360ViewerPanel">
         <div class="panelHead">
           <div>
-            <h2>3. 後續建立旋轉草稿</h2>
-            <p class="muted">四張基準圖完成後，下一階段會在此提供 AI 補中間角度、旋轉預覽、異常影格審核與成本標記。</p>
+            <h2>3. 自適應角度預覽</h2>
+            <p class="muted">1 張會以單圖檢視；2 張以上可用滑鼠或手指左右拖曳切換現有角度。這是依現有圖片切換，不會假裝生成不存在的背面。</p>
           </div>
-          <span class="analysisBadge">規劃中：AI 補角度</span>
+          <span id="machine360ViewerBadge" class="analysisBadge">尚無可預覽圖片</span>
         </div>
-        <div class="v19Roadmap">
-          <div><span>1</span><strong>四張基準圖</strong><small>目前版本</small></div>
-          <div><span>2</span><strong>AI 補中間角度</strong><small>人工審核</small></div>
-          <div><span>3</span><strong>成本區域標記</strong><small>點擊查看</small></div>
-          <div><span>4</span><strong>主管唯讀頁</strong><small>旋轉與比較</small></div>
+        <div id="machine360Viewer" class="machine360Viewer empty" tabindex="0" aria-label="機台角度預覽">
+          <img id="machine360ViewerImage" alt="機台角度預覽" hidden>
+          <div id="machine360ViewerEmpty" class="viewerEmpty">請先儲存至少一張基準圖</div>
+          <button id="machine360Prev" class="viewerArrow prev" type="button" aria-label="上一個角度">‹</button>
+          <button id="machine360Next" class="viewerArrow next" type="button" aria-label="下一個角度">›</button>
+          <div class="viewerOverlay"><strong id="machine360ViewerAngle">—</strong><span id="machine360ViewerHint">單圖可檢視，兩張以上可拖曳切換</span></div>
         </div>
+        <div id="machine360ViewerDots" class="viewerDots"></div>
+        <p class="muted tinyText">AI 補齊中間角度仍屬後續功能；目前預覽只使用你實際上傳並儲存的圖片。</p>
       </div>
     </section>
 
@@ -627,73 +630,32 @@
 
     <section id="smartEstimate" class="view">
       <div class="quickIntro estimateIntro">
-        <div><span class="eyebrow">v2.0 · 智能估價</span><h2>AI 讀取圖片或 PDF，自動帶入資料並產生三段估價</h2><p>系統會優先配對公司價格主檔，套用市場指數後計算樂觀、基準與保守估價；所有 AI 結果仍需人工確認。</p></div>
+        <div><span class="eyebrow">v2.0.2 · 智能估價</span><h2>用公司價格、尺寸、用量與市場指數產生三段估價</h2><p>估價結果分為樂觀、基準、保守，並顯示價格來源與信心度。</p></div>
         <div id="estimateStatusBadge" class="apiBadge">尚未建立估價</div>
       </div>
       <div class="panel">
         <div class="panelHead"><div><h2>1. 估價專案</h2><p class="muted">可從既有機台實際成本載入，也可建立全新估價。</p></div><div class="panelActions"><button id="newEstimate" class="button ghost" type="button">新增估價</button><button id="loadMachineActualItems" class="button secondary" type="button">載入該機台實際品項</button></div></div>
         <form id="estimateProjectForm" class="entryForm compactForm">
           <input id="estimateId" type="hidden">
-          <label><span>機台</span><select id="estimateMachine"></select></label>
-          <label><span>估價名稱 *</span><input id="estimateName" type="text" required placeholder="例如：蟹霸量產版美術件估價"></label>
+          <label><span>估價對象</span><select id="estimateTargetType"><option value="new" selected>新機台／新專案</option><option value="existing">既有機台</option></select></label>
+          <label id="estimateMachineField"><span>既有機台</span><select id="estimateMachine"></select></label>
+          <label><span>估價名稱／新機台暫名 *</span><input id="estimateName" type="text" required placeholder="例如：蟹霸新版本美術材料估價"></label>
           <label><span>版本</span><input id="estimateVersion" type="text" value="V1"></label>
           <label><span>估價日期</span><input id="estimateDate" type="date"></label>
           <label><span>狀態</span><select id="estimateStatus"><option>草稿</option><option>待確認</option><option>已核准</option><option>已作廢</option></select></label>
           <label class="wide"><span>備註</span><textarea id="estimateNote" rows="2"></textarea></label>
         </form>
       </div>
-      <div class="panel estimateAiImportPanel">
-        <div class="panelHead">
-          <div>
-            <h2>2. AI 偵測輸入</h2>
-            <p class="muted">上傳估價單、材料表、印刷規格圖或 PDF，AI 會帶入品項、材質、尺寸與印刷資訊，再依價格主檔自動估價。</p>
-          </div>
-          <span id="estimateAiBadge" class="analysisBadge">尚未分析</span>
-        </div>
-        <div class="estimateAiImportGrid">
-          <label class="uploadZone estimateUploadZone" for="estimateSourceFile">
-            <input id="estimateSourceFile" type="file" accept=".jpg,.jpeg,.png,.webp,.pdf,image/jpeg,image/png,image/webp,application/pdf" hidden>
-            <strong>點這裡選擇圖片或 PDF</strong>
-            <span id="estimateSourceFileName">支援 JPG、JPEG、PNG、WebP、PDF；不支援 Word</span>
-          </label>
-          <div class="estimateAiOptions">
-            <label>
-              <span>匯入方式</span>
-              <select id="estimateImportMode">
-                <option value="replace">取代目前估價明細</option>
-                <option value="append">追加到目前估價明細</option>
-              </select>
-            </label>
-            <label>
-              <span>價格策略</span>
-              <select id="estimatePriceStrategy">
-                <option value="company_first">優先公司價格主檔，缺價才採文件單價</option>
-                <option value="document_first">優先採用文件可見單價</option>
-                <option value="company_only">只使用公司價格主檔</option>
-              </select>
-            </label>
-            <div class="formActions">
-              <button id="analyzeEstimateSource" class="button primary" type="button" disabled>AI 偵測並自動估價</button>
-              <button id="clearEstimateSource" class="button ghost" type="button">清除檔案</button>
-            </div>
-          </div>
-        </div>
-        <p id="estimateAiStatus" class="photoStatus muted">尚未選擇檔案。</p>
-        <details class="aiRawDetails">
-          <summary>查看 AI 辨識原文與提醒</summary>
-          <textarea id="estimateAiRawText" rows="6" readonly placeholder="AI 分析後會顯示主要辨識文字與注意事項"></textarea>
-        </details>
-      </div>
       <div class="panel">
-        <div class="panelHead"><div><h2>3. 估價明細</h2><p class="muted">AI 或人工輸入後，系統會自動配對公司價格、套用市場指數並計算樂觀／基準／保守估價。</p></div><div class="panelActions"><button id="addEstimateItem" class="button secondary" type="button">新增品項</button><button id="recalculateEstimate" class="button ghost" type="button">重新計算</button></div></div>
-        <div class="tableWrap estimateTableWrap"><table class="estimateTable"><thead><tr><th>#</th><th>品項</th><th>材質／厚度</th><th>尺寸 mm</th><th>數量</th><th>價格來源</th><th>用量</th><th>損耗%</th><th>市場%</th><th>加工／其他</th><th>基準成本</th><th>美術優化</th><th></th></tr></thead><tbody id="estimateItemRows"></tbody></table></div>
+        <div class="panelHead"><div><h2>2. 估價明細</h2><p class="muted">寬高可自動換算平方公尺或才；用量仍可人工覆寫。</p></div><div class="panelActions"><button id="addEstimateItem" class="button secondary" type="button">新增品項</button><button id="recalculateEstimate" class="button ghost" type="button">重新計算</button></div></div>
+        <div id="estimateItemRows" class="estimateItemList"></div>
         <div class="estimateTotals">
           <div><span>樂觀估價</span><strong id="estimateOptimistic">$0</strong></div>
           <div class="highlight"><span>基準估價</span><strong id="estimateBaseline">$0</strong></div>
           <div><span>保守估價</span><strong id="estimateConservative">$0</strong></div>
           <div><span>整體信心度</span><strong id="estimateConfidence">0%</strong></div>
         </div>
-        <div class="formActions"><button id="saveEstimate" class="button primary" type="button">儲存估價版本</button></div>
+        <div class="formActions"><button id="saveEstimate" class="button primary" type="button">儲存估價版本</button><button id="saveEstimateAndOptimize" class="button secondary" type="button">儲存並進行美術降本</button></div>
       </div>
       <div class="panel">
         <div class="panelHead"><div><h2>已儲存估價</h2><p class="muted">可載入、修改、複製或刪除。</p></div></div>
@@ -703,15 +665,16 @@
 
     <section id="artOptimization" class="view">
       <div class="quickIntro optimizeIntro">
-        <div><span class="eyebrow">v2.0 · 僅限美術端</span><h2>AI 材質與印刷降本，不修改機構、工設、運送或包裝</h2><p>AI 只分析美術材料、印刷方式、白墨、特殊效果、併版與板材利用率；所有方案均需美術打樣確認。</p></div>
+        <div><span class="eyebrow">v2.0.2 · 僅限美術端</span><h2>AI 材質與印刷降本，不修改機構、工設、運送或包裝</h2><p>AI 只分析美術材料、印刷方式、白墨、特殊效果、併版與板材利用率；所有方案均需美術打樣確認。</p></div>
         <div class="apiBadge connected">Gemini 3.5 Flash＋Gemini 3.1 Flash Image</div>
       </div>
       <div class="v20Grid twoCol">
         <div class="panel">
           <div class="panelHead"><div><h2>1. 建立降本分析</h2><p class="muted">可使用已儲存估價，或直接分析機台的實際費用品項。</p></div></div>
           <form id="optimizationForm" class="entryForm compactForm">
-            <label><span>機台 *</span><select id="optimizationMachine" required></select></label>
-            <label><span>估價版本</span><select id="optimizationEstimate"><option value="">使用實際費用</option></select></label>
+            <label><span>分析來源</span><select id="optimizationSource"><option value="estimate" selected>智能估價案</option><option value="actual">既有機台實際費用</option></select></label>
+            <label id="optimizationEstimateField"><span>估價版本 *</span><select id="optimizationEstimate"></select></label>
+            <label id="optimizationMachineField"><span>既有機台 *</span><select id="optimizationMachine"></select></label>
             <label><span>目標降本比例</span><input id="optimizationTarget" type="number" min="1" max="40" step="1" value="10"></label>
             <label><span>方案強度</span><select id="optimizationLevel"><option value="保守">保守</option><option value="平衡" selected>平衡</option><option value="積極">積極</option></select></label>
             <label class="wide"><span>不可變更條件</span><textarea id="optimizationConstraints" rows="5">僅限美術材料與印刷製程優化。不得修改機台輪廓、尺寸、零件數量、安裝方式、孔位、機構、工業設計、電子、燈具、運送、包裝與品牌主視覺。</textarea></label>
@@ -757,7 +720,7 @@
 
   <datalist id="supplierOptions"></datalist>
   <datalist id="machineAreaOptions"></datalist>
-  <script src="data.js?v=20260623-igs-v2-0-1"></script>
-  <script src="app.js?v=20260623-igs-v2-0-1"></script>
+  <script src="data.js?v=20260623-igs-v2-0-2"></script>
+  <script src="app.js?v=20260623-igs-v2-0-2"></script>
 </body>
 </html>

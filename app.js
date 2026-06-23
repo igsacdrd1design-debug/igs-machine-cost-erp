@@ -1,5 +1,5 @@
 // =====================================================
-// IGS 機台材料成本 ERP — 前端 v2.0.1
+// IGS 機台材料成本 ERP — 前端 v2.0.2
 // 1. ERP 密碼登入
 // 2. 工作階段驗證
 // 3. 私人 Google Sheet 安全讀取
@@ -27,7 +27,7 @@ const pageDescriptions = {
   quotationEntry: "上傳圖片或 PDF，將成本歸入既有機台並確認稅額與安裝區域。",
   quickMachine: "快速建立新的機台主檔。",
   suppliers: "查看供應商與成本單金額。",
-  machine360Setup: "上傳一至四張基準角度圖，建立少量圖片驅動的 360° 機台成本視覺。",
+  machine360Setup: "上傳一至四張基準角度圖；一張可檢視，兩張以上可拖曳切換現有角度。",
   priceCenter: "管理公司材料價格並查詢網路市場浮動。",
   smartEstimate: "AI 讀取圖片或 PDF，自動帶入品項並用公司價格與市場指數建立三段估價。",
   artOptimization: "僅針對美術材料與印刷製程提出降本及視覺概念模擬。",
@@ -66,6 +66,8 @@ let state = {
   estimateAiRawText: "",
   selectedMachineStage: COST_TYPES[0],
   selectedMachineArea: "",
+  machine360ViewerIndex: 0,
+  machine360ViewerPointerX: null,
 };
 
 const secureImageCache = new Map();
@@ -1312,6 +1314,7 @@ function setupMachine360() {
   if (!machineSelect) return;
   machineSelect.addEventListener("change", () => {
     state.machine360Draft = {};
+    state.machine360ViewerIndex = 0;
     renderMachine360Setup();
   });
   document.querySelectorAll("[data-machine360-view]").forEach((input) => {
@@ -1327,6 +1330,7 @@ function setupMachine360() {
     button.addEventListener("click", () => deleteStoredMachine360View(button.dataset.delete360));
   });
   $("saveMachine360Views").addEventListener("click", saveMachine360Views);
+  setupAdaptiveMachine360Viewer();
   renderMachine360Setup();
 }
 
@@ -1336,6 +1340,79 @@ function machine360ViewsForMachine(machineId) {
 
 function existingMachine360View(machineId, viewKey) {
   return state.machine360Views.find((view) => view.machineId === machineId && view.viewKey === viewKey) || null;
+}
+
+function sortedMachine360Views(machineId) {
+  return machine360ViewsForMachine(machineId).filter((view) => view.imageFileId).sort((a, b) => toNumber(a.angle) - toNumber(b.angle));
+}
+
+function setupAdaptiveMachine360Viewer() {
+  const viewer = $("machine360Viewer");
+  if (!viewer) return;
+  $("machine360Prev")?.addEventListener("click", () => stepMachine360Viewer(-1));
+  $("machine360Next")?.addEventListener("click", () => stepMachine360Viewer(1));
+  viewer.addEventListener("pointerdown", (event) => {
+    state.machine360ViewerPointerX = event.clientX;
+    viewer.setPointerCapture?.(event.pointerId);
+  });
+  viewer.addEventListener("pointerup", (event) => {
+    const start = state.machine360ViewerPointerX;
+    state.machine360ViewerPointerX = null;
+    if (start === null) return;
+    const delta = event.clientX - start;
+    if (Math.abs(delta) >= 28) stepMachine360Viewer(delta < 0 ? 1 : -1);
+  });
+  viewer.addEventListener("keydown", (event) => {
+    if (event.key === "ArrowLeft") stepMachine360Viewer(-1);
+    if (event.key === "ArrowRight") stepMachine360Viewer(1);
+  });
+}
+
+function stepMachine360Viewer(delta) {
+  const machineId = $("machine360Machine")?.value || "";
+  const views = sortedMachine360Views(machineId);
+  if (views.length < 2) return;
+  state.machine360ViewerIndex = (state.machine360ViewerIndex + delta + views.length) % views.length;
+  renderAdaptiveMachine360Viewer();
+}
+
+async function renderAdaptiveMachine360Viewer() {
+  const viewer = $("machine360Viewer");
+  const image = $("machine360ViewerImage");
+  const empty = $("machine360ViewerEmpty");
+  const dots = $("machine360ViewerDots");
+  const badge = $("machine360ViewerBadge");
+  if (!viewer || !image || !empty || !dots || !badge) return;
+  const machineId = $("machine360Machine")?.value || "";
+  const views = sortedMachine360Views(machineId);
+  state.machine360ViewerIndex = Math.max(0, Math.min(state.machine360ViewerIndex, Math.max(0, views.length - 1)));
+  const prev = $("machine360Prev");
+  const next = $("machine360Next");
+  const canSwitch = views.length >= 2;
+  if (prev) prev.hidden = !canSwitch;
+  if (next) next.hidden = !canSwitch;
+  if (!views.length) {
+    viewer.classList.add("empty"); image.hidden = true; empty.hidden = false;
+    empty.textContent = machineId ? "尚未儲存基準圖" : "請先選擇機台";
+    badge.textContent = "尚無可預覽圖片";
+    $("machine360ViewerAngle").textContent = "—";
+    $("machine360ViewerHint").textContent = "先儲存至少一張圖片";
+    dots.innerHTML = "";
+    return;
+  }
+  const view = views[state.machine360ViewerIndex];
+  viewer.classList.remove("empty"); empty.hidden = true; image.hidden = false;
+  try { image.src = await getPrivateImageDataUrl(view.imageFileId); }
+  catch (error) { image.hidden = true; empty.hidden = false; empty.textContent = "圖片讀取失敗"; }
+  $("machine360ViewerAngle").textContent = `${view.viewName || MACHINE_360_VIEW_CONFIG[view.viewKey]?.label || view.viewKey}｜${toNumber(view.angle)}°`;
+  $("machine360ViewerHint").textContent = canSwitch ? "左右拖曳、方向鍵或按鈕切換現有角度" : "目前為單圖檢視；可繼續補其他角度";
+  badge.textContent = views.length === 1 ? "單圖檢視模式" : `${views.length} 圖自適應切換`;
+  badge.classList.toggle("connected", views.length > 0);
+  dots.innerHTML = views.map((item, index) => `<button type="button" class="viewerDot ${index === state.machine360ViewerIndex ? "active" : ""}" data-viewer-index="${index}" title="${escapeHTML(item.viewName || item.viewKey)}"></button>`).join("");
+  dots.querySelectorAll("[data-viewer-index]").forEach((button) => button.addEventListener("click", () => {
+    state.machine360ViewerIndex = Number(button.dataset.viewerIndex) || 0;
+    renderAdaptiveMachine360Viewer();
+  }));
 }
 
 async function handleMachine360FileSelection(event) {
@@ -1494,6 +1571,7 @@ async function renderMachine360Setup() {
     statusText = "可先儲存目前已有的圖片，之後再補上其他角度。";
   }
   $("machine360Status").textContent = statusText;
+  await renderAdaptiveMachine360Viewer();
 }
 
 async function saveMachine360Views() {
@@ -2332,10 +2410,13 @@ function setupV20() {
   $('estimateItemRows').addEventListener('change', handleEstimateItemInput);
   $('estimateItemRows').addEventListener('click', handleEstimateItemClick);
   $('saveEstimate').addEventListener('click', saveCurrentEstimate);
+  $('saveEstimateAndOptimize').addEventListener('click', saveEstimateAndOpenOptimization);
   $('estimateProjectRows').addEventListener('click', handleEstimateProjectClick);
-  $('estimateMachine').addEventListener('change', () => { if (!$('estimateName').value) { const m = machineById($('estimateMachine').value); if (m) $('estimateName').value = `${m.name} 美術材料估價`; } });
+  $('estimateTargetType').addEventListener('change', updateEstimateTargetMode);
+  $('estimateMachine').addEventListener('change', () => { if ($('estimateTargetType').value === 'existing' && !$('estimateName').value) { const m = machineById($('estimateMachine').value); if (m) $('estimateName').value = `${m.name} 美術材料估價`; } });
 
-  $('optimizationMachine').addEventListener('change', () => { populateOptimizationEstimateOptions(); renderSimulationViewOptions(); });
+  $('optimizationSource').addEventListener('change', updateOptimizationSourceMode);
+  $('optimizationMachine').addEventListener('change', renderSimulationViewOptions);
   $('optimizationEstimate').addEventListener('change', renderSimulationViewOptions);
   $('optimizationForm').addEventListener('submit', generateOptimizationFromForm);
   $('optimizationRecommendations').addEventListener('click', handleOptimizationRecommendationClick);
@@ -2346,7 +2427,10 @@ function setupV20() {
   if (!state.estimateDraftItems.length) state.estimateDraftItems = [emptyEstimateItem()];
   if (!$('materialPriceDate').value) $('materialPriceDate').value = todayValue();
   if (!$('estimateDate').value) $('estimateDate').value = todayValue();
+  updateEstimateTargetMode();
+  updateOptimizationSourceMode();
 }
+
 
 function materialPriceFormRecord() {
   return {
@@ -2797,10 +2881,20 @@ function recalculateEstimateItem(item){
 function recalculateAllEstimateItems(){state.estimateDraftItems.forEach(recalculateEstimateItem);}
 
 function renderEstimateDraft(){
-  if(!$('estimateItemRows'))return;if(!state.estimateDraftItems.length)state.estimateDraftItems=[emptyEstimateItem()];recalculateAllEstimateItems();
+  if(!$('estimateItemRows'))return;
+  if(!state.estimateDraftItems.length)state.estimateDraftItems=[emptyEstimateItem()];
+  recalculateAllEstimateItems();
   const priceOptions='<option value="">自動配對／未指定</option>'+state.materialPrices.filter((p)=>p.active!=='否').map((p)=>`<option value="${escapeHTML(p.id)}">${escapeHTML(p.name)} ${escapeHTML(p.thickness)}｜${money(p.basePrice)}/${escapeHTML(p.unit)}</option>`).join('');
-  $('estimateItemRows').innerHTML=state.estimateDraftItems.map((item,index)=>`<tr data-estimate-index="${index}"><td>${index+1}</td><td><input class="tableInput wideInput" data-estimate-field="name" value="${escapeHTML(item.name)}" placeholder="品項名稱"><input class="tableInput" data-estimate-field="code" value="${escapeHTML(item.code)}" placeholder="品項代碼"></td><td><input class="tableInput" data-estimate-field="material" value="${escapeHTML(item.material)}" placeholder="材質"><input class="tableInput" data-estimate-field="thickness" value="${escapeHTML(item.thickness)}" placeholder="厚度"><input class="tableInput wideInput" data-estimate-field="spec" value="${escapeHTML(item.spec)}" placeholder="規格"></td><td><input class="tableInput numberInput" data-estimate-field="widthMm" type="number" min="0" step="0.1" value="${item.widthMm||''}" placeholder="寬"><input class="tableInput numberInput" data-estimate-field="heightMm" type="number" min="0" step="0.1" value="${item.heightMm||''}" placeholder="高"></td><td><input class="tableInput numberInput" data-estimate-field="qty" type="number" min="0" step="0.01" value="${item.qty}"><input class="tableInput" data-estimate-field="unit" value="${escapeHTML(item.unit)}"></td><td><select class="tableInput priceSelect" data-estimate-field="priceId">${priceOptions}</select><input class="tableInput numberInput manualPriceInput" data-estimate-field="baseUnitPrice" type="number" min="0" step="0.01" value="${roundDisplay(item.baseUnitPrice)}" placeholder="人工／文件單價"><small data-estimate-price-source>${escapeHTML(item.priceSource||'尚未配對')}</small></td><td><input class="tableInput numberInput" data-estimate-field="usage" type="number" min="0" step="0.0001" value="${roundDisplay(item.usage)}"></td><td><input class="tableInput numberInput" data-estimate-field="wasteRate" type="number" min="0" max="100" step="0.1" value="${item.wasteRate}"></td><td><input class="tableInput numberInput" data-estimate-field="marketAdjustment" type="number" step="0.01" value="${item.marketAdjustment}"></td><td><input class="tableInput numberInput" data-estimate-field="processingFee" type="number" min="0" step="0.01" value="${item.processingFee}" placeholder="加工"><input class="tableInput numberInput" data-estimate-field="otherFee" type="number" min="0" step="0.01" value="${item.otherFee}" placeholder="其他"></td><td data-estimate-cost-summary><strong>${money(item.baselineCost)}</strong><br><small>信心 ${Math.round(item.confidenceScore)}%</small></td><td class="toggleCell"><label><input type="checkbox" data-estimate-field="allowMaterialOptimization" ${item.allowMaterialOptimization!=='否'?'checked':''}>材質</label><label><input type="checkbox" data-estimate-field="allowPrintOptimization" ${item.allowPrintOptimization!=='否'?'checked':''}>印刷</label><input class="tableInput" data-estimate-field="printMethod" value="${escapeHTML(item.printMethod)}" placeholder="印刷方式"></td><td><button class="removeRow" type="button" data-remove-estimate="${index}">刪除</button></td></tr>`).join('');
-  state.estimateDraftItems.forEach((item,index)=>{const select=$('estimateItemRows').querySelector(`tr[data-estimate-index="${index}"] select[data-estimate-field="priceId"]`);if(select)select.value=item.priceId||'';});
+  $('estimateItemRows').innerHTML=state.estimateDraftItems.map((item,index)=>`<article class="estimateItemCard" data-estimate-index="${index}">
+    <header class="estimateItemCardHead"><div><span class="itemIndex">品項 ${index+1}</span><strong>${escapeHTML(item.name||'尚未命名')}</strong><small data-estimate-price-source>${escapeHTML(item.priceSource||'尚未配對價格')}</small></div><div class="estimateCardCost" data-estimate-cost-summary><strong>${money(item.baselineCost)}</strong><small>信心 ${Math.round(item.confidenceScore)}%</small></div><button class="removeRow" type="button" data-remove-estimate="${index}">刪除</button></header>
+    <div class="estimateItemCardGrid">
+      <section class="estimateFieldGroup"><h4>品項資料</h4><label><span>品項名稱</span><input class="tableInput" data-estimate-field="name" value="${escapeHTML(item.name)}" placeholder="品項名稱"></label><label><span>品項代碼</span><input class="tableInput" data-estimate-field="code" value="${escapeHTML(item.code)}" placeholder="品項代碼／檔名"></label><label><span>材質</span><input class="tableInput" data-estimate-field="material" value="${escapeHTML(item.material)}" placeholder="壓克力、PVC、貼紙…"></label><label><span>厚度</span><input class="tableInput" data-estimate-field="thickness" value="${escapeHTML(item.thickness)}" placeholder="例如 3mm"></label><label class="wide"><span>規格</span><input class="tableInput" data-estimate-field="spec" value="${escapeHTML(item.spec)}" placeholder="規格／包裝"></label></section>
+      <section class="estimateFieldGroup"><h4>尺寸與數量</h4><div class="inlineFields"><label><span>寬 mm</span><input class="tableInput numberInput" data-estimate-field="widthMm" type="number" min="0" step="0.1" value="${item.widthMm||''}"></label><label><span>高 mm</span><input class="tableInput numberInput" data-estimate-field="heightMm" type="number" min="0" step="0.1" value="${item.heightMm||''}"></label></div><div class="inlineFields"><label><span>數量</span><input class="tableInput numberInput" data-estimate-field="qty" type="number" min="0" step="0.01" value="${item.qty}"></label><label><span>單位</span><input class="tableInput" data-estimate-field="unit" value="${escapeHTML(item.unit)}"></label></div><div class="inlineFields"><label><span>計價用量</span><input class="tableInput numberInput" data-estimate-field="usage" type="number" min="0" step="0.0001" value="${roundDisplay(item.usage)}"></label><label><span>損耗 %</span><input class="tableInput numberInput" data-estimate-field="wasteRate" type="number" min="0" max="100" step="0.1" value="${item.wasteRate}"></label></div></section>
+      <section class="estimateFieldGroup"><h4>價格計算</h4><label><span>公司價格配對</span><select class="tableInput priceSelect" data-estimate-field="priceId">${priceOptions}</select></label><label><span>人工／文件單價</span><input class="tableInput numberInput manualPriceInput" data-estimate-field="baseUnitPrice" type="number" min="0" step="0.01" value="${roundDisplay(item.baseUnitPrice)}"></label><div class="inlineFields"><label><span>市場調整 %</span><input class="tableInput numberInput" data-estimate-field="marketAdjustment" type="number" step="0.01" value="${item.marketAdjustment}"></label><label><span>加工費</span><input class="tableInput numberInput" data-estimate-field="processingFee" type="number" min="0" step="0.01" value="${item.processingFee}"></label></div><label><span>其他美術費用</span><input class="tableInput numberInput" data-estimate-field="otherFee" type="number" min="0" step="0.01" value="${item.otherFee}"></label></section>
+      <section class="estimateFieldGroup"><h4>印刷與降本條件</h4><div class="checkRow"><label><input type="checkbox" data-estimate-field="allowMaterialOptimization" ${item.allowMaterialOptimization!=='否'?'checked':''}>允許材質優化</label><label><input type="checkbox" data-estimate-field="allowPrintOptimization" ${item.allowPrintOptimization!=='否'?'checked':''}>允許印刷優化</label></div><label><span>印刷方式</span><input class="tableInput" data-estimate-field="printMethod" value="${escapeHTML(item.printMethod)}" placeholder="UV、背噴、貼膜…"></label><div class="inlineFields"><label><span>印刷面</span><input class="tableInput" data-estimate-field="printSide" value="${escapeHTML(item.printSide)}"></label><label><span>白墨範圍</span><input class="tableInput" data-estimate-field="whiteInk" value="${escapeHTML(item.whiteInk)}"></label></div><label><span>特殊效果</span><input class="tableInput" data-estimate-field="specialEffect" value="${escapeHTML(item.specialEffect)}"></label><label><span>不可變更條件</span><input class="tableInput" data-estimate-field="constraints" value="${escapeHTML(item.constraints)}" placeholder="例如：外觀、尺寸、孔位不得改"></label></section>
+    </div>
+  </article>`).join('');
+  state.estimateDraftItems.forEach((item,index)=>{const select=$('estimateItemRows').querySelector(`[data-estimate-index="${index}"] select[data-estimate-field="priceId"]`);if(select)select.value=item.priceId||'';});
   updateEstimateTotals();
 }
 
@@ -2857,21 +2951,94 @@ function updateEstimateTotals(){
 }
 function handleEstimateItemClick(event){const btn=event.target.closest('[data-remove-estimate]');if(!btn)return;state.estimateDraftItems.splice(Number(btn.dataset.removeEstimate),1);if(!state.estimateDraftItems.length)state.estimateDraftItems=[emptyEstimateItem()];renderEstimateDraft();}
 
+function updateEstimateTargetMode(){
+  const isExisting=$('estimateTargetType')?.value==='existing';
+  if($('estimateMachineField')) $('estimateMachineField').hidden=!isExisting;
+  if(!isExisting && $('estimateMachine')) $('estimateMachine').value='';
+  if($('loadMachineActualItems')) $('loadMachineActualItems').hidden=!isExisting;
+}
+
 function parseDimensions(text){const match=String(text||'').match(/[W寬]?\s*(\d+(?:\.\d+)?)\s*[x×X*]\s*[H高]?\s*(\d+(?:\.\d+)?)/i);return match?{widthMm:Number(match[1]),heightMm:Number(match[2])}:{widthMm:0,heightMm:0};}
 function loadActualItemsIntoEstimate(){const machineId=$('estimateMachine').value;if(!machineId){showNotice('請先選擇機台。','warn');return;}const orderIds=state.costOrders.filter((o)=>o.machineId===machineId&&o.type==='實際費用').map((o)=>o.id);const items=state.costItems.filter((i)=>orderIds.includes(i.costOrderId)&&i.itemType!=='附加費用');if(!items.length){showNotice('這台機台尚無實際費用品項。','warn');return;}state.estimateDraftItems=items.map((i)=>{const d=parseDimensions(i.spec);return{...emptyEstimateItem(),code:i.fileName||'',name:i.name,material:i.material,spec:i.spec,thickness:i.thickness,qty:i.qty||1,unit:i.unit||'件',widthMm:d.widthMm,heightMm:d.heightMm,baseUnitPrice:i.price,manualPrice:true,manualPriceConfidence:85,wasteRate:0,marketAdjustment:0,marketManuallySet:true,priceSource:'機台實際成本',confidenceScore:85};});const m=machineById(machineId);if(!$('estimateName').value)$('estimateName').value=`${m?.name||machineId} 美術材料估價`;renderEstimateDraft();showNotice(`已載入 ${items.length} 筆實際費用品項。`,'success');}
 
-function resetEstimateEditor(){state.currentEstimateId='';state.estimateDraftItems=[emptyEstimateItem()];$('estimateProjectForm').reset();$('estimateId').value='';$('estimateVersion').value='V1';$('estimateDate').value=todayValue();$('estimateStatus').value='草稿';clearEstimateSourceDocument();renderEstimateDraft();}
-function loadEstimateProject(id){const project=state.estimateProjects.find((p)=>p.id===id);if(!project)return;state.currentEstimateId=id;$('estimateId').value=id;$('estimateMachine').value=project.machineId;$('estimateName').value=project.name;$('estimateVersion').value=project.version;$('estimateDate').value=project.date;$('estimateStatus').value=project.status;$('estimateNote').value=project.note;state.estimateDraftItems=state.estimateItems.filter((i)=>i.estimateId===id).map((i)=>({...i,usageManuallySet:true,marketManuallySet:true}));if(!state.estimateDraftItems.length)state.estimateDraftItems=[emptyEstimateItem()];renderEstimateDraft();document.querySelector('[data-view="smartEstimate"]')?.click();}
+function resetEstimateEditor(){state.currentEstimateId='';state.estimateDraftItems=[emptyEstimateItem()];$('estimateProjectForm').reset();$('estimateId').value='';$('estimateTargetType').value='new';$('estimateVersion').value='V1';$('estimateDate').value=todayValue();$('estimateStatus').value='草稿';clearEstimateSourceDocument();updateEstimateTargetMode();renderEstimateDraft();}
+function loadEstimateProject(id){const project=state.estimateProjects.find((p)=>p.id===id);if(!project)return;state.currentEstimateId=id;$('estimateId').value=id;$('estimateTargetType').value=project.machineId?'existing':'new';$('estimateMachine').value=project.machineId;$('estimateName').value=project.name;$('estimateVersion').value=project.version;$('estimateDate').value=project.date;$('estimateStatus').value=project.status;$('estimateNote').value=project.note;state.estimateDraftItems=state.estimateItems.filter((i)=>i.estimateId===id).map((i)=>({...i,usageManuallySet:true,marketManuallySet:true}));if(!state.estimateDraftItems.length)state.estimateDraftItems=[emptyEstimateItem()];updateEstimateTargetMode();renderEstimateDraft();document.querySelector('[data-view="smartEstimate"]')?.click();}
 
-async function saveCurrentEstimate(){const name=$('estimateName').value.trim();if(!name){showNotice('請填寫估價名稱。','warn');return;}const valid=state.estimateDraftItems.filter((i)=>i.name.trim());if(!valid.length){showNotice('至少需要一筆有品項名稱的估價明細。','warn');return;}const button=$('saveEstimate');button.disabled=true;button.textContent='儲存中…';try{recalculateAllEstimateItems();const response=await secureApiRequest({action:'saveEstimate',project:{id:state.currentEstimateId,machineId:$('estimateMachine').value,name,version:$('estimateVersion').value.trim(),date:$('estimateDate').value,status:$('estimateStatus').value,note:$('estimateNote').value.trim()},items:valid},{timeoutMs:120000});const project=normalizeEstimateProject(response.result.project);state.estimateProjects=state.estimateProjects.filter((p)=>p.id!==project.id);state.estimateProjects.push(project);state.estimateItems=state.estimateItems.filter((i)=>i.estimateId!==project.id);state.estimateItems.push(...(response.result.items||[]).map(normalizeEstimateItem));state.currentEstimateId=project.id;$('estimateId').value=project.id;renderEstimateProjects();renderEstimateDraft();populateOptimizationEstimateOptions();showNotice('估價版本已儲存。','success');}catch(error){showNotice(`估價儲存失敗：${error.message}`,'error');}finally{button.disabled=false;button.textContent='儲存估價版本';}}
+async function saveCurrentEstimate(){
+  const name=$('estimateName').value.trim();
+  if(!name){showNotice('請填寫估價名稱。','warn');return null;}
+  const valid=state.estimateDraftItems.filter((i)=>i.name.trim());
+  if(!valid.length){showNotice('至少需要一筆有品項名稱的估價明細。','warn');return null;}
+  const button=$('saveEstimate');button.disabled=true;button.textContent='儲存中…';
+  try{
+    recalculateAllEstimateItems();
+    const machineId=$('estimateTargetType').value==='existing'?$('estimateMachine').value:'';
+    const response=await secureApiRequest({action:'saveEstimate',project:{id:state.currentEstimateId,machineId,name,version:$('estimateVersion').value.trim(),date:$('estimateDate').value,status:$('estimateStatus').value,note:$('estimateNote').value.trim()},items:valid},{timeoutMs:120000});
+    const project=normalizeEstimateProject(response.result.project);
+    state.estimateProjects=state.estimateProjects.filter((p)=>p.id!==project.id);state.estimateProjects.push(project);
+    state.estimateItems=state.estimateItems.filter((i)=>i.estimateId!==project.id);state.estimateItems.push(...(response.result.items||[]).map(normalizeEstimateItem));
+    state.currentEstimateId=project.id;$('estimateId').value=project.id;renderEstimateProjects();renderEstimateDraft();populateOptimizationEstimateOptions();showNotice('估價版本已儲存。','success');
+    return project;
+  }catch(error){showNotice(`估價儲存失敗：${error.message}`,'error');return null;}
+  finally{button.disabled=false;button.textContent='儲存估價版本';}
+}
 
-function renderEstimateProjects(){if(!$('estimateProjectRows'))return;const rows=[...state.estimateProjects].sort((a,b)=>dateValue(b.date||b.updatedAt)-dateValue(a.date||a.updatedAt));$('estimateProjectRows').innerHTML=rows.length?rows.map((p)=>`<tr><td>${escapeHTML(p.date||'—')}</td><td><strong>${escapeHTML(p.name)}</strong></td><td>${escapeHTML(machineById(p.machineId)?.name||'—')}</td><td>${escapeHTML(p.version)}</td><td>${money(p.optimisticTotal)}</td><td><strong>${money(p.baselineTotal)}</strong></td><td>${money(p.conservativeTotal)}</td><td>${Math.round(p.confidence)}%</td><td>${escapeHTML(p.status)}</td><td><div class="rowActions"><button class="linkButton" data-load-estimate="${escapeHTML(p.id)}">載入</button><button class="linkButton" data-copy-estimate="${escapeHTML(p.id)}">複製</button><button class="linkButton dangerText" data-delete-estimate="${escapeHTML(p.id)}">刪除</button></div></td></tr>`).join(''):'<tr><td colspan="10" class="empty">尚未儲存估價。</td></tr>';}
+async function saveEstimateAndOpenOptimization(){
+  const button=$('saveEstimateAndOptimize');
+  if(button){button.disabled=true;button.textContent='儲存中…';}
+  const project=await saveCurrentEstimate();
+  if(button){button.disabled=false;button.textContent='儲存並進行美術降本';}
+  if(!project)return;
+  $('optimizationSource').value='estimate';
+  updateOptimizationSourceMode();
+  populateOptimizationEstimateOptions();
+  $('optimizationEstimate').value=project.id;
+  renderSimulationViewOptions();
+  document.querySelector('[data-view="artOptimization"]')?.click();
+  $('optimizationStatus').textContent=`已載入估價「${project.name}」，可直接產生美術降本方案。`;
+}
+
+function renderEstimateProjects(){if(!$('estimateProjectRows'))return;const rows=[...state.estimateProjects].sort((a,b)=>dateValue(b.date||b.updatedAt)-dateValue(a.date||a.updatedAt));$('estimateProjectRows').innerHTML=rows.length?rows.map((p)=>`<tr><td>${escapeHTML(p.date||'—')}</td><td><strong>${escapeHTML(p.name)}</strong></td><td>${escapeHTML(machineById(p.machineId)?.name||(p.machineId?'未找到機台':'新機台／未建主檔'))}</td><td>${escapeHTML(p.version)}</td><td>${money(p.optimisticTotal)}</td><td><strong>${money(p.baselineTotal)}</strong></td><td>${money(p.conservativeTotal)}</td><td>${Math.round(p.confidence)}%</td><td>${escapeHTML(p.status)}</td><td><div class="rowActions"><button class="linkButton" data-load-estimate="${escapeHTML(p.id)}">載入</button><button class="linkButton" data-copy-estimate="${escapeHTML(p.id)}">複製</button><button class="linkButton dangerText" data-delete-estimate="${escapeHTML(p.id)}">刪除</button></div></td></tr>`).join(''):'<tr><td colspan="10" class="empty">尚未儲存估價。</td></tr>';}
 
 async function handleEstimateProjectClick(event){const load=event.target.closest('[data-load-estimate]');if(load){loadEstimateProject(load.dataset.loadEstimate);return;}const copy=event.target.closest('[data-copy-estimate]');if(copy){loadEstimateProject(copy.dataset.copyEstimate);state.currentEstimateId='';$('estimateId').value='';$('estimateName').value += '（複製）';$('estimateVersion').value='V1';renderEstimateDraft();return;}const del=event.target.closest('[data-delete-estimate]');if(!del)return;const id=del.dataset.deleteEstimate;if(!confirm('確定刪除這個估價版本及其明細嗎？'))return;try{await secureApiRequest({action:'deleteEstimate',estimateId:id},{timeoutMs:60000});state.estimateProjects=state.estimateProjects.filter((p)=>p.id!==id);state.estimateItems=state.estimateItems.filter((i)=>i.estimateId!==id);state.artRecommendations=state.artRecommendations.filter((r)=>r.estimateId!==id);if(state.currentEstimateId===id)resetEstimateEditor();renderEstimateProjects();renderOptimizationHistory();populateOptimizationEstimateOptions();showNotice('估價版本已刪除。','success');}catch(e){showNotice(`刪除失敗：${e.message}`,'error');}}
 
-function populateOptimizationEstimateOptions(){const select=$('optimizationEstimate');if(!select)return;const machineId=$('optimizationMachine')?.value||'';const current=select.value;const projects=state.estimateProjects.filter((p)=>!machineId||p.machineId===machineId);select.innerHTML='<option value="">使用實際費用</option>'+projects.map((p)=>`<option value="${escapeHTML(p.id)}">${escapeHTML(p.name)}｜${escapeHTML(p.version)}</option>`).join('');if([...select.options].some((o)=>o.value===current))select.value=current;}
+function populateOptimizationEstimateOptions(){
+  const select=$('optimizationEstimate');if(!select)return;
+  const current=select.value;
+  const projects=[...state.estimateProjects].sort((a,b)=>dateValue(b.date||b.updatedAt)-dateValue(a.date||a.updatedAt));
+  select.innerHTML='<option value="">請選擇估價版本</option>'+projects.map((p)=>`<option value="${escapeHTML(p.id)}">${escapeHTML(p.name)}｜${escapeHTML(p.version)}${p.machineId?`｜${escapeHTML(machineById(p.machineId)?.name||p.machineId)}`:'｜新機台'}</option>`).join('');
+  if([...select.options].some((o)=>o.value===current))select.value=current;
+}
 
-async function generateOptimizationFromForm(event){event.preventDefault();const machineId=$('optimizationMachine').value;if(!machineId){showNotice('請先選擇機台。','warn');return;}const btn=$('generateOptimization');btn.disabled=true;btn.textContent='AI 分析中…';$('optimizationStatus').textContent='正在分析材質、印刷方式、白墨、特殊效果與併版機會…';try{const response=await secureApiRequest({action:'generateArtOptimization',input:{machineId,estimateId:$('optimizationEstimate').value,targetPercent:toNumber($('optimizationTarget').value),level:$('optimizationLevel').value,constraints:$('optimizationConstraints').value}},{timeoutMs:150000});state.currentOptimization=response.result;const recs=(response.result.recommendations||[]).map(normalizeArtRecommendation);state.artRecommendations.push(...recs);renderCurrentOptimization();renderOptimizationHistory();renderSimulationViewOptions();$('optimizationStatus').textContent='分析完成；所有建議仍需美術打樣確認。';showNotice('AI 美術降本分析完成。','success');}catch(e){$('optimizationStatus').textContent=`分析失敗：${e.message}`;showNotice(`降本分析失敗：${e.message}`,'error');}finally{btn.disabled=false;btn.textContent='AI 產生降本方案';}}
+function updateOptimizationSourceMode(){
+  const source=$('optimizationSource')?.value||'estimate';
+  const fromEstimate=source==='estimate';
+  if($('optimizationEstimateField')) $('optimizationEstimateField').hidden=!fromEstimate;
+  if($('optimizationMachineField')) $('optimizationMachineField').hidden=fromEstimate;
+  if(fromEstimate && $('optimizationMachine')) $('optimizationMachine').value='';
+  if(!fromEstimate && $('optimizationEstimate')) $('optimizationEstimate').value='';
+  populateOptimizationEstimateOptions();
+  renderSimulationViewOptions();
+  $('optimizationStatus').textContent=fromEstimate?'選擇智能估價案，可包含尚未建立機台主檔的新案。':'選擇既有機台，系統會分析實際費用品項。';
+}
+
+function selectedOptimizationProject(){return state.estimateProjects.find((p)=>p.id===($('optimizationEstimate')?.value||''))||null;}
+function currentOptimizationMachineId(){return $('optimizationSource')?.value==='estimate'?(selectedOptimizationProject()?.machineId||''):($('optimizationMachine')?.value||'');}
+
+async function generateOptimizationFromForm(event){
+  event.preventDefault();
+  const source=$('optimizationSource').value;
+  const estimateId=source==='estimate'?$('optimizationEstimate').value:'';
+  const machineId=source==='actual'?$('optimizationMachine').value:(selectedOptimizationProject()?.machineId||'');
+  if(source==='estimate'&&!estimateId){showNotice('請先選擇估價版本。','warn');return;}
+  if(source==='actual'&&!machineId){showNotice('請先選擇既有機台。','warn');return;}
+  const btn=$('generateOptimization');btn.disabled=true;btn.textContent='AI 分析中…';$('optimizationStatus').textContent='正在分析材質、印刷方式、白墨、特殊效果與併版機會…';
+  try{
+    const response=await secureApiRequest({action:'generateArtOptimization',input:{machineId,estimateId,targetPercent:toNumber($('optimizationTarget').value),level:$('optimizationLevel').value,constraints:$('optimizationConstraints').value}},{timeoutMs:150000});
+    state.currentOptimization=response.result;const recs=(response.result.recommendations||[]).map(normalizeArtRecommendation);state.artRecommendations.push(...recs);renderCurrentOptimization();renderOptimizationHistory();renderSimulationViewOptions();$('optimizationStatus').textContent='分析完成；所有建議仍需美術打樣確認。';showNotice('AI 美術降本分析完成。','success');
+  }catch(e){$('optimizationStatus').textContent=`分析失敗：${e.message}`;showNotice(`降本分析失敗：${e.message}`,'error');}
+  finally{btn.disabled=false;btn.textContent='AI 產生降本方案';}
+}
 
 function renderCurrentOptimization(){const box=$('optimizationRecommendations');const data=state.currentOptimization;if(!data){box.innerHTML='<div class="empty">尚未產生建議。</div>';$('optimizationSummary').textContent='尚未分析。';return;}const recs=(data.recommendations||[]).map((r)=>r.id?r:normalizeArtRecommendation(r));$('optimizationSummary').textContent=`${data.summary||''}｜預估節省 ${money(data.estimatedSavingLow)}～${money(data.estimatedSavingHigh)}`;box.innerHTML=recs.map(recommendationCardHtml).join('');$('generateSimulation').disabled=!recs.length;}
 
@@ -2881,15 +3048,15 @@ async function handleOptimizationRecommendationClick(event){const btn=event.targ
 async function handleOptimizationHistoryClick(event){const btn=event.target.closest('[data-rec-status]');if(!btn)return;await updateRecommendationStatus(btn.dataset.recId,btn.dataset.recStatus);}
 async function updateRecommendationStatus(id,status){try{await secureApiRequest({action:'updateRecommendationStatus',id,status});const rec=state.artRecommendations.find((r)=>r.id===id);if(rec)rec.status=status;renderOptimizationHistory();if(state.currentOptimization){const r=(state.currentOptimization.recommendations||[]).find((x)=>x.id===id);if(r)r.status=status;}showNotice(`建議狀態已更新為「${status}」。`,'success');}catch(e){showNotice(`狀態更新失敗：${e.message}`,'error');}}
 
-function renderOptimizationHistory(){if(!$('optimizationHistoryRows'))return;const rows=[...state.artRecommendations].sort((a,b)=>dateValue(b.createdAt)-dateValue(a.createdAt));$('optimizationHistoryRows').innerHTML=rows.length?rows.map((r)=>`<tr><td>${escapeHTML(machineById(r.machineId)?.name||r.machineId||'—')}</td><td>${escapeHTML(r.itemName||'—')}</td><td>${escapeHTML(r.type)}</td><td>${money(r.originalCost)}</td><td>${money(r.optimizedLow)}～${money(r.optimizedHigh)}</td><td>${money(r.savingLow)}～${money(r.savingHigh)}</td><td>${escapeHTML(r.confidence)}</td><td><span class="statusPill ${statusClass(r.status)}">${escapeHTML(r.status)}</span></td><td><select class="tableInput" data-rec-status data-rec-id="${escapeHTML(r.id)}"><option value="">更新狀態</option><option>接受建議</option><option>送美術打樣</option><option>送採購詢價</option><option>忽略</option></select></td></tr>`).join(''):'<tr><td colspan="9" class="empty">尚無降本建議。</td></tr>';$('optimizationHistoryRows').querySelectorAll('select[data-rec-status]').forEach((select)=>select.addEventListener('change',()=>{if(select.value)updateRecommendationStatus(select.dataset.recId,select.value);}));}
+function renderOptimizationHistory(){if(!$('optimizationHistoryRows'))return;const rows=[...state.artRecommendations].sort((a,b)=>dateValue(b.createdAt)-dateValue(a.createdAt));$('optimizationHistoryRows').innerHTML=rows.length?rows.map((r)=>`<tr><td>${escapeHTML(machineById(r.machineId)?.name||state.estimateProjects.find((p)=>p.id===r.estimateId)?.name||r.machineId||'新機台估價')}</td><td>${escapeHTML(r.itemName||'—')}</td><td>${escapeHTML(r.type)}</td><td>${money(r.originalCost)}</td><td>${money(r.optimizedLow)}～${money(r.optimizedHigh)}</td><td>${money(r.savingLow)}～${money(r.savingHigh)}</td><td>${escapeHTML(r.confidence)}</td><td><span class="statusPill ${statusClass(r.status)}">${escapeHTML(r.status)}</span></td><td><select class="tableInput" data-rec-status data-rec-id="${escapeHTML(r.id)}"><option value="">更新狀態</option><option>接受建議</option><option>送美術打樣</option><option>送採購詢價</option><option>忽略</option></select></td></tr>`).join(''):'<tr><td colspan="9" class="empty">尚無降本建議。</td></tr>';$('optimizationHistoryRows').querySelectorAll('select[data-rec-status]').forEach((select)=>select.addEventListener('change',()=>{if(select.value)updateRecommendationStatus(select.dataset.recId,select.value);}));}
 
-function renderSimulationViewOptions(){const select=$('simulationView');if(!select)return;const machineId=$('optimizationMachine')?.value||'';const views=state.machine360Views.filter((v)=>v.machineId===machineId);const machine=machineById(machineId);select.innerHTML=views.length?views.map((v)=>`<option value="${escapeHTML(v.viewKey)}">${escapeHTML(v.viewName)}</option>`).join(''):(machine?.imageFileId?'<option value="MACHINE">機台代表圖</option>':'<option value="">尚無基準圖</option>');renderSimulationPreview();}
+function renderSimulationViewOptions(){const select=$('simulationView');if(!select)return;const machineId=currentOptimizationMachineId();const views=state.machine360Views.filter((v)=>v.machineId===machineId);const machine=machineById(machineId);select.innerHTML=views.length?views.map((v)=>`<option value="${escapeHTML(v.viewKey)}">${escapeHTML(v.viewName)}</option>`).join(''):(machine?.imageFileId?'<option value="MACHINE">機台代表圖</option>':'<option value="">尚無基準圖</option>');renderSimulationPreview();}
 
-function currentSimulation(){const machineId=$('optimizationMachine')?.value||'';const viewKey=$('simulationView')?.value||'';return [...state.artSimulations].filter((s)=>s.machineId===machineId&&(!viewKey||s.viewKey===viewKey||viewKey==='MACHINE')).sort((a,b)=>dateValue(b.createdAt)-dateValue(a.createdAt))[0]||null;}
-function sourceViewFileId(){const machineId=$('optimizationMachine')?.value||'';const viewKey=$('simulationView')?.value||'';const view=state.machine360Views.find((v)=>v.machineId===machineId&&v.viewKey===viewKey);return view?.imageFileId||machineById(machineId)?.imageFileId||'';}
+function currentSimulation(){const machineId=currentOptimizationMachineId();const viewKey=$('simulationView')?.value||'';return [...state.artSimulations].filter((s)=>s.machineId===machineId&&(!viewKey||s.viewKey===viewKey||viewKey==='MACHINE')).sort((a,b)=>dateValue(b.createdAt)-dateValue(a.createdAt))[0]||null;}
+function sourceViewFileId(){const machineId=currentOptimizationMachineId();const viewKey=$('simulationView')?.value||'';const view=state.machine360Views.find((v)=>v.machineId===machineId&&v.viewKey===viewKey);return view?.imageFileId||machineById(machineId)?.imageFileId||'';}
 async function renderSimulationPreview(){const box=$('simulationPreview');if(!box)return;const simulation=currentSimulation();const sourceId=sourceViewFileId();if(!sourceId&&!simulation){box.className='simulationPreview empty';box.textContent='這台機台尚無可用圖片。';return;}box.className='simulationPreview';box.innerHTML=`<div class="simulationCompare"><figure>${sourceId?`<img data-secure-file-id="${escapeHTML(sourceId)}" alt="原始機台">`:'<div class="empty">無原圖</div>'}<figcaption>原始</figcaption></figure><figure>${simulation?.imageFileId?`<img data-secure-file-id="${escapeHTML(simulation.imageFileId)}" alt="AI 美術降本模擬">`:'<div class="empty">尚未生成</div>'}<figcaption>AI 美術概念模擬</figcaption></figure></div>`;hydrateSecureImages(box);}
 
-async function generateCurrentSimulation(){const machineId=$('optimizationMachine').value;if(!machineId){showNotice('請先選擇機台。','warn');return;}const recs=(state.currentOptimization?.recommendations||[]).map((r)=>r.id).filter(Boolean);if(!recs.length){showNotice('請先產生降本建議。','warn');return;}const btn=$('generateSimulation');btn.disabled=true;btn.textContent='生成中…';try{const response=await secureApiRequest({action:'generateArtSimulation',input:{machineId,estimateId:$('optimizationEstimate').value,viewKey:$('simulationView').value,recommendationIds:recs}},{timeoutMs:180000});const simulation=normalizeArtSimulation(response.result.simulation);state.artSimulations.push(simulation);await renderSimulationPreview();showNotice('AI 美術概念模擬已產生並保存到私人 Drive。','success');}catch(e){showNotice(`概念圖生成失敗：${e.message}`,'error');}finally{btn.disabled=false;btn.textContent='產生目前方案概念圖';}}
+async function generateCurrentSimulation(){const machineId=currentOptimizationMachineId();if(!machineId){showNotice('此估價尚未綁定機台或圖片，無法產生視覺模擬；數字降本分析仍可使用。','warn');return;}const recs=(state.currentOptimization?.recommendations||[]).map((r)=>r.id).filter(Boolean);if(!recs.length){showNotice('請先產生降本建議。','warn');return;}const btn=$('generateSimulation');btn.disabled=true;btn.textContent='生成中…';try{const response=await secureApiRequest({action:'generateArtSimulation',input:{machineId,estimateId:$('optimizationEstimate').value,viewKey:$('simulationView').value,recommendationIds:recs}},{timeoutMs:180000});const simulation=normalizeArtSimulation(response.result.simulation);state.artSimulations.push(simulation);await renderSimulationPreview();showNotice('AI 美術概念模擬已產生並保存到私人 Drive。','success');}catch(e){showNotice(`概念圖生成失敗：${e.message}`,'error');}finally{btn.disabled=false;btn.textContent='產生目前方案概念圖';}}
 
 function confidenceClass(value){return value==='高'?'confidenceHigh':value==='低'?'confidenceLow':'confidenceMedium';}
 function statusClass(value){if(value==='接受建議')return'accepted';if(value==='送美術打樣'||value==='送採購詢價')return'review';if(value==='忽略')return'ignored';return'';}
