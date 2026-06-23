@@ -908,3 +908,272 @@ td small { color: var(--muted); }
   border-color: rgba(47,107,79,.18);
   background: #e7f4e9;
 }
+
+
+/* =====================================================
+ * v2.0.6 多角度拖曳旋轉與成本位置標記
+ * ===================================================== */
+.viewerHeadActions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.viewerAutoButton {
+  min-height: 36px;
+  padding: 8px 13px;
+  white-space: nowrap;
+}
+.viewerAutoButton.active {
+  color: #fff;
+  border-color: #2d6f7f;
+  background: #2d6f7f;
+}
+.machine360Viewer {
+  cursor: grab;
+}
+.machine360Viewer.dragging {
+  cursor: grabbing;
+}
+.machine360Viewer img {
+  opacity: .15;
+  transition: opacity .2s ease;
+}
+.machine360Viewer img.frameReady {
+  opacity: 1;
+}
+.viewerMediaFrame {
+  position: relative;
+  display: inline-block;
+  max-width: 100%;
+  max-height: 480px;
+  line-height: 0;
+}
+.viewerMediaFrame > img {
+  display: block;
+  width: auto;
+  height: auto;
+  max-width: 100%;
+  max-height: 480px;
+  object-fit: contain;
+  background: #fff;
+}
+.viewerHotspots {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.viewerHotspots .machineHotspot {
+  pointer-events: auto;
+}
+.dialogInteractiveGrid {
+  display: grid;
+  grid-template-columns: minmax(420px, 1.35fr) minmax(280px, .65fr);
+  gap: 14px;
+  align-items: stretch;
+}
+.dialogMachine360Viewer .viewerMediaFrame {
+  max-height: 520px;
+}
+.dialogMachine360Viewer .viewerMediaFrame > img {
+  max-height: 520px;
+}
+.dialogInteractiveGrid .machineAreaCostPanel {
+  min-height: 480px;
+  max-height: 560px;
+  overflow: auto;
+}
+.markerEditorToolbar {
+  display: grid;
+  grid-template-columns: minmax(150px, .8fr) minmax(160px, .8fr) minmax(250px, 1.5fr) minmax(120px, .6fr) minmax(120px, .6fr);
+  gap: 12px;
+  margin-bottom: 16px;
+}
+.markerEditorToolbar label {
+  display: grid;
+  gap: 6px;
+}
+.markerEditorToolbar label > span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+.markerEditorToolbar input,
+.markerEditorToolbar select {
+  width: 100%;
+  min-width: 0;
+  padding: 10px 11px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #fff;
+  box-sizing: border-box;
+}
+.markerEditorGrid {
+  display: grid;
+  grid-template-columns: minmax(440px, 1.25fr) minmax(320px, .75fr);
+  gap: 16px;
+  align-items: start;
+}
+.markerCanvas {
+  position: relative;
+  min-height: 500px;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  border: 1px solid #cddfe3;
+  border-radius: 18px;
+  background: radial-gradient(circle at 50% 42%, #fff, #edf4f5);
+  cursor: crosshair;
+}
+.markerMediaFrame {
+  position: relative;
+  display: inline-block;
+  max-width: 100%;
+  max-height: 560px;
+  line-height: 0;
+}
+.markerMediaFrame > img {
+  display: block;
+  width: auto;
+  height: auto;
+  max-width: 100%;
+  max-height: 560px;
+  object-fit: contain;
+  background: #fff;
+}
+.markerSidePanel {
+  display: grid;
+  gap: 16px;
+}
+.markerSidePanel section {
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: #faf8f2;
+}
+.markerSidePanel h3 {
+  margin: 0 0 6px;
+  color: var(--deep);
+}
+.markerItemList {
+  display: grid;
+  gap: 8px;
+  max-height: 360px;
+  overflow: auto;
+  margin-top: 10px;
+}
+.markerItemChoice {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 9px;
+  padding: 9px;
+  border: 1px solid #e1e8ea;
+  border-radius: 10px;
+  background: #fff;
+  cursor: pointer;
+}
+.markerItemChoice:hover {
+  border-color: #96b8bf;
+  background: #f6fbfb;
+}
+.markerItemChoice span {
+  min-width: 0;
+}
+.markerItemChoice strong,
+.markerItemChoice small {
+  display: block;
+}
+.markerItemChoice small {
+  margin-top: 3px;
+  overflow: hidden;
+  color: var(--muted);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.markerItemChoice em {
+  color: var(--blue);
+  font-style: normal;
+  font-weight: 800;
+}
+.markerActions {
+  margin: 0;
+}
+.machineMarkerSavedList {
+  display: grid;
+  gap: 7px;
+  max-height: 260px;
+  overflow: auto;
+}
+.savedMarkerRow {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 10px 11px;
+  border: 1px solid #dde7e9;
+  border-radius: 10px;
+  text-align: left;
+  background: #fff;
+  cursor: pointer;
+}
+.savedMarkerRow:hover,
+.savedMarkerRow.active {
+  border-color: #5b8d98;
+  background: #eef7f8;
+}
+.savedMarkerRow strong,
+.savedMarkerRow small {
+  display: block;
+}
+.savedMarkerRow small {
+  margin-top: 3px;
+  color: var(--muted);
+}
+.savedMarkerRow em {
+  color: var(--blue);
+  font-style: normal;
+  font-weight: 800;
+}
+.machineHotspot.markerDraft {
+  border-color: #cf7b31;
+  border-style: dashed;
+  background: rgba(237, 149, 72, .3);
+  pointer-events: none;
+}
+@media (max-width: 1120px) {
+  .markerEditorToolbar {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .markerNameField {
+    grid-column: 1 / -1;
+  }
+  .markerEditorGrid,
+  .dialogInteractiveGrid {
+    grid-template-columns: 1fr;
+  }
+  .dialogInteractiveGrid .machineAreaCostPanel {
+    min-height: 220px;
+    max-height: none;
+  }
+}
+@media (max-width: 680px) {
+  .markerEditorToolbar {
+    grid-template-columns: 1fr;
+  }
+  .markerNameField {
+    grid-column: auto;
+  }
+  .markerCanvas {
+    min-height: 340px;
+  }
+  .markerMediaFrame > img {
+    max-height: 420px;
+  }
+  .viewerHeadActions {
+    width: 100%;
+    justify-content: flex-start;
+  }
+}

@@ -1,5 +1,5 @@
 // =====================================================
-// IGS 機台材料成本 ERP — 前端 v2.0.4
+// IGS 機台材料成本 ERP — 前端 v2.0.6
 // 1. ERP 密碼登入
 // 2. 工作階段驗證
 // 3. 私人 Google Sheet 安全讀取
@@ -68,8 +68,22 @@ let state = {
   selectedMachineArea: "",
   machine360ViewerIndex: 0,
   machine360ViewerPointerX: null,
+  machine360ViewerLastX: null,
+  machine360ViewerAutoTimer: null,
   dialogMachine360Index: 0,
   dialogMachine360PointerX: null,
+  dialogMachine360LastX: null,
+  dialogMachine360AutoTimer: null,
+  machineMarkerDraft: {
+    areaId: "",
+    viewKey: "FRONT",
+    name: "",
+    x: 44,
+    y: 44,
+    width: 12,
+    height: 10,
+    itemIds: [],
+  },
 };
 
 const secureImageCache = new Map();
@@ -191,6 +205,7 @@ function normalizeMachineArea(row) {
   return {
     id: String(firstValue(row, ["區域ID", "areaId", "id"])),
     machineId: String(firstValue(row, ["機台ID", "machineId"])),
+    viewKey: String(firstValue(row, ["視角代碼", "viewKey"], "FRONT")) || "FRONT",
     name: String(firstValue(row, ["區域名稱", "areaName", "name"])),
     x: toNumber(firstValue(row, ["X百分比", "x"])),
     y: toNumber(firstValue(row, ["Y百分比", "y"])),
@@ -462,6 +477,9 @@ function resetPrivateState() {
   state.quotationDocumentPayload = null;
   state.selectedMachineStage = COST_TYPES[0];
   state.selectedMachineArea = "";
+  stopMachine360AutoRotate();
+  stopDialogMachine360AutoRotate();
+  state.machineMarkerDraft = createEmptyMachineMarkerDraft();
   state.quotationAiStatus = "未辨識";
   state.quotationRawText = "";
   secureImageCache.clear();
@@ -528,10 +546,17 @@ function setupFilters() {
 }
 
 function setupDialog() {
-  $("closeMachineDialog").addEventListener("click", () => $("machineDialog").close());
-  $("machineDialog").addEventListener("click", (event) => {
-    if (event.target === $("machineDialog")) $("machineDialog").close();
+  $("closeMachineDialog").addEventListener("click", () => {
+    stopDialogMachine360AutoRotate();
+    $("machineDialog").close();
   });
+  $("machineDialog").addEventListener("click", (event) => {
+    if (event.target === $("machineDialog")) {
+      stopDialogMachine360AutoRotate();
+      $("machineDialog").close();
+    }
+  });
+  $("machineDialog").addEventListener("close", stopDialogMachine360AutoRotate);
 }
 
 function setupForms() {
@@ -1311,12 +1336,27 @@ const MACHINE_360_VIEW_CONFIG = Object.freeze({
   LEFT45: { label: "左 45°", angle: 315, inputId: "machine360Left45File", previewId: "machine360Left45Preview", nameId: "machine360Left45Name" },
 });
 
+function createEmptyMachineMarkerDraft() {
+  return {
+    areaId: "",
+    viewKey: "FRONT",
+    name: "",
+    x: 44,
+    y: 44,
+    width: 12,
+    height: 10,
+    itemIds: [],
+  };
+}
+
 function setupMachine360() {
   const machineSelect = $("machine360Machine");
   if (!machineSelect) return;
   machineSelect.addEventListener("change", () => {
+    stopMachine360AutoRotate();
     state.machine360Draft = {};
     state.machine360ViewerIndex = 0;
+    state.machineMarkerDraft = createEmptyMachineMarkerDraft();
     renderMachine360Setup();
   });
   document.querySelectorAll("[data-machine360-view]").forEach((input) => {
@@ -1332,6 +1372,32 @@ function setupMachine360() {
     button.addEventListener("click", () => deleteStoredMachine360View(button.dataset.delete360));
   });
   $("saveMachine360Views").addEventListener("click", saveMachine360Views);
+  $("machine360AutoRotate")?.addEventListener("click", toggleMachine360AutoRotate);
+
+  $("machineMarkerView")?.addEventListener("change", () => {
+    state.machineMarkerDraft = createEmptyMachineMarkerDraft();
+    state.machineMarkerDraft.viewKey = $("machineMarkerView").value || "FRONT";
+    renderMachineMarkerEditor();
+  });
+  $("machineMarkerStage")?.addEventListener("change", renderMachineMarkerEditor);
+  $("machineMarkerAreaName")?.addEventListener("input", () => {
+    state.machineMarkerDraft.name = $("machineMarkerAreaName").value.trim();
+    renderMachineMarkerOverlay();
+  });
+  $("machineMarkerWidth")?.addEventListener("input", () => {
+    state.machineMarkerDraft.width = Math.max(4, Math.min(40, toNumber($("machineMarkerWidth").value) || 12));
+    renderMachineMarkerOverlay();
+  });
+  $("machineMarkerHeight")?.addEventListener("input", () => {
+    state.machineMarkerDraft.height = Math.max(4, Math.min(40, toNumber($("machineMarkerHeight").value) || 10));
+    renderMachineMarkerOverlay();
+  });
+  $("machineMarkerCanvas")?.addEventListener("click", handleMachineMarkerCanvasClick);
+  $("saveMachineMarker")?.addEventListener("click", saveMachineMarker);
+  $("deleteMachineMarker")?.addEventListener("click", deleteMachineMarker);
+  $("resetMachineMarker")?.addEventListener("click", resetMachineMarkerEditor);
+  $("machineMarkerSavedList")?.addEventListener("click", handleMachineMarkerSavedListClick);
+
   setupAdaptiveMachine360Viewer();
   renderMachine360Setup();
 }
@@ -1355,19 +1421,65 @@ function setupAdaptiveMachine360Viewer() {
   $("machine360Next")?.addEventListener("click", () => stepMachine360Viewer(1));
   viewer.addEventListener("pointerdown", (event) => {
     state.machine360ViewerPointerX = event.clientX;
+    state.machine360ViewerLastX = event.clientX;
+    viewer.classList.add("dragging");
     viewer.setPointerCapture?.(event.pointerId);
   });
-  viewer.addEventListener("pointerup", (event) => {
-    const start = state.machine360ViewerPointerX;
-    state.machine360ViewerPointerX = null;
-    if (start === null) return;
-    const delta = event.clientX - start;
-    if (Math.abs(delta) >= 28) stepMachine360Viewer(delta < 0 ? 1 : -1);
+  viewer.addEventListener("pointermove", (event) => {
+    if (state.machine360ViewerPointerX === null) return;
+    const last = state.machine360ViewerLastX ?? event.clientX;
+    const delta = event.clientX - last;
+    if (Math.abs(delta) >= 36) {
+      stepMachine360Viewer(delta < 0 ? 1 : -1);
+      state.machine360ViewerLastX = event.clientX;
+    }
   });
+  const release = () => {
+    state.machine360ViewerPointerX = null;
+    state.machine360ViewerLastX = null;
+    viewer.classList.remove("dragging");
+  };
+  viewer.addEventListener("pointerup", release);
+  viewer.addEventListener("pointercancel", release);
   viewer.addEventListener("keydown", (event) => {
     if (event.key === "ArrowLeft") stepMachine360Viewer(-1);
     if (event.key === "ArrowRight") stepMachine360Viewer(1);
+    if (event.key === " ") {
+      event.preventDefault();
+      toggleMachine360AutoRotate();
+    }
   });
+}
+
+function stopMachine360AutoRotate() {
+  if (state.machine360ViewerAutoTimer) {
+    clearInterval(state.machine360ViewerAutoTimer);
+    state.machine360ViewerAutoTimer = null;
+  }
+  const button = $("machine360AutoRotate");
+  if (button) {
+    button.textContent = "自動旋轉";
+    button.classList.remove("active");
+  }
+}
+
+function toggleMachine360AutoRotate() {
+  const machineId = $("machine360Machine")?.value || "";
+  const views = sortedMachine360Views(machineId);
+  if (views.length < 2) {
+    showNotice("至少需要兩張已儲存角度圖，才能啟用自動旋轉。", "warn");
+    return;
+  }
+  if (state.machine360ViewerAutoTimer) {
+    stopMachine360AutoRotate();
+    return;
+  }
+  state.machine360ViewerAutoTimer = setInterval(() => stepMachine360Viewer(1), 1200);
+  const button = $("machine360AutoRotate");
+  if (button) {
+    button.textContent = "停止旋轉";
+    button.classList.add("active");
+  }
 }
 
 function stepMachine360Viewer(delta) {
@@ -1393,7 +1505,10 @@ async function renderAdaptiveMachine360Viewer() {
   const canSwitch = views.length >= 2;
   if (prev) prev.hidden = !canSwitch;
   if (next) next.hidden = !canSwitch;
+  const autoButton = $("machine360AutoRotate");
+  if (autoButton) autoButton.disabled = !canSwitch;
   if (!views.length) {
+    stopMachine360AutoRotate();
     viewer.classList.add("empty"); image.hidden = true; empty.hidden = false;
     empty.textContent = machineId ? "尚未儲存基準圖" : "請先選擇機台";
     badge.textContent = "尚無可預覽圖片";
@@ -1404,17 +1519,267 @@ async function renderAdaptiveMachine360Viewer() {
   }
   const view = views[state.machine360ViewerIndex];
   viewer.classList.remove("empty"); empty.hidden = true; image.hidden = false;
-  try { image.src = await getPrivateImageDataUrl(view.imageFileId); }
+  image.classList.remove("frameReady");
+  try {
+    image.src = await getPrivateImageDataUrl(view.imageFileId);
+    requestAnimationFrame(() => image.classList.add("frameReady"));
+  }
   catch (error) { image.hidden = true; empty.hidden = false; empty.textContent = "圖片讀取失敗"; }
   $("machine360ViewerAngle").textContent = `${view.viewName || MACHINE_360_VIEW_CONFIG[view.viewKey]?.label || view.viewKey}｜${toNumber(view.angle)}°`;
-  $("machine360ViewerHint").textContent = canSwitch ? "左右拖曳、方向鍵或按鈕切換現有角度" : "目前為單圖檢視；可繼續補其他角度";
-  badge.textContent = views.length === 1 ? "單圖檢視模式" : `${views.length} 圖自適應切換`;
+  $("machine360ViewerHint").textContent = canSwitch ? "按住左右拖曳即可旋轉切換；空白鍵可開始或停止自動旋轉" : "目前為單圖檢視；可繼續補其他角度";
+  badge.textContent = views.length === 1 ? "單圖檢視模式" : `${views.length} 圖旋轉模式`;
   badge.classList.toggle("connected", views.length > 0);
   dots.innerHTML = views.map((item, index) => `<button type="button" class="viewerDot ${index === state.machine360ViewerIndex ? "active" : ""}" data-viewer-index="${index}" title="${escapeHTML(item.viewName || item.viewKey)}"></button>`).join("");
   dots.querySelectorAll("[data-viewer-index]").forEach((button) => button.addEventListener("click", () => {
     state.machine360ViewerIndex = Number(button.dataset.viewerIndex) || 0;
     renderAdaptiveMachine360Viewer();
   }));
+}
+
+function markerViewsForMachine(machineId) {
+  const stored = sortedMachine360Views(machineId);
+  if (stored.length) return stored;
+  const machine = machineById(machineId);
+  if (!machine || (!machine.imageFileId && !machine.imageUrl)) return [];
+  return [{
+    id: "MAIN_IMAGE",
+    machineId,
+    viewKey: "FRONT",
+    viewName: "正面／代表圖",
+    angle: 0,
+    imageFileId: machine.imageFileId,
+    imageUrl: machine.imageUrl,
+  }];
+}
+
+function costItemsForMachineStage(machineId, stageType) {
+  const orderIds = state.costOrders
+    .filter((order) => order.machineId === machineId && order.type === stageType)
+    .map((order) => order.id);
+  return state.costItems.filter((item) => orderIds.includes(item.costOrderId) && item.itemType !== "附加費用");
+}
+
+async function renderMachineMarkerEditor() {
+  const machineId = $("machine360Machine")?.value || "";
+  const viewSelect = $("machineMarkerView");
+  const stage = $("machineMarkerStage")?.value || COST_TYPES[0];
+  const views = markerViewsForMachine(machineId);
+  if (!viewSelect) return;
+
+  const currentViewKey = state.machineMarkerDraft.viewKey || viewSelect.value || views[0]?.viewKey || "FRONT";
+  viewSelect.innerHTML = views.length
+    ? views.map((view) => `<option value="${escapeHTML(view.viewKey)}">${escapeHTML(view.viewName || view.viewKey)}｜${toNumber(view.angle)}°</option>`).join("")
+    : '<option value="">尚無圖片</option>';
+  if ([...viewSelect.options].some((option) => option.value === currentViewKey)) viewSelect.value = currentViewKey;
+  else if (views[0]) {
+    viewSelect.value = views[0].viewKey;
+    state.machineMarkerDraft.viewKey = views[0].viewKey;
+  }
+
+  const view = views.find((item) => item.viewKey === viewSelect.value) || views[0];
+  const image = $("machineMarkerImage");
+  const frame = $("machineMarkerMediaFrame");
+  const empty = $("machineMarkerEmpty");
+  if (!machineId || !view) {
+    if (frame) frame.hidden = true;
+    if (empty) {
+      empty.hidden = false;
+      empty.textContent = machineId ? "請先儲存至少一張角度圖或機台代表圖" : "請先選擇機台";
+    }
+  } else {
+    if (frame) frame.hidden = false;
+    if (empty) empty.hidden = true;
+    try {
+      image.src = view.imageFileId ? await getPrivateImageDataUrl(view.imageFileId) : view.imageUrl;
+      image.hidden = false;
+    } catch (error) {
+      image.hidden = true;
+      if (frame) frame.hidden = true;
+      if (empty) {
+        empty.hidden = false;
+        empty.textContent = "標記底圖讀取失敗";
+      }
+    }
+  }
+
+  const items = costItemsForMachineStage(machineId, stage);
+  const list = $("machineMarkerItemList");
+  if (list) {
+    list.innerHTML = items.length
+      ? items.map((item) => {
+        const checked = state.machineMarkerDraft.itemIds.includes(item.id);
+        return `<label class="markerItemChoice">
+          <input type="checkbox" value="${escapeHTML(item.id)}" ${checked ? "checked" : ""}>
+          <span><strong>${escapeHTML(item.name || "未命名品項")}</strong><small>${escapeHTML([item.material, item.spec, item.thickness].filter(Boolean).join("｜") || "未填規格")}</small></span>
+          <em>${money(item.subtotal)}</em>
+        </label>`;
+      }).join("")
+      : '<div class="empty">這個費用階段尚無材料明細。</div>';
+  }
+
+  const areaNames = unique([
+    ...areasForMachine(machineId),
+    ...state.machineAreas.filter((area) => area.machineId === machineId).map((area) => area.name),
+  ]).filter(Boolean);
+  if ($("machineMarkerAreaOptions")) {
+    $("machineMarkerAreaOptions").innerHTML = areaNames.map((name) => `<option value="${escapeHTML(name)}"></option>`).join("");
+  }
+  if ($("machineMarkerAreaName")) $("machineMarkerAreaName").value = state.machineMarkerDraft.name || "";
+  if ($("machineMarkerWidth")) $("machineMarkerWidth").value = state.machineMarkerDraft.width || 12;
+  if ($("machineMarkerHeight")) $("machineMarkerHeight").value = state.machineMarkerDraft.height || 10;
+  if ($("deleteMachineMarker")) $("deleteMachineMarker").hidden = !state.machineMarkerDraft.areaId;
+
+  const saved = state.machineAreas
+    .filter((area) => area.machineId === machineId)
+    .sort((a, b) => String(a.viewKey).localeCompare(String(b.viewKey)) || a.name.localeCompare(b.name));
+  if ($("machineMarkerSavedList")) {
+    $("machineMarkerSavedList").innerHTML = saved.length
+      ? saved.map((area) => {
+        const itemCount = state.costItems.filter((item) => item.areaId === area.id || (norm(item.areaName) === norm(area.name) && item.areaName !== "未指定")).length;
+        return `<button type="button" class="savedMarkerRow ${state.machineMarkerDraft.areaId === area.id ? "active" : ""}" data-edit-marker="${escapeHTML(area.id)}">
+          <span><strong>${escapeHTML(area.name)}</strong><small>${escapeHTML(area.viewKey || "FRONT")}｜${itemCount} 筆品項</small></span>
+          <em>編輯</em>
+        </button>`;
+      }).join("")
+      : '<div class="empty">尚未建立成本位置標記。</div>';
+  }
+  renderMachineMarkerOverlay();
+}
+
+function renderMachineMarkerOverlay() {
+  const overlay = $("machineMarkerOverlay");
+  const machineId = $("machine360Machine")?.value || "";
+  const viewKey = $("machineMarkerView")?.value || state.machineMarkerDraft.viewKey || "FRONT";
+  if (!overlay) return;
+  const saved = state.machineAreas.filter((area) =>
+    area.machineId === machineId &&
+    (area.viewKey || "FRONT") === viewKey &&
+    isValidMachineArea(area)
+  );
+  const savedMarkup = saved.map((area) => `<button type="button" class="machineHotspot confirmed ${state.machineMarkerDraft.areaId === area.id ? "active" : ""}" data-edit-marker="${escapeHTML(area.id)}" style="left:${area.x}%;top:${area.y}%;width:${area.width}%;height:${area.height}%"><span>${escapeHTML(area.name)}</span></button>`).join("");
+  const draft = state.machineMarkerDraft;
+  const draftMarkup = draft.name && draft.viewKey === viewKey
+    ? `<div class="machineHotspot markerDraft active" style="left:${draft.x}%;top:${draft.y}%;width:${draft.width}%;height:${draft.height}%"><span>${escapeHTML(draft.name)}</span></div>`
+    : "";
+  overlay.innerHTML = savedMarkup + draftMarkup;
+  overlay.querySelectorAll("[data-edit-marker]").forEach((button) => button.addEventListener("click", (event) => {
+    event.stopPropagation();
+    editMachineMarker(button.dataset.editMarker);
+  }));
+}
+
+function handleMachineMarkerCanvasClick(event) {
+  const frame = $("machineMarkerMediaFrame");
+  if (!frame || frame.hidden || event.target.closest("[data-edit-marker]")) return;
+  const rect = frame.getBoundingClientRect();
+  if (!rect.width || !rect.height) return;
+  const width = Math.max(4, Math.min(40, toNumber($("machineMarkerWidth")?.value) || state.machineMarkerDraft.width || 12));
+  const height = Math.max(4, Math.min(40, toNumber($("machineMarkerHeight")?.value) || state.machineMarkerDraft.height || 10));
+  const centerX = ((event.clientX - rect.left) / rect.width) * 100;
+  const centerY = ((event.clientY - rect.top) / rect.height) * 100;
+  state.machineMarkerDraft.viewKey = $("machineMarkerView")?.value || "FRONT";
+  state.machineMarkerDraft.name = $("machineMarkerAreaName")?.value.trim() || state.machineMarkerDraft.name;
+  state.machineMarkerDraft.width = width;
+  state.machineMarkerDraft.height = height;
+  state.machineMarkerDraft.x = Math.max(0, Math.min(100 - width, centerX - width / 2));
+  state.machineMarkerDraft.y = Math.max(0, Math.min(100 - height, centerY - height / 2));
+  renderMachineMarkerOverlay();
+  if ($("machineMarkerStatus")) {
+    $("machineMarkerStatus").textContent = "位置已更新。勾選對應品項後按「儲存位置標記」。";
+    $("machineMarkerStatus").className = "photoStatus ready";
+  }
+}
+
+function handleMachineMarkerSavedListClick(event) {
+  const button = event.target.closest("[data-edit-marker]");
+  if (button) editMachineMarker(button.dataset.editMarker);
+}
+
+function editMachineMarker(areaId) {
+  const area = state.machineAreas.find((item) => item.id === areaId);
+  if (!area) return;
+  const machineId = $("machine360Machine")?.value || "";
+  const stage = $("machineMarkerStage")?.value || COST_TYPES[0];
+  const stageItems = costItemsForMachineStage(machineId, stage);
+  state.machineMarkerDraft = {
+    areaId: area.id,
+    viewKey: area.viewKey || "FRONT",
+    name: area.name,
+    x: area.x,
+    y: area.y,
+    width: area.width,
+    height: area.height,
+    itemIds: stageItems.filter((item) => item.areaId === area.id || norm(item.areaName) === norm(area.name)).map((item) => item.id),
+  };
+  renderMachineMarkerEditor();
+}
+
+function resetMachineMarkerEditor() {
+  const currentView = $("machineMarkerView")?.value || "FRONT";
+  state.machineMarkerDraft = createEmptyMachineMarkerDraft();
+  state.machineMarkerDraft.viewKey = currentView;
+  if ($("machineMarkerStatus")) {
+    $("machineMarkerStatus").textContent = "先輸入區域名稱，再點擊圖片放置標記。";
+    $("machineMarkerStatus").className = "photoStatus muted";
+  }
+  renderMachineMarkerEditor();
+}
+
+async function saveMachineMarker() {
+  const machineId = $("machine360Machine")?.value || "";
+  const name = $("machineMarkerAreaName")?.value.trim() || "";
+  const stageType = $("machineMarkerStage")?.value || COST_TYPES[0];
+  const itemIds = [...document.querySelectorAll('#machineMarkerItemList input[type="checkbox"]:checked')].map((input) => input.value);
+  if (!machineId) return showNotice("請先選擇機台。", "warn");
+  if (!name) return showNotice("請輸入區域名稱。", "warn");
+  if (!itemIds.length) return showNotice("請至少勾選一筆要綁定的成本品項。", "warn");
+  const marker = {
+    ...state.machineMarkerDraft,
+    machineId,
+    name,
+    viewKey: $("machineMarkerView")?.value || "FRONT",
+    width: Math.max(4, Math.min(40, toNumber($("machineMarkerWidth")?.value) || 12)),
+    height: Math.max(4, Math.min(40, toNumber($("machineMarkerHeight")?.value) || 10)),
+    status: "已確認",
+  };
+  const button = $("saveMachineMarker");
+  button.disabled = true;
+  button.textContent = "儲存中…";
+  try {
+    await secureApiRequest({ action: "saveMachineAreaMarker", marker, itemIds, stageType }, { timeoutMs: 60000 });
+    const selectedMachine = machineId;
+    await loadData();
+    if ($("machine360Machine")) $("machine360Machine").value = selectedMachine;
+    state.machineMarkerDraft = createEmptyMachineMarkerDraft();
+    state.machineMarkerDraft.viewKey = marker.viewKey;
+    await renderMachine360Setup();
+    showNotice("成本位置標記已儲存，主管頁可直接點擊查看金額。", "success");
+  } catch (error) {
+    showNotice(`位置標記儲存失敗：${error.message}`, "error");
+  } finally {
+    button.disabled = false;
+    button.textContent = "儲存位置標記";
+  }
+}
+
+async function deleteMachineMarker() {
+  const areaId = state.machineMarkerDraft.areaId;
+  if (!areaId) return;
+  if (!window.confirm("確定刪除此成本位置標記嗎？對應品項會改回未指定區域。")) return;
+  const button = $("deleteMachineMarker");
+  button.disabled = true;
+  try {
+    await secureApiRequest({ action: "deleteMachineAreaMarker", areaId }, { timeoutMs: 60000 });
+    const selectedMachine = $("machine360Machine")?.value || "";
+    await loadData();
+    if ($("machine360Machine")) $("machine360Machine").value = selectedMachine;
+    resetMachineMarkerEditor();
+    showNotice("位置標記已刪除。", "success");
+  } catch (error) {
+    showNotice(`刪除失敗：${error.message}`, "error");
+  } finally {
+    button.disabled = false;
+  }
 }
 
 async function handleMachine360FileSelection(event) {
@@ -1574,6 +1939,7 @@ async function renderMachine360Setup() {
   }
   $("machine360Status").textContent = statusText;
   await renderAdaptiveMachine360Viewer();
+  await renderMachineMarkerEditor();
 }
 
 async function saveMachine360Views() {
@@ -1950,17 +2316,32 @@ function renderSuppliers() {
     : '<div class="empty fullSpan">供應商 API 尚未開通或目前沒有資料</div>';
 }
 
+function dialogViewsForMachine(machine) {
+  const stored = sortedMachine360Views(machine.id);
+  if (stored.length) return stored;
+  if (!machine.imageFileId && !machine.imageUrl) return [];
+  return [{
+    id: "MAIN_IMAGE",
+    machineId: machine.id,
+    viewKey: "FRONT",
+    viewName: "正面／代表圖",
+    angle: 0,
+    imageFileId: machine.imageFileId,
+    imageUrl: machine.imageUrl,
+  }];
+}
+
 function openMachineDialog(machineId) {
   const machine = machineById(machineId);
   if (!machine) return;
+  stopDialogMachine360AutoRotate();
   state.selectedMachineId = machineId;
   state.selectedMachineStage = COST_TYPES[0];
   state.selectedMachineArea = "";
   const totals = totalsForMachine(machineId);
-  const areas = state.machineAreas.filter((area) => area.machineId === machineId && isValidMachineArea(area));
-  const machineViews = sortedMachine360Views(machineId);
+  const machineViews = dialogViewsForMachine(machine);
   state.dialogMachine360Index = 0;
-  const imageMarkup = machine.imageFileId
+  const headerImageMarkup = machine.imageFileId
     ? `<img data-secure-file-id="${escapeHTML(machine.imageFileId)}" alt="${escapeHTML(machine.name)}">`
     : machine.imageUrl
       ? `<img src="${escapeHTML(machine.imageUrl)}" alt="${escapeHTML(machine.name)}">`
@@ -1968,7 +2349,7 @@ function openMachineDialog(machineId) {
 
   $("machineDialogContent").innerHTML = `
     <div class="dialogHeader">
-      <div class="dialogMachineImage ${(machine.imageFileId || machine.imageUrl) ? "hasImage" : ""}">${imageMarkup}</div>
+      <div class="dialogMachineImage ${(machine.imageFileId || machine.imageUrl) ? "hasImage" : ""}">${headerImageMarkup}</div>
       <div>
         <span class="tag">${escapeHTML(machine.category)}</span>
         <h2>${escapeHTML(machine.name)}</h2>
@@ -1985,33 +2366,37 @@ function openMachineDialog(machineId) {
       <section class="dialog360Section">
         <div class="dialog360Head">
           <div>
-            <h3>多角度機台預覽</h3>
-            <p>目前顯示已上傳的 ${machineViews.length} 張基準角度圖；尚未包含 AI 補出的中間角度。</p>
+            <h3>多角度機台與成本位置</h3>
+            <p>拖曳或自動旋轉切換已上傳的角度圖；點擊圖上的標記可查看該區域費用。</p>
           </div>
-          <span id="dialogMachine360Badge" class="apiBadge connected">${machineViews.length === 1 ? "單圖模式" : `${machineViews.length} 圖切換`}</span>
-        </div>
-        <div id="dialogMachine360Viewer" class="machine360Viewer dialogMachine360Viewer" tabindex="0" aria-label="機台多角度預覽">
-          <img id="dialogMachine360Image" alt="${escapeHTML(machine.name)} 多角度預覽" hidden>
-          <div id="dialogMachine360Empty" class="viewerEmpty">正在載入圖片…</div>
-          <button id="dialogMachine360Prev" class="viewerArrow prev" type="button" aria-label="上一個角度" ${machineViews.length < 2 ? "hidden" : ""}>‹</button>
-          <button id="dialogMachine360Next" class="viewerArrow next" type="button" aria-label="下一個角度" ${machineViews.length < 2 ? "hidden" : ""}>›</button>
-          <div class="viewerOverlay">
-            <strong id="dialogMachine360Angle">—</strong>
-            <span id="dialogMachine360Hint">${machineViews.length < 2 ? "目前為單圖檢視" : "左右拖曳、方向鍵或按鈕切換角度"}</span>
+          <div class="viewerHeadActions">
+            <span id="dialogMachine360Badge" class="apiBadge connected">${machineViews.length === 1 ? "單圖模式" : `${machineViews.length} 圖旋轉`}</span>
+            <button id="dialogMachine360AutoRotate" class="button secondary viewerAutoButton" type="button" ${machineViews.length < 2 ? "disabled" : ""}>自動旋轉</button>
           </div>
         </div>
-        <div id="dialogMachine360Dots" class="viewerDots" aria-label="角度選擇"></div>
-      </section>` : ""}
-    ${(machine.imageFileId || machine.imageUrl) ? `
-      <div class="machineAreaExplorer">
-        <div class="machineAreaCanvas">
-          ${imageMarkup}
-          ${areas.map((area) => `<button class="machineHotspot ${area.status === "已確認" ? "confirmed" : "suggested"}" type="button" data-machine-hotspot="${escapeHTML(area.name)}" style="left:${area.x}%;top:${area.y}%;width:${area.width}%;height:${area.height}%"><span>${escapeHTML(area.name)}</span></button>`).join("")}
+        <div class="dialogInteractiveGrid">
+          <div>
+            <div id="dialogMachine360Viewer" class="machine360Viewer dialogMachine360Viewer" tabindex="0" aria-label="機台多角度預覽">
+              <div id="dialogMachine360MediaFrame" class="viewerMediaFrame" hidden>
+                <img id="dialogMachine360Image" alt="${escapeHTML(machine.name)} 多角度預覽" hidden>
+                <div id="dialogMachine360Hotspots" class="viewerHotspots"></div>
+              </div>
+              <div id="dialogMachine360Empty" class="viewerEmpty">正在載入圖片…</div>
+              <button id="dialogMachine360Prev" class="viewerArrow prev" type="button" aria-label="上一個角度" ${machineViews.length < 2 ? "hidden" : ""}>‹</button>
+              <button id="dialogMachine360Next" class="viewerArrow next" type="button" aria-label="下一個角度" ${machineViews.length < 2 ? "hidden" : ""}>›</button>
+              <div class="viewerOverlay">
+                <strong id="dialogMachine360Angle">—</strong>
+                <span id="dialogMachine360Hint">${machineViews.length < 2 ? "目前為單圖檢視" : "按住左右拖曳即可旋轉切換"}</span>
+              </div>
+            </div>
+            <div id="dialogMachine360Dots" class="viewerDots" aria-label="角度選擇"></div>
+          </div>
+          <div id="machineAreaCostPanel" class="machineAreaCostPanel">
+            尚未選擇成本位置。若圖上沒有標記，請到「360° 機台建置」建立成本位置並綁定品項。
+          </div>
         </div>
-        <div id="machineAreaCostPanel" class="machineAreaCostPanel">
-          ${areas.length ? "點選機台圖片上的區域，查看該區域的品項與費用。" : "目前沒有可點擊熱區。AI 有足夠依據時會建立建議熱區，也可先用安裝區域文字保存成本。"}
-        </div>
-      </div>` : ""}
+      </section>` : `
+      <div class="machineAreaCostPanel">這台機台尚未上傳代表圖或角度圖，暫時無法建立可點擊成本位置。</div>`}
     <div class="stageTabs" role="tablist">
       ${COST_TYPES.map((type, index) => `<button class="stageTab ${index === 0 ? "active" : ""}" type="button" data-stage="${escapeHTML(type)}">${escapeHTML(type)}</button>`).join("")}
     </div>
@@ -2026,16 +2411,8 @@ function openMachineDialog(machineId) {
       if (state.selectedMachineArea) renderMachineAreaCostPanel(machineId, state.selectedMachineArea, state.selectedMachineStage);
     });
   });
-  $("machineDialogContent").querySelectorAll("[data-machine-hotspot]").forEach((button) => {
-    button.addEventListener("click", () => {
-      state.selectedMachineArea = button.dataset.machineHotspot;
-      $("machineDialogContent").querySelectorAll("[data-machine-hotspot]").forEach((item) => item.classList.remove("active"));
-      button.classList.add("active");
-      renderMachineAreaCostPanel(machineId, state.selectedMachineArea, state.selectedMachineStage);
-    });
-  });
   renderDialogStage(machineId, state.selectedMachineStage);
-  setupDialogMachine360Viewer(machineId);
+  if (machineViews.length) setupDialogMachine360Viewer(machineId);
   $("machineDialog").showModal();
   hydrateSecureImages($("machineDialogContent"));
 }
@@ -2045,57 +2422,138 @@ function setupDialogMachine360Viewer(machineId) {
   if (!viewer) return;
   $("dialogMachine360Prev")?.addEventListener("click", () => stepDialogMachine360Viewer(machineId, -1));
   $("dialogMachine360Next")?.addEventListener("click", () => stepDialogMachine360Viewer(machineId, 1));
+  $("dialogMachine360AutoRotate")?.addEventListener("click", () => toggleDialogMachine360AutoRotate(machineId));
   viewer.addEventListener("pointerdown", (event) => {
+    if (event.target.closest("[data-machine-hotspot]")) return;
     state.dialogMachine360PointerX = event.clientX;
+    state.dialogMachine360LastX = event.clientX;
+    viewer.classList.add("dragging");
     viewer.setPointerCapture?.(event.pointerId);
   });
-  viewer.addEventListener("pointerup", (event) => {
-    const start = state.dialogMachine360PointerX;
-    state.dialogMachine360PointerX = null;
-    if (start === null) return;
-    const delta = event.clientX - start;
-    if (Math.abs(delta) >= 28) stepDialogMachine360Viewer(machineId, delta < 0 ? 1 : -1);
+  viewer.addEventListener("pointermove", (event) => {
+    if (state.dialogMachine360PointerX === null) return;
+    const last = state.dialogMachine360LastX ?? event.clientX;
+    const delta = event.clientX - last;
+    if (Math.abs(delta) >= 36) {
+      stepDialogMachine360Viewer(machineId, delta < 0 ? 1 : -1);
+      state.dialogMachine360LastX = event.clientX;
+    }
   });
+  const release = () => {
+    state.dialogMachine360PointerX = null;
+    state.dialogMachine360LastX = null;
+    viewer.classList.remove("dragging");
+  };
+  viewer.addEventListener("pointerup", release);
+  viewer.addEventListener("pointercancel", release);
   viewer.addEventListener("keydown", (event) => {
     if (event.key === "ArrowLeft") stepDialogMachine360Viewer(machineId, -1);
     if (event.key === "ArrowRight") stepDialogMachine360Viewer(machineId, 1);
+    if (event.key === " ") {
+      event.preventDefault();
+      toggleDialogMachine360AutoRotate(machineId);
+    }
   });
   renderDialogMachine360Viewer(machineId);
 }
 
+function stopDialogMachine360AutoRotate() {
+  if (state.dialogMachine360AutoTimer) {
+    clearInterval(state.dialogMachine360AutoTimer);
+    state.dialogMachine360AutoTimer = null;
+  }
+  const button = $("dialogMachine360AutoRotate");
+  if (button) {
+    button.textContent = "自動旋轉";
+    button.classList.remove("active");
+  }
+}
+
+function toggleDialogMachine360AutoRotate(machineId) {
+  const machine = machineById(machineId);
+  const views = machine ? dialogViewsForMachine(machine) : [];
+  if (views.length < 2) return;
+  if (state.dialogMachine360AutoTimer) {
+    stopDialogMachine360AutoRotate();
+    return;
+  }
+  state.dialogMachine360AutoTimer = setInterval(() => stepDialogMachine360Viewer(machineId, 1), 1200);
+  const button = $("dialogMachine360AutoRotate");
+  if (button) {
+    button.textContent = "停止旋轉";
+    button.classList.add("active");
+  }
+}
+
 function stepDialogMachine360Viewer(machineId, delta) {
-  const views = sortedMachine360Views(machineId);
+  const machine = machineById(machineId);
+  const views = machine ? dialogViewsForMachine(machine) : [];
   if (views.length < 2) return;
   state.dialogMachine360Index = (state.dialogMachine360Index + delta + views.length) % views.length;
+  state.selectedMachineArea = "";
   renderDialogMachine360Viewer(machineId);
 }
 
 async function renderDialogMachine360Viewer(machineId) {
   const image = $("dialogMachine360Image");
+  const frame = $("dialogMachine360MediaFrame");
   const empty = $("dialogMachine360Empty");
   const dots = $("dialogMachine360Dots");
-  if (!image || !empty || !dots) return;
-  const views = sortedMachine360Views(machineId);
+  if (!image || !frame || !empty || !dots) return;
+  const machine = machineById(machineId);
+  const views = machine ? dialogViewsForMachine(machine) : [];
   if (!views.length) return;
   state.dialogMachine360Index = Math.max(0, Math.min(state.dialogMachine360Index, views.length - 1));
   const view = views[state.dialogMachine360Index];
+  frame.hidden = true;
   image.hidden = true;
   empty.hidden = false;
   empty.textContent = "正在載入圖片…";
   try {
-    image.src = await getPrivateImageDataUrl(view.imageFileId);
+    image.src = view.imageFileId ? await getPrivateImageDataUrl(view.imageFileId) : view.imageUrl;
     image.hidden = false;
+    frame.hidden = false;
     empty.hidden = true;
+    requestAnimationFrame(() => image.classList.add("frameReady"));
   } catch (error) {
     empty.textContent = "圖片讀取失敗";
   }
   const label = view.viewName || MACHINE_360_VIEW_CONFIG[view.viewKey]?.label || view.viewKey;
   if ($("dialogMachine360Angle")) $("dialogMachine360Angle").textContent = `${label}｜${toNumber(view.angle)}°`;
+  if ($("dialogMachine360Hint")) $("dialogMachine360Hint").textContent = views.length > 1 ? "按住左右拖曳、方向鍵或自動旋轉切換角度" : "目前為單圖檢視";
   dots.innerHTML = views.map((item, index) => `<button type="button" class="viewerDot ${index === state.dialogMachine360Index ? "active" : ""}" data-dialog-viewer-index="${index}" title="${escapeHTML(item.viewName || item.viewKey)}"></button>`).join("");
   dots.querySelectorAll("[data-dialog-viewer-index]").forEach((button) => button.addEventListener("click", () => {
     state.dialogMachine360Index = Number(button.dataset.dialogViewerIndex) || 0;
+    state.selectedMachineArea = "";
     renderDialogMachine360Viewer(machineId);
   }));
+  renderDialogMachineHotspots(machineId, view.viewKey || "FRONT");
+}
+
+function renderDialogMachineHotspots(machineId, viewKey) {
+  const overlay = $("dialogMachine360Hotspots");
+  const panel = $("machineAreaCostPanel");
+  if (!overlay) return;
+  const areas = state.machineAreas.filter((area) =>
+    area.machineId === machineId &&
+    (area.viewKey || "FRONT") === viewKey &&
+    isValidMachineArea(area)
+  );
+  overlay.innerHTML = areas.map((area) => `<button class="machineHotspot ${area.status === "已確認" ? "confirmed" : "suggested"}" type="button" data-machine-hotspot="${escapeHTML(area.name)}" style="left:${area.x}%;top:${area.y}%;width:${area.width}%;height:${area.height}%"><span>${escapeHTML(area.name)}</span></button>`).join("");
+  overlay.querySelectorAll("[data-machine-hotspot]").forEach((button) => {
+    button.addEventListener("click", (event) => {
+      event.stopPropagation();
+      state.selectedMachineArea = button.dataset.machineHotspot;
+      overlay.querySelectorAll("[data-machine-hotspot]").forEach((item) => item.classList.remove("active"));
+      button.classList.add("active");
+      renderMachineAreaCostPanel(machineId, state.selectedMachineArea, state.selectedMachineStage);
+    });
+  });
+  if (panel && !state.selectedMachineArea) {
+    panel.innerHTML = areas.length
+      ? "點擊機台圖上的成本標記，查看目前費用階段的區域金額與品項。"
+      : "此角度尚未建立成本位置標記。請到「360° 機台建置」新增標記並綁定品項。";
+  }
 }
 
 function isValidMachineArea(area) {

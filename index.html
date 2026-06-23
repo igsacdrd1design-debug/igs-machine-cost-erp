@@ -8,7 +8,7 @@
   <meta name="googlebot" content="noindex, nofollow, noarchive, nosnippet">
   <meta name="referrer" content="no-referrer">
   <title>IGS 機台材料成本 ERP</title>
-  <link rel="stylesheet" href="style.css?v=20260623-igs-v2-0-5">
+  <link rel="stylesheet" href="style.css?v=20260623-igs-v2-0-6">
 </head>
 <body class="authLocked">
   <section id="authGate" class="authGate" aria-labelledby="loginTitle">
@@ -543,9 +543,12 @@
         <div class="panelHead">
           <div>
             <h2>3. 多角度旋轉預覽</h2>
-            <p class="muted">顯示目前已儲存的基準角度圖。1 張為單圖檢視，2 張以上可左右拖曳切換。</p>
+            <p class="muted">顯示目前已儲存的基準角度圖。2 張以上可按住左右拖曳或啟用自動旋轉。</p>
           </div>
-          <span id="machine360ViewerBadge" class="apiBadge">尚無可預覽圖片</span>
+          <div class="viewerHeadActions">
+            <span id="machine360ViewerBadge" class="apiBadge">尚無可預覽圖片</span>
+            <button id="machine360AutoRotate" class="button secondary viewerAutoButton" type="button" disabled>自動旋轉</button>
+          </div>
         </div>
         <div id="machine360Viewer" class="machine360Viewer empty" tabindex="0" aria-label="機台多角度預覽">
           <img id="machine360ViewerImage" alt="機台角度預覽" hidden>
@@ -560,19 +563,78 @@
         <div id="machine360ViewerDots" class="viewerDots" aria-label="角度選擇"></div>
       </div>
 
+      <div class="panel machineMarkerPanel">
+        <div class="panelHead">
+          <div>
+            <h2>4. 建立可點擊成本位置</h2>
+            <p class="muted">選擇角度與費用階段，點擊圖片放置標記，再勾選該區域包含的成本品項。主管查看時即可點擊標記看到金額。</p>
+          </div>
+          <span class="analysisBadge">可修改、刪除</span>
+        </div>
+        <div class="markerEditorToolbar">
+          <label>
+            <span>標記角度</span>
+            <select id="machineMarkerView"><option value="">尚無圖片</option></select>
+          </label>
+          <label>
+            <span>費用階段</span>
+            <select id="machineMarkerStage">
+              <option value="打樣版費用">打樣版費用</option>
+              <option value="測試台費用">測試台費用</option>
+              <option value="實際費用">實際費用</option>
+            </select>
+          </label>
+          <label class="markerNameField">
+            <span>區域名稱</span>
+            <input id="machineMarkerAreaName" list="machineMarkerAreaOptions" placeholder="例如：頭部招牌、操作台中央">
+            <datalist id="machineMarkerAreaOptions"></datalist>
+          </label>
+          <label>
+            <span>標記寬度 %</span>
+            <input id="machineMarkerWidth" type="number" min="4" max="40" step="1" value="12">
+          </label>
+          <label>
+            <span>標記高度 %</span>
+            <input id="machineMarkerHeight" type="number" min="4" max="40" step="1" value="10">
+          </label>
+        </div>
+        <div class="markerEditorGrid">
+          <div>
+            <div id="machineMarkerCanvas" class="markerCanvas" tabindex="0">
+              <div id="machineMarkerMediaFrame" class="markerMediaFrame" hidden>
+                <img id="machineMarkerImage" alt="成本位置標記底圖" hidden>
+                <div id="machineMarkerOverlay" class="viewerHotspots"></div>
+              </div>
+              <div id="machineMarkerEmpty" class="viewerEmpty">請先選擇機台並儲存至少一張角度圖</div>
+            </div>
+            <p id="machineMarkerStatus" class="photoStatus muted">先輸入區域名稱，再點擊圖片放置標記。</p>
+          </div>
+          <div class="markerSidePanel">
+            <section>
+              <h3>綁定品項</h3>
+              <p class="muted">勾選此位置所包含的成本品項。點擊標記時會依目前費用階段加總。</p>
+              <div id="machineMarkerItemList" class="markerItemList"><div class="empty">請先選擇機台。</div></div>
+            </section>
+            <div class="formActions markerActions">
+              <button id="saveMachineMarker" class="button primary" type="button">儲存位置標記</button>
+              <button id="resetMachineMarker" class="button secondary" type="button">新增另一個標記</button>
+              <button id="deleteMachineMarker" class="button dangerButton" type="button" hidden>刪除此標記</button>
+            </div>
+            <section>
+              <h3>已建立標記</h3>
+              <div id="machineMarkerSavedList" class="machineMarkerSavedList"><div class="empty">尚未建立成本位置標記。</div></div>
+            </section>
+          </div>
+        </div>
+      </div>
+
       <div class="panel machine360NextPanel">
         <div class="panelHead">
           <div>
-            <h2>4. 後續建立 AI 旋轉草稿</h2>
-            <p class="muted">四張基準圖完成後，下一階段會在此提供 AI 補中間角度、旋轉預覽、異常影格審核與成本標記。</p>
+            <h2>5. AI 補中間角度</h2>
+            <p class="muted">目前旋轉使用你已上傳的基準角度圖。AI 產生連續中間影格仍屬實驗功能，尚未在正式資料中自動啟用。</p>
           </div>
-          <span class="analysisBadge">規劃中：AI 補角度</span>
-        </div>
-        <div class="v19Roadmap">
-          <div><span>1</span><strong>四張基準圖</strong><small>目前版本</small></div>
-          <div><span>2</span><strong>AI 補中間角度</strong><small>人工審核</small></div>
-          <div><span>3</span><strong>成本區域標記</strong><small>點擊查看</small></div>
-          <div><span>4</span><strong>主管唯讀頁</strong><small>旋轉與比較</small></div>
+          <span class="analysisBadge">實驗功能尚未啟用</span>
         </div>
       </div>
     </section>
@@ -737,6 +799,6 @@
   <datalist id="supplierOptions"></datalist>
   <datalist id="machineAreaOptions"></datalist>
   <script src="data.js?v=20260623-igs-v2-0"></script>
-  <script src="app.js?v=20260623-igs-v2-0-5"></script>
+  <script src="app.js?v=20260623-igs-v2-0-6"></script>
 </body>
 </html>
