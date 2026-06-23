@@ -6,4 +6,11 @@ window.IGS_OFFLINE_DATA = {
   suppliers: [],
   settings: [],
   machineAreas: [],
+  machine360Views: [],
+  materialPrices: [],
+  marketIndexes: [],
+  estimateProjects: [],
+  estimateItems: [],
+  artRecommendations: [],
+  artSimulations: [],
 };
