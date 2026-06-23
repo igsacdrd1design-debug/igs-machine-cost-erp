@@ -407,7 +407,7 @@ td small { color: var(--muted); }
 .machineUploadPreview img { width: 120px; height: 90px; object-fit: cover; border-radius: 12px; }
 .machineUploadPreview > div { display: grid; gap: 8px; }
 .stageThumb { width: 72px; height: 54px; object-fit: cover; border-radius: 9px; }
-.draftItemsTable { min-width: 1260px; }
+.draftItemsTable { min-width: 1780px; }
 .itemImageEditor { width: 86px; display: grid; gap: 5px; }
 .itemImageEditor img { width: 78px; height: 58px; object-fit: cover; border-radius: 9px; border: 1px solid var(--line); }
 .miniUpload { display: grid; place-items: center; width: 78px; height: 58px; border: 1px dashed #b7c9cd; border-radius: 9px; color: var(--blue); background: var(--blue-soft); cursor: pointer; font-size: 12px; font-weight: 700; }
@@ -419,3 +419,9 @@ td small { color: var(--muted); }
   .machineUploadPreview { align-items: flex-start; flex-direction: column; }
   .costSummary { align-items: flex-end; flex-direction: column; gap: 8px; }
 }
+
+.specInput { min-width: 210px; }
+.materialInput { min-width: 150px; }
+.thicknessInput { min-width: 100px; }
+.fileNameInput { min-width: 220px; }
+.noteInput { min-width: 220px; }

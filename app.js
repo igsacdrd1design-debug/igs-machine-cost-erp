@@ -140,10 +140,13 @@ function normalizeCostItem(row) {
     costOrderId: String(firstValue(row, ["成本單ID", "costOrderId"])),
     index: firstValue(row, ["項次", "index"]),
     name: String(firstValue(row, ["品項名稱", "品項", "name"])),
-    spec: String(firstValue(row, ["規格", "spec"])),
+    spec: String(firstValue(row, ["規格", "規格/包裝", "規格／包裝", "spec"])),
     qty,
     unit: String(firstValue(row, ["單位", "unit"])),
     price,
+    material: String(firstValue(row, ["材質", "material"])),
+    thickness: String(firstValue(row, ["厚度", "thickness"])),
+    fileName: String(firstValue(row, ["檔案名稱", "fileName"])),
     subtotal: subtotal || qty * price,
     imageUrl: String(firstValue(row, ["品項圖片URL", "imageUrl"])),
     imageFileId: String(firstValue(row, ["品項圖片檔案ID", "imageFileId"])),
@@ -730,7 +733,7 @@ async function analyzeQuotationImage() {
   const originalText = button.textContent;
   button.disabled = true;
   button.textContent = "AI 辨識中…";
-  setQuotationAiStatus("Gemini 正在讀取估價單，請稍候…", "loading");
+  setQuotationAiStatus("Gemini 正在讀取估價單；模型忙碌時會自動重試，請稍候…", "loading");
 
   try {
     const response = await secureApiRequest({
@@ -741,7 +744,7 @@ async function analyzeQuotationImage() {
     applyQuotationAnalysis(result);
     state.quotationAiStatus = "已辨識";
     $("quotationAiBadge").textContent = "AI 已辨識，待人工確認";
-    setQuotationAiStatus(`辨識完成，共帶入 ${state.draftItems.length} 個品項。請逐項確認。`, "success");
+    setQuotationAiStatus(`辨識完成，共帶入 ${state.draftItems.length} 個品項。請確認材質、厚度與檔案名稱。`, "success");
     showNotice("AI 已先填入可辨識資料；請確認後再寫入 Google Sheet。");
   } catch (error) {
     state.quotationAiStatus = "辨識失敗";
@@ -770,8 +773,11 @@ function applyQuotationAnalysis(result) {
       name: String(item.name || ""),
       spec: String(item.spec || ""),
       qty: toNumber(item.qty) || 1,
-      unit: String(item.unit || "件"),
+      unit: String(item.unit || ""),
       price: toNumber(item.price),
+      material: String(item.material || ""),
+      thickness: String(item.thickness || ""),
+      fileName: String(item.fileName || ""),
       note: String(item.note || ""),
       image: null,
       confidence: toNumber(item.confidence),
@@ -825,7 +831,7 @@ function setupDraftItems() {
 }
 
 function emptyDraftItem() {
-  return { name: "", spec: "", qty: 1, unit: "件", price: 0, note: "", image: null, confidence: 0 };
+  return { name: "", spec: "", qty: 1, unit: "", price: 0, material: "", thickness: "", fileName: "", note: "", image: null, confidence: 0 };
 }
 
 async function handleDraftItemImageChange(event) {
@@ -887,6 +893,9 @@ async function handleCreateCostOrder(event) {
         qty: toNumber(item.qty),
         unit: String(item.unit || "").trim(),
         price: toNumber(item.price),
+        material: String(item.material || "").trim(),
+        thickness: String(item.thickness || "").trim(),
+        fileName: String(item.fileName || "").trim(),
         note: String(item.note || "").trim(),
         image: item.image ? stripDataUrl(item.image) : null,
       })),
@@ -1355,7 +1364,7 @@ function renderDialogStage(machineId, type) {
     </div>
     <div class="tableWrap">
       <table class="dialogTable">
-        <thead><tr><th>圖片</th><th>品項</th><th>規格</th><th>數量</th><th>單位</th><th>單價</th><th>小計</th><th>備註</th></tr></thead>
+        <thead><tr><th>圖片</th><th>品項</th><th>規格／包裝</th><th>數量</th><th>單位</th><th>單價</th><th>材質</th><th>厚度</th><th>檔案名稱</th><th>小計</th><th>備註</th></tr></thead>
         <tbody>${items.length ? items.map((item) => `<tr>
           <td>${item.imageFileId ? `<img class="dialogItemThumb" data-secure-file-id="${escapeHTML(item.imageFileId)}" alt="${escapeHTML(item.name)}">` : item.imageUrl ? `<img class="dialogItemThumb" src="${escapeHTML(item.imageUrl)}" alt="${escapeHTML(item.name)}">` : "—"}</td>
           <td>${escapeHTML(item.name || "—")}</td>
@@ -1363,9 +1372,12 @@ function renderDialogStage(machineId, type) {
           <td>${item.qty}</td>
           <td>${escapeHTML(item.unit || "—")}</td>
           <td>${money(item.price)}</td>
+          <td>${escapeHTML(item.material || "—")}</td>
+          <td>${escapeHTML(item.thickness || "—")}</td>
+          <td>${escapeHTML(item.fileName || "—")}</td>
           <td><strong>${money(item.subtotal)}</strong></td>
           <td>${escapeHTML(item.note || "—")}</td>
-        </tr>`).join("") : '<tr><td colspan="8" class="empty">成本單已建立，但尚無材料明細</td></tr>'}</tbody>
+        </tr>`).join("") : '<tr><td colspan="11" class="empty">成本單已建立，但尚無材料明細</td></tr>'}</tbody>
       </table>
     </div>`;
   hydrateSecureImages(content);
@@ -1378,12 +1390,15 @@ function renderDraftItems() {
       ${item.image?.dataUrl ? `<img src="${escapeHTML(item.image.dataUrl)}" alt="品項圖片"><button type="button" class="miniClear" data-clear-item-image="${index}">移除</button>` : `<label class="miniUpload">上傳<input type="file" accept="image/jpeg,image/png,image/webp" data-item-image="${index}" hidden></label>`}
     </div></td>
     <td><input class="tableInput itemNameInput" data-field="name" value="${escapeHTML(item.name)}" placeholder="品項名稱"></td>
-    <td><input class="tableInput" data-field="spec" value="${escapeHTML(item.spec)}" placeholder="規格"></td>
+    <td><input class="tableInput specInput" data-field="spec" value="${escapeHTML(item.spec)}" placeholder="例如：w204.9 × h168 / mm"></td>
     <td><input class="tableInput numberInput" data-field="qty" type="number" min="0" step="0.01" value="${item.qty}"></td>
-    <td><input class="tableInput unitInput" data-field="unit" value="${escapeHTML(item.unit)}"></td>
+    <td><input class="tableInput unitInput" data-field="unit" value="${escapeHTML(item.unit)}" placeholder="可留空"></td>
     <td><input class="tableInput numberInput" data-field="price" type="number" min="0" step="0.01" value="${item.price || ""}"></td>
+    <td><input class="tableInput materialInput" data-field="material" value="${escapeHTML(item.material || "")}" placeholder="例如：透明壓克力"></td>
+    <td><input class="tableInput thicknessInput" data-field="thickness" value="${escapeHTML(item.thickness || "")}" placeholder="例如：3mm"></td>
+    <td><input class="tableInput fileNameInput" data-field="fileName" value="${escapeHTML(item.fileName || "")}" placeholder="例如：A20_...ai"></td>
     <td data-subtotal><strong>${money(item.qty * item.price)}</strong></td>
-    <td><input class="tableInput" data-field="note" value="${escapeHTML(item.note)}" placeholder="備註"></td>
+    <td><input class="tableInput noteInput" data-field="note" value="${escapeHTML(item.note)}" placeholder="備註"></td>
     <td><button class="removeRow" type="button" data-remove="${index}">刪除</button></td>
   </tr>`).join("");
   renderDraftSubtotal();
