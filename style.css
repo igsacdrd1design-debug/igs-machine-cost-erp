@@ -1177,3 +1177,218 @@ td small { color: var(--muted); }
     justify-content: flex-start;
   }
 }
+
+/* =====================================================
+ * v2.0.7 AI 中間角度生成、審核與發布
+ * ===================================================== */
+.ai360Toolbar {
+  display: grid;
+  grid-template-columns: minmax(260px, 1fr) auto;
+  gap: 16px;
+  align-items: end;
+  padding: 14px;
+  border: 1px solid #dce7e9;
+  border-radius: 14px;
+  background: #f8fbfb;
+}
+.ai360Toolbar label {
+  display: grid;
+  gap: 7px;
+}
+.ai360Toolbar label > span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+}
+.ai360Toolbar select {
+  width: 100%;
+}
+.ai360ToolbarActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: flex-end;
+}
+.ai360Warning {
+  margin: 12px 0 16px;
+  padding: 12px 14px;
+  border: 1px solid #ead7a7;
+  border-radius: 12px;
+  color: #765315;
+  background: #fff9e8;
+  line-height: 1.65;
+}
+.aiFrameGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+  gap: 14px;
+}
+.aiFrameCard {
+  overflow: hidden;
+  border: 1px solid #dce6e8;
+  border-radius: 14px;
+  background: #fff;
+  box-shadow: 0 7px 20px rgba(24, 67, 79, .05);
+}
+.aiFrameCard.approved {
+  border-color: #80b59b;
+  box-shadow: 0 0 0 2px rgba(72, 145, 108, .08);
+}
+.aiFrameImage {
+  display: grid;
+  place-items: center;
+  height: 220px;
+  background: radial-gradient(circle at 50% 42%, #fff, #eef4f5);
+}
+.aiFrameImage img {
+  width: 100%;
+  height: 220px;
+  object-fit: contain;
+  background: #fff;
+}
+.aiFrameMeta {
+  display: grid;
+  gap: 8px;
+  padding: 12px;
+}
+.aiFrameMeta > div:first-child {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.aiFrameMeta small {
+  color: var(--muted);
+}
+.statusPill {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  padding: 3px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+.statusPill.ok {
+  color: #286448;
+  background: #e4f3e9;
+}
+.statusPill.warn {
+  color: #835b16;
+  background: #fff2d0;
+}
+.aiFrameActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+.aiFrameActions .button {
+  min-height: 34px;
+  padding: 7px 10px;
+  font-size: 12px;
+}
+.machineMarkerPanel {
+  margin-top: 18px;
+}
+.machineMarkerLayout {
+  display: grid;
+  grid-template-columns: minmax(440px, 1.25fr) minmax(300px, .75fr);
+  gap: 16px;
+  align-items: start;
+}
+.machineMarkerEditor,
+.machineMarkerSidebar {
+  display: grid;
+  gap: 14px;
+}
+.markerControlGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+.markerControlGrid label {
+  display: grid;
+  gap: 6px;
+}
+.markerControlGrid label.wide {
+  grid-column: 1 / -1;
+}
+.markerControlGrid label > span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+}
+.markerControlGrid input,
+.markerControlGrid select {
+  width: 100%;
+  min-width: 0;
+}
+.machineMarkerCanvas {
+  position: relative;
+  min-height: 500px;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  border: 1px solid #cddfe3;
+  border-radius: 18px;
+  background: radial-gradient(circle at 50% 42%, #fff, #edf4f5);
+  cursor: crosshair;
+}
+.machineMarkerCanvas .viewerMediaFrame {
+  max-height: 560px;
+}
+.machineMarkerCanvas .viewerMediaFrame > img {
+  max-height: 560px;
+}
+.machineMarkerItemList {
+  display: grid;
+  gap: 8px;
+  max-height: 360px;
+  overflow: auto;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: #faf8f2;
+}
+.machineMarkerSidebar > div {
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: #faf8f2;
+}
+.machineMarkerSidebar h3 {
+  margin: 0 0 10px;
+}
+.markerActionRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.markerActionRow.button,
+.markerActionRow .button {
+  flex: 1 1 140px;
+}
+@media (max-width: 980px) {
+  .ai360Toolbar,
+  .machineMarkerLayout {
+    grid-template-columns: 1fr;
+  }
+  .ai360ToolbarActions {
+    justify-content: stretch;
+  }
+  .ai360ToolbarActions .button {
+    flex: 1 1 180px;
+  }
+}
+@media (max-width: 620px) {
+  .markerControlGrid {
+    grid-template-columns: 1fr;
+  }
+  .markerControlGrid label.wide {
+    grid-column: auto;
+  }
+  .machineMarkerCanvas {
+    min-height: 340px;
+  }
+}

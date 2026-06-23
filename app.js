@@ -1,5 +1,5 @@
 // =====================================================
-// IGS 機台材料成本 ERP — 前端 v2.0.6
+// IGS 機台材料成本 ERP — 前端 v2.0.7
 // 1. ERP 密碼登入
 // 2. 工作階段驗證
 // 3. 私人 Google Sheet 安全讀取
@@ -27,7 +27,7 @@ const pageDescriptions = {
   quotationEntry: "上傳圖片或 PDF，將成本歸入既有機台並確認稅額與安裝區域。",
   quickMachine: "快速建立新的機台主檔。",
   suppliers: "查看供應商與成本單金額。",
-  machine360Setup: "上傳一至四張基準角度圖；一張可檢視，兩張以上可拖曳切換現有角度。",
+  machine360Setup: "上傳一至四張基準角度圖，使用 AI 補中間角度並建立可旋轉的主管成本頁。",
   priceCenter: "管理公司材料價格並查詢網路市場浮動。",
   smartEstimate: "AI 讀取圖片或 PDF，自動帶入品項並用公司價格與市場指數建立三段估價。",
   artOptimization: "僅針對美術材料與印刷製程提出降本及視覺概念模擬。",
@@ -44,6 +44,7 @@ let state = {
   settings: [],
   machineAreas: [],
   machine360Views: [],
+  machine360Frames: [],
   materialPrices: [],
   marketIndexes: [],
   estimateProjects: [],
@@ -74,6 +75,7 @@ let state = {
   dialogMachine360PointerX: null,
   dialogMachine360LastX: null,
   dialogMachine360AutoTimer: null,
+  machine360AiGenerating: false,
   machineMarkerDraft: {
     areaId: "",
     viewKey: "FRONT",
@@ -230,6 +232,28 @@ function normalizeMachine360View(row) {
     status: String(firstValue(row, ["圖片狀態", "status"], "基準圖")),
     createdAt: String(firstValue(row, ["建立時間", "createdAt"])),
     updatedAt: String(firstValue(row, ["更新時間", "updatedAt"])),
+  };
+}
+
+function normalizeMachine360Frame(row) {
+  const angle = toNumber(firstValue(row, ["角度", "angle"]));
+  return {
+    id: String(firstValue(row, ["影格ID", "frameId", "id"])),
+    machineId: String(firstValue(row, ["機台ID", "machineId"])),
+    angle,
+    viewKey: `AI_${String(angle).replace(".", "_").padStart(3, "0")}`,
+    viewName: String(firstValue(row, ["視角名稱", "viewName"], `AI ${angle}°`)),
+    sourceType: String(firstValue(row, ["來源類型", "sourceType"], "AI生成")),
+    sourceViews: String(firstValue(row, ["基準來源", "sourceViews"])),
+    imageUrl: String(firstValue(row, ["圖片URL", "imageUrl"])),
+    imageFileId: String(firstValue(row, ["圖片檔案ID", "imageFileId"])),
+    model: String(firstValue(row, ["AI模型", "model"])),
+    aiStatus: String(firstValue(row, ["AI狀態", "aiStatus"])),
+    reviewStatus: String(firstValue(row, ["審核狀態", "reviewStatus"], "待審核")),
+    prompt: String(firstValue(row, ["提示詞", "prompt"])),
+    createdAt: String(firstValue(row, ["建立時間", "createdAt"])),
+    updatedAt: String(firstValue(row, ["更新時間", "updatedAt"])),
+    isAiFrame: true,
   };
 }
 
@@ -461,6 +485,7 @@ function resetPrivateState() {
   state.settings = [];
   state.machineAreas = [];
   state.machine360Views = [];
+  state.machine360Frames = [];
   state.materialPrices = [];
   state.marketIndexes = [];
   state.estimateProjects = [];
@@ -1373,6 +1398,9 @@ function setupMachine360() {
   });
   $("saveMachine360Views").addEventListener("click", saveMachine360Views);
   $("machine360AutoRotate")?.addEventListener("click", toggleMachine360AutoRotate);
+  $("generateMachine360Frames")?.addEventListener("click", generateMachine360Frames);
+  $("approveAllMachine360Frames")?.addEventListener("click", approveAllMachine360Frames);
+  $("machine360AiFrameGrid")?.addEventListener("click", handleMachine360AiFrameAction);
 
   $("machineMarkerView")?.addEventListener("change", () => {
     state.machineMarkerDraft = createEmptyMachineMarkerDraft();
@@ -1410,8 +1438,19 @@ function existingMachine360View(machineId, viewKey) {
   return state.machine360Views.find((view) => view.machineId === machineId && view.viewKey === viewKey) || null;
 }
 
-function sortedMachine360Views(machineId) {
-  return machine360ViewsForMachine(machineId).filter((view) => view.imageFileId).sort((a, b) => toNumber(a.angle) - toNumber(b.angle));
+function machine360FramesForMachine(machineId) {
+  return state.machine360Frames.filter((frame) => frame.machineId === machineId && frame.imageFileId);
+}
+
+function sortedMachine360Views(machineId, includePending = false) {
+  const byAngle = new Map();
+  machine360FramesForMachine(machineId)
+    .filter((frame) => includePending ? frame.reviewStatus !== "已停用" : frame.reviewStatus === "已核准")
+    .forEach((frame) => byAngle.set(toNumber(frame.angle).toFixed(1), { ...frame, status: "AI生成" }));
+  machine360ViewsForMachine(machineId)
+    .filter((view) => view.imageFileId)
+    .forEach((view) => byAngle.set(toNumber(view.angle).toFixed(1), { ...view, isAiFrame: false }));
+  return [...byAngle.values()].sort((a, b) => toNumber(a.angle) - toNumber(b.angle));
 }
 
 function setupAdaptiveMachine360Viewer() {
@@ -1465,9 +1504,9 @@ function stopMachine360AutoRotate() {
 
 function toggleMachine360AutoRotate() {
   const machineId = $("machine360Machine")?.value || "";
-  const views = sortedMachine360Views(machineId);
+  const views = sortedMachine360Views(machineId, true);
   if (views.length < 2) {
-    showNotice("至少需要兩張已儲存角度圖，才能啟用自動旋轉。", "warn");
+    showNotice("至少需要兩張已儲存或 AI 生成的角度圖，才能啟用自動旋轉。", "warn");
     return;
   }
   if (state.machine360ViewerAutoTimer) {
@@ -1484,7 +1523,7 @@ function toggleMachine360AutoRotate() {
 
 function stepMachine360Viewer(delta) {
   const machineId = $("machine360Machine")?.value || "";
-  const views = sortedMachine360Views(machineId);
+  const views = sortedMachine360Views(machineId, true);
   if (views.length < 2) return;
   state.machine360ViewerIndex = (state.machine360ViewerIndex + delta + views.length) % views.length;
   renderAdaptiveMachine360Viewer();
@@ -1498,7 +1537,7 @@ async function renderAdaptiveMachine360Viewer() {
   const badge = $("machine360ViewerBadge");
   if (!viewer || !image || !empty || !dots || !badge) return;
   const machineId = $("machine360Machine")?.value || "";
-  const views = sortedMachine360Views(machineId);
+  const views = sortedMachine360Views(machineId, true);
   state.machine360ViewerIndex = Math.max(0, Math.min(state.machine360ViewerIndex, Math.max(0, views.length - 1)));
   const prev = $("machine360Prev");
   const next = $("machine360Next");
@@ -1525,9 +1564,11 @@ async function renderAdaptiveMachine360Viewer() {
     requestAnimationFrame(() => image.classList.add("frameReady"));
   }
   catch (error) { image.hidden = true; empty.hidden = false; empty.textContent = "圖片讀取失敗"; }
-  $("machine360ViewerAngle").textContent = `${view.viewName || MACHINE_360_VIEW_CONFIG[view.viewKey]?.label || view.viewKey}｜${toNumber(view.angle)}°`;
-  $("machine360ViewerHint").textContent = canSwitch ? "按住左右拖曳即可旋轉切換；空白鍵可開始或停止自動旋轉" : "目前為單圖檢視；可繼續補其他角度";
-  badge.textContent = views.length === 1 ? "單圖檢視模式" : `${views.length} 圖旋轉模式`;
+  const frameState = view.isAiFrame ? `｜${view.reviewStatus || "待審核"}` : "｜基準圖";
+  $("machine360ViewerAngle").textContent = `${view.viewName || MACHINE_360_VIEW_CONFIG[view.viewKey]?.label || view.viewKey}｜${toNumber(view.angle)}°${frameState}`;
+  $("machine360ViewerHint").textContent = canSwitch ? "按住左右拖曳即可旋轉切換；AI 影格需核准後才會發布到主管頁" : "目前為單圖檢視；可使用 AI 補中間角度";
+  const aiCount = views.filter((item) => item.isAiFrame).length;
+  badge.textContent = views.length === 1 ? "單圖檢視模式" : `${views.length} 圖旋轉模式${aiCount ? `｜AI ${aiCount} 張` : ""}`;
   badge.classList.toggle("connected", views.length > 0);
   dots.innerHTML = views.map((item, index) => `<button type="button" class="viewerDot ${index === state.machine360ViewerIndex ? "active" : ""}" data-viewer-index="${index}" title="${escapeHTML(item.viewName || item.viewKey)}"></button>`).join("");
   dots.querySelectorAll("[data-viewer-index]").forEach((button) => button.addEventListener("click", () => {
@@ -1939,7 +1980,177 @@ async function renderMachine360Setup() {
   }
   $("machine360Status").textContent = statusText;
   await renderAdaptiveMachine360Viewer();
+  await renderMachine360AiFrames();
   await renderMachineMarkerEditor();
+}
+
+
+function requestedMachine360Angles() {
+  const frameCount = Number($("machine360FrameCount")?.value || 8);
+  const count = frameCount === 16 ? 16 : 8;
+  return Array.from({ length: count }, (_, index) => Number((((360 / count) * index) % 360).toFixed(1)));
+}
+
+function missingMachine360Angles(machineId) {
+  const existingAngles = new Set(sortedMachine360Views(machineId, true).map((item) => toNumber(item.angle).toFixed(1)));
+  return requestedMachine360Angles().filter((angle) => !existingAngles.has(toNumber(angle).toFixed(1)));
+}
+
+async function generateMachine360Frames() {
+  const machineId = $("machine360Machine")?.value || "";
+  const button = $("generateMachine360Frames");
+  if (!machineId) {
+    showNotice("請先選擇機台。", "warn");
+    return;
+  }
+  const bases = machine360ViewsForMachine(machineId).filter((view) => view.imageFileId);
+  if (!bases.length) {
+    showNotice("至少先儲存一張基準角度圖。", "warn");
+    return;
+  }
+  const angles = missingMachine360Angles(machineId);
+  if (!angles.length) {
+    showNotice("目前選擇的角度數已經沒有缺少影格。", "success");
+    return;
+  }
+  const confirmed = window.confirm(`將使用 Gemini 依 ${bases.length} 張基準圖產生 ${angles.length} 張 AI 角度草稿。\n\n生成圖片可能消耗付費額度，且所有影格都必須人工審核。確定繼續嗎？`);
+  if (!confirmed) return;
+
+  state.machine360AiGenerating = true;
+  if (button) {
+    button.disabled = true;
+    button.textContent = "AI 生成中…";
+  }
+  const progress = $("machine360AiProgress");
+  let success = 0;
+  const failures = [];
+
+  try {
+    for (let index = 0; index < angles.length; index += 1) {
+      const angle = angles[index];
+      if (progress) progress.textContent = `正在生成 ${angle}°｜${index + 1} / ${angles.length}`;
+      try {
+        const response = await secureApiRequest(
+          { action: "generateMachine360Frame", machineId, angle, force: false },
+          { includeToken: true, timeoutMs: 190000 }
+        );
+        if (response.result?.frame) {
+          const frame = normalizeMachine360Frame(response.result.frame);
+          state.machine360Frames = state.machine360Frames.filter((item) => item.id !== frame.id && !(item.machineId === machineId && toNumber(item.angle).toFixed(1) === toNumber(frame.angle).toFixed(1)));
+          state.machine360Frames.push(frame);
+          success += 1;
+          await renderAdaptiveMachine360Viewer();
+          await renderMachine360AiFrames();
+        }
+      } catch (error) {
+        failures.push(`${angle}°：${error.message}`);
+      }
+    }
+    if (progress) progress.textContent = failures.length ? `完成 ${success} 張，失敗 ${failures.length} 張` : `已完成 ${success} 張 AI 草稿`;
+    if (failures.length) showNotice(`AI 角度生成部分完成。${failures.slice(0, 2).join("；")}`, "warn");
+    else showNotice("AI 中間角度草稿已完成，請逐張核准後再發布。", "success");
+  } finally {
+    state.machine360AiGenerating = false;
+    if (button) {
+      button.disabled = false;
+      button.textContent = "AI 產生缺少角度";
+    }
+    await renderMachine360AiFrames();
+  }
+}
+
+async function renderMachine360AiFrames() {
+  const grid = $("machine360AiFrameGrid");
+  const approveButton = $("approveAllMachine360Frames");
+  const progress = $("machine360AiProgress");
+  if (!grid) return;
+  const machineId = $("machine360Machine")?.value || "";
+  const frames = machine360FramesForMachine(machineId).slice().sort((a, b) => a.angle - b.angle);
+  if (approveButton) approveButton.disabled = !frames.some((frame) => frame.reviewStatus !== "已核准");
+  if (!state.machine360AiGenerating && progress) {
+    const approved = frames.filter((frame) => frame.reviewStatus === "已核准").length;
+    progress.textContent = frames.length ? `AI 影格 ${frames.length} 張｜已核准 ${approved} 張` : "尚未產生 AI 影格";
+  }
+  if (!frames.length) {
+    grid.innerHTML = '<div class="empty fullSpan">尚無 AI 中間角度。先選擇 8 或 16 角度，再按「AI 產生缺少角度」。</div>';
+    return;
+  }
+  grid.innerHTML = frames.map((frame) => `
+    <article class="aiFrameCard ${frame.reviewStatus === "已核准" ? "approved" : "pending"}">
+      <div class="aiFrameImage"><img data-secure-file-id="${escapeHTML(frame.imageFileId)}" alt="${escapeHTML(frame.viewName)}"></div>
+      <div class="aiFrameMeta">
+        <div><strong>${escapeHTML(frame.viewName)}｜${frame.angle}°</strong><span class="statusPill ${frame.reviewStatus === "已核准" ? "ok" : "warn"}">${escapeHTML(frame.reviewStatus)}</span></div>
+        <small>${escapeHTML(frame.model || "Gemini AI")}</small>
+        <div class="aiFrameActions">
+          <button class="button secondary" type="button" data-ai-frame-action="approve" data-frame-id="${escapeHTML(frame.id)}" ${frame.reviewStatus === "已核准" ? "disabled" : ""}>核准</button>
+          <button class="button secondary" type="button" data-ai-frame-action="regenerate" data-frame-id="${escapeHTML(frame.id)}" data-angle="${frame.angle}">重新生成</button>
+          <button class="button secondary dangerText" type="button" data-ai-frame-action="delete" data-frame-id="${escapeHTML(frame.id)}">刪除</button>
+        </div>
+      </div>
+    </article>`).join("");
+  await hydrateSecureImages(grid);
+}
+
+async function handleMachine360AiFrameAction(event) {
+  const button = event.target.closest("[data-ai-frame-action]");
+  if (!button) return;
+  const action = button.dataset.aiFrameAction;
+  const frameId = button.dataset.frameId || "";
+  const frame = state.machine360Frames.find((item) => item.id === frameId);
+  if (!frame) return;
+  button.disabled = true;
+  try {
+    if (action === "approve") {
+      const response = await secureApiRequest({ action: "reviewMachine360Frame", frameId, status: "已核准" }, { timeoutMs: 60000 });
+      const updated = normalizeMachine360Frame(response.result.frame);
+      state.machine360Frames = state.machine360Frames.map((item) => item.id === frameId ? updated : item);
+      showNotice(`${updated.angle}° 影格已核准並發布。`, "success");
+    } else if (action === "regenerate") {
+      const confirmed = window.confirm(`確定重新生成 ${frame.angle}° 嗎？舊影格會移到 Drive 垃圾桶。`);
+      if (!confirmed) return;
+      const response = await secureApiRequest({ action: "generateMachine360Frame", machineId: frame.machineId, angle: frame.angle, force: true }, { timeoutMs: 190000 });
+      const updated = normalizeMachine360Frame(response.result.frame);
+      state.machine360Frames = state.machine360Frames.map((item) => item.id === frameId ? updated : item);
+      secureImageCache.delete(frame.imageFileId);
+      showNotice(`${updated.angle}° 已重新生成，請再次審核。`, "success");
+    } else if (action === "delete") {
+      const confirmed = window.confirm(`確定刪除 ${frame.angle}° AI 影格嗎？`);
+      if (!confirmed) return;
+      await secureApiRequest({ action: "deleteMachine360Frame", frameId }, { timeoutMs: 60000 });
+      state.machine360Frames = state.machine360Frames.filter((item) => item.id !== frameId);
+      secureImageCache.delete(frame.imageFileId);
+      showNotice(`${frame.angle}° AI 影格已刪除。`, "success");
+    }
+    state.machine360ViewerIndex = 0;
+    await renderAdaptiveMachine360Viewer();
+    await renderMachine360AiFrames();
+  } catch (error) {
+    showNotice(`AI 影格操作失敗：${error.message}`, "error");
+  } finally {
+    button.disabled = false;
+  }
+}
+
+async function approveAllMachine360Frames() {
+  const machineId = $("machine360Machine")?.value || "";
+  if (!machineId) return;
+  const frames = machine360FramesForMachine(machineId).filter((frame) => frame.reviewStatus !== "已核准");
+  if (!frames.length) return;
+  const confirmed = window.confirm(`確定一次核准目前 ${frames.length} 張 AI 影格嗎？\n\n建議先逐張檢查外型、Logo、按鈕、螢幕與左右方向。`);
+  if (!confirmed) return;
+  const button = $("approveAllMachine360Frames");
+  if (button) button.disabled = true;
+  try {
+    await secureApiRequest({ action: "approveAllMachine360Frames", machineId }, { timeoutMs: 60000 });
+    state.machine360Frames = state.machine360Frames.map((frame) => frame.machineId === machineId ? { ...frame, reviewStatus: "已核准" } : frame);
+    await renderMachine360AiFrames();
+    await renderAdaptiveMachine360Viewer();
+    showNotice("此機台的 AI 影格已全部核准並發布。", "success");
+  } catch (error) {
+    showNotice(`批次核准失敗：${error.message}`, "error");
+  } finally {
+    if (button) button.disabled = false;
+  }
 }
 
 async function saveMachine360Views() {
@@ -2022,6 +2233,7 @@ async function loadData() {
     state.suppliers = (Array.isArray(result.suppliers) ? result.suppliers : []).map(normalizeSupplier);
     state.machineAreas = (Array.isArray(result.machineAreas) ? result.machineAreas : []).map(normalizeMachineArea);
     state.machine360Views = (Array.isArray(result.machine360Views) ? result.machine360Views : []).map(normalizeMachine360View);
+    state.machine360Frames = (Array.isArray(result.machine360Frames) ? result.machine360Frames : []).map(normalizeMachine360Frame);
     state.materialPrices = (Array.isArray(result.materialPrices) ? result.materialPrices : []).map(normalizeMaterialPrice);
     state.marketIndexes = (Array.isArray(result.marketIndexes) ? result.marketIndexes : []).map(normalizeMarketIndex);
     state.estimateProjects = (Array.isArray(result.estimateProjects) ? result.estimateProjects : []).map(normalizeEstimateProject);

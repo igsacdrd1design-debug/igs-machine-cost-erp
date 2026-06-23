@@ -7,6 +7,7 @@ window.IGS_OFFLINE_DATA = {
   settings: [],
   machineAreas: [],
   machine360Views: [],
+  machine360Frames: [],
   materialPrices: [],
   marketIndexes: [],
   estimateProjects: [],
