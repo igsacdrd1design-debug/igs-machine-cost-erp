@@ -641,3 +641,17 @@ td small { color: var(--muted); }
 .tinyText{font-size:12px}.dangerButton{color:#a4382a;border-color:#e7b8b1}.dangerButton:hover{background:#fff0ed}
 @media(max-width:1050px){.v20Grid.twoCol{grid-template-columns:1fr}.estimateTotals{grid-template-columns:repeat(2,1fr)}}
 @media(max-width:700px){.compactForm{grid-template-columns:1fr}.estimateTotals{grid-template-columns:1fr}.inlineSearch{min-width:0;width:100%}.recommendationCost{grid-template-columns:1fr!important}.simulationCompare{grid-template-columns:1fr}}
+
+/* v2.0.1 智能估價 AI 匯入 */
+.estimateAiImportPanel{border-color:#cfe2e5;background:linear-gradient(180deg,#f9fdfd,#fff)}
+.estimateAiImportGrid{display:grid;grid-template-columns:minmax(280px,.9fr) minmax(360px,1.1fr);gap:16px;align-items:stretch}
+.estimateUploadZone{min-height:155px;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;gap:8px;border:2px dashed #9ebdc3;border-radius:14px;background:#f5fbfb;cursor:pointer;padding:18px}
+.estimateUploadZone:hover{border-color:#3e7784;background:#eef8f8}
+.estimateUploadZone strong{font-size:16px}.estimateUploadZone span{font-size:12px;color:var(--muted);word-break:break-all}
+.estimateAiOptions{display:grid;grid-template-columns:1fr 1fr;gap:12px;align-content:start}
+.estimateAiOptions label{display:grid;gap:6px}.estimateAiOptions label>span{font-size:13px;font-weight:700}.estimateAiOptions select{border:1px solid var(--line);border-radius:10px;padding:10px 12px;background:#fff;width:100%}
+.estimateAiOptions .formActions{grid-column:1/-1;margin-top:4px}
+.aiRawDetails{margin-top:12px}.aiRawDetails summary{cursor:pointer;font-weight:700;color:#315f69}.aiRawDetails textarea{width:100%;margin-top:10px;border:1px solid var(--line);border-radius:10px;padding:10px;resize:vertical;background:#f9fbfb}
+.photoStatus.warn{color:#9a6718}
+.estimateTable .manualPriceInput{min-width:125px;margin-top:5px}
+@media(max-width:900px){.estimateAiImportGrid{grid-template-columns:1fr}.estimateAiOptions{grid-template-columns:1fr}}
