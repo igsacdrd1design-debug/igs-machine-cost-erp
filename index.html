@@ -649,11 +649,11 @@
     <section id="priceCenter" class="view">
       <div class="quickIntro priceIntro">
         <div>
-          <span class="eyebrow">v2.3.1 · CSV自動辨識＋價格認證＋市場趨勢</span>
+          <span class="eyebrow">v2.6 · 精準配對＋製程價格同步＋免費 AI 補估</span>
           <h2>建立正式價格主檔，認證近期歷史報價並監看市場浮動</h2>
           <p>新報價先進入待認證區；補齊供應商、正式日期與稅別並人工認證後，才會影響智能估價基準。</p>
         </div>
-        <div class="apiBadge connected">Gemini 3.5 Flash Grounding</div>
+        <div class="apiBadge connected">內部價格優先｜AI 不使用網路搜尋</div>
       </div>
 
       <div class="v20Grid twoCol">
@@ -691,7 +691,7 @@
         </div>
 
         <div class="panel">
-          <div class="panelHead"><div><h2>2. 網路市場浮動查詢</h2><p class="muted">查詢原料或印刷市場趨勢，不直接覆蓋公司價格。</p></div></div>
+          <div class="panelHead"><div><h2>3. 網路市場浮動查詢（付費選用）</h2><p class="muted">此功能使用 Google Search，可能需要付費額度；不影響免費的內部資料補估。</p></div></div>
           <form id="marketResearchForm" class="entryForm compactForm">
             <label><span>材質分類 *</span><input id="marketCategory" type="text" required placeholder="例如：壓克力、PVC、鋁材"></label>
             <label><span>查詢關鍵字 *</span><input id="marketQuery" type="text" required placeholder="例如：台灣 透明壓克力 板材 價格 趨勢"></label>
@@ -709,10 +709,21 @@
         <div class="tableWrap"><table class="v20Table"><thead><tr><th>材料</th><th>分類</th><th>厚度／規格</th><th>單位</th><th>單價</th><th>供應商</th><th>日期</th><th>來源</th><th>信心</th><th></th></tr></thead><tbody id="materialPriceRows"></tbody></table></div>
       </div>
 
+      <div class="panel">
+        <div class="panelHead">
+          <div>
+            <h2>2. 製程／印刷價格規則</h2>
+            <p class="muted">智能估價會直接同步 Google Sheet「內部估價規則」中的印刷與加工價格；沒有規則的製程會顯示待補，不會算成 0 元。</p>
+          </div>
+          <p id="processPriceRuleCount" class="muted">共 0 筆</p>
+        </div>
+        <div class="tableWrap"><table class="v20Table"><thead><tr><th>製程</th><th>尺寸級距</th><th>計價方式</th><th>原材 TWD</th><th>打樣 TWD</th><th>日期</th><th>來源</th><th>認證</th></tr></thead><tbody id="processPriceRuleRows"></tbody></table></div>
+      </div>
+
       <div class="panel priceReviewPanel">
         <div class="panelHead">
           <div>
-            <h2>3. 待認證歷史價格</h2>
+            <h2>4. 待認證歷史價格</h2>
             <p class="muted">新取得的估價先匯入這裡；可直接使用「IGS_近期價格待認證匯入.csv」。只有「已認證＋納入基準」才會參與智能估價。</p>
           </div>
           <div class="panelActions">
@@ -811,7 +822,7 @@
     <section id="smartEstimate" class="view">
       <div class="quickIntro estimateIntro">
         <div>
-          <span class="eyebrow">v2.2 · 貼文字快速估價＋分項價格指紋</span>
+          <span class="eyebrow">v2.6 · 嚴格材料配對＋製程成本拆分</span>
           <h2>貼上品項明細或上傳文件，自動拆尺寸、製程並產生低中高估價</h2>
           <p>AI 額度不足時仍可使用文字解析與內部價格規則；缺少的加工價格會清楚標示，不會當成免費。</p>
         </div>
@@ -910,7 +921,7 @@
             </label>
             <label class="checkboxField estimateAutoPriceOption">
               <input id="estimateAutoPriceMissing" type="checkbox" checked>
-              <span>先用內部規則自動試算；仍缺價才用 AI 補估</span>
+              <span>先用公司與內部規則試算；仍缺價才用免費 AI 依內部資料補估</span>
             </label>
           </div>
 
@@ -972,7 +983,7 @@
           </div>
           <div class="panelActions">
             <button id="addEstimateItem" class="button secondary" type="button">＋ 手動新增品項</button>
-            <button id="estimateMissingPrices" class="button secondary" type="button" disabled>AI 補估缺價</button>
+            <button id="estimateMissingPrices" class="button secondary" type="button" disabled>AI 依內部資料補估</button>
             <button id="recalculateEstimate" class="button ghost" type="button">重新計算</button>
           </div>
         </div>
@@ -1088,7 +1099,11 @@
 
   <datalist id="supplierOptions"></datalist>
   <datalist id="machineAreaOptions"></datalist>
+  <datalist id="estimatePrintMethodOptions"></datalist>
+  <datalist id="estimatePrintSideOptions"></datalist>
+  <datalist id="estimateWhiteInkOptions"></datalist>
+  <datalist id="estimateSpecialEffectOptions"></datalist>
   <script src="data.js?v=20260624-igs-v2-4"></script>
-  <script src="app.js?v=20260624-igs-v2-5-personal-ai"></script>
+  <script src="app.js?v=20260624-igs-v2-6-precise-estimate"></script>
 </body>
 </html>
