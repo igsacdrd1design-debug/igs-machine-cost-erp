@@ -1622,3 +1622,46 @@ td small { color: var(--muted); }
   .estimateSaveActions{flex-direction:column}
   .estimateSaveActions .button{width:100%}
 }
+
+/* v2.0.9 AI 缺價補估 */
+.estimateAutoPriceOption{
+  grid-column:1 / -1;
+  display:flex;
+  align-items:center;
+  gap:.55rem;
+  padding:.7rem .85rem;
+  border:1px solid rgba(41,95,111,.16);
+  border-radius:12px;
+  background:rgba(237,247,247,.72);
+}
+.estimateAutoPriceOption input{width:auto;margin:0}
+.estimatePriceState.ai{
+  color:#6a4a00;
+  background:#fff3cc;
+  border:1px solid #ebcf73;
+}
+
+
+/* v2.1 尺寸與繁中標準化摘要 */
+.estimateDimensionSummary{
+  display:flex;
+  flex-wrap:wrap;
+  gap:8px 14px;
+  padding:10px 12px;
+  border-top:1px solid var(--line);
+  background:#f7fbfa;
+  color:#385a60;
+  font-size:12px;
+}
+.estimateDimensionSummary.warning{background:#fff8e8;color:#7c5a16}
+.estimateDimensionSummary span{display:inline-flex;gap:4px;align-items:center}
+.estimateDimensionSummary .dimensionWarning{
+  flex-basis:100%;
+  color:#a4472f;
+  font-weight:700;
+}
+.estimateFieldGroup input[readonly]{background:#f1f4f3;color:#506268}
+@media(max-width:720px){
+  .estimateDimensionSummary{display:grid;grid-template-columns:1fr 1fr}
+  .estimateDimensionSummary .dimensionWarning{grid-column:1/-1}
+}

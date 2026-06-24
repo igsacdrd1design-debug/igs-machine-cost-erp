@@ -1,5 +1,5 @@
 // =====================================================
-// IGS 機台材料成本 ERP — 前端 v2.0.7
+// IGS 機台材料成本 ERP — 前端 v2.1.0
 // 1. ERP 密碼登入
 // 2. 工作階段驗證
 // 3. 私人 Google Sheet 安全讀取
@@ -51,6 +51,8 @@ let state = {
   estimateItems: [],
   artRecommendations: [],
   artSimulations: [],
+  termDictionary: [],
+  sizeRules: [],
   estimateDraftItems: [],
   currentMarketResearch: null,
   currentOptimization: null,
@@ -492,6 +494,8 @@ function resetPrivateState() {
   state.estimateItems = [];
   state.artRecommendations = [];
   state.artSimulations = [];
+  state.termDictionary = [];
+  state.sizeRules = [];
   state.estimateDraftItems = [];
   state.currentMarketResearch = null;
   state.currentOptimization = null;
@@ -2240,6 +2244,8 @@ async function loadData() {
     state.estimateItems = (Array.isArray(result.estimateItems) ? result.estimateItems : []).map(normalizeEstimateItem);
     state.artRecommendations = (Array.isArray(result.artRecommendations) ? result.artRecommendations : []).map(normalizeArtRecommendation);
     state.artSimulations = (Array.isArray(result.artSimulations) ? result.artSimulations : []).map(normalizeArtSimulation);
+    state.termDictionary = Array.isArray(result.termDictionary) ? result.termDictionary : [];
+    state.sizeRules = Array.isArray(result.sizeRules) ? result.sizeRules : [];
 
     populateControls();
     renderAll();
@@ -3092,7 +3098,22 @@ function normalizeEstimateItem(row) {
     allowMaterialOptimization: String(firstValue(row, ["允許材質優化", "allowMaterialOptimization"], "是")),
     allowPrintOptimization: String(firstValue(row, ["允許印刷優化", "allowPrintOptimization"], "是")),
     constraints: String(firstValue(row, ["不可變更條件", "constraints"])),
-    manualPrice: !String(firstValue(row, ["價格ID", "priceId"])) && toNumber(firstValue(row, ["基準單價", "baseUnitPrice"])) > 0 && /文件單價|人工輸入單價|機台實際成本/.test(String(firstValue(row, ["價格來源", "priceSource"]))),
+    originalName: String(firstValue(row, ["原始品名", "originalName"])),
+    normalizedName: String(firstValue(row, ["標準品名", "normalizedName", "品項名稱", "name"])),
+    originalMaterial: String(firstValue(row, ["原始材質", "originalMaterial"])),
+    normalizedMaterial: String(firstValue(row, ["標準材質", "normalizedMaterial", "材質", "material"])),
+    originalSpec: String(firstValue(row, ["原始規格", "originalSpec"])),
+    originalUnit: String(firstValue(row, ["原始尺寸單位", "originalUnit"], "mm")),
+    dimensionDetailsJson: String(firstValue(row, ["尺寸明細JSON", "dimensionDetailsJson"])),
+    exactAreaMm2: toNumber(firstValue(row, ["精確面積mm2", "exactAreaMm2"])),
+    singleExactTsai: toNumber(firstValue(row, ["單件精確才數", "singleExactTsai"])),
+    totalExactTsai: toNumber(firstValue(row, ["總精確才數", "totalExactTsai"])),
+    billingTsai: toNumber(firstValue(row, ["計價才數", "billingTsai"])),
+    sizeTier: String(firstValue(row, ["尺寸級距", "sizeTier"])),
+    dimensionStatus: String(firstValue(row, ["尺寸解析狀態", "dimensionStatus"])),
+    dimensionConfidence: toNumber(firstValue(row, ["尺寸信心度", "dimensionConfidence"])),
+    longStripWarning: String(firstValue(row, ["長條件提醒", "longStripWarning"])),
+    manualPrice: !String(firstValue(row, ["價格ID", "priceId"])) && toNumber(firstValue(row, ["基準單價", "baseUnitPrice"])) > 0 && /文件單價|人工輸入單價|機台實際成本|AI市場參考價/.test(String(firstValue(row, ["價格來源", "priceSource"]))),
     manualPriceConfidence: toNumber(firstValue(row, ["信心度", "confidenceScore"], 75)),
   };
 }
@@ -3159,6 +3180,7 @@ function setupV20() {
   $('newEstimate').addEventListener('click', resetEstimateEditor);
   $('loadMachineActualItems').addEventListener('click', loadActualItemsIntoEstimate);
   $('addEstimateItem').addEventListener('click', () => { state.estimateDraftItems.push(emptyEstimateItem()); renderEstimateDraft(); });
+  $('estimateMissingPrices').addEventListener('click', () => estimateMissingPricesWithAi({ manual: true }));
   $('recalculateEstimate').addEventListener('click', () => { recalculateAllEstimateItems(); renderEstimateDraft(); });
   $('estimateItemRows').addEventListener('input', handleEstimateItemInput);
   $('estimateItemRows').addEventListener('change', handleEstimateItemInput);
@@ -3458,6 +3480,101 @@ function useDocumentPriceForEstimate(item, unitPrice, confidence, fileName) {
   item.usageManuallySet = false;
 }
 
+
+const BUILTIN_TRADITIONAL_TERMS = Object.freeze({
+  '亚克力':'壓克力','压克力':'壓克力','奖杯':'獎盃','后方':'後方','镜面贴纸':'鏡面貼紙','透明贴纸':'透明貼紙',
+  '亚光贴纸':'亞光貼紙','折弯':'折彎','热折弯':'熱折彎','灯条':'燈條','机台':'機台','导光板':'導光板',
+  '背胶':'背膠','铣槽':'銑槽','铣沟':'銑溝','喷印':'噴印','满版白墨':'滿版白墨','局部白墨':'局部白墨',
+  '侧面':'側面','内部':'內部','档案名称':'檔案名稱','规格':'規格','数量':'數量','单价':'單價','备注':'備註'
+});
+const COMMON_TRADITIONAL_CHARS = Object.freeze({'机':'機','压':'壓','后':'後','奖':'獎','杯':'盃','镜':'鏡','贴':'貼','纸':'紙','灯':'燈','条':'條','铣':'銑','弯':'彎','喷':'噴','亚':'亞','胶':'膠','导':'導','侧':'側','内':'內','图':'圖','号':'號','层':'層','边':'邊','宽':'寬','长':'長','发':'發','门':'門','维':'維','护':'護','线':'線','钢':'鋼','铝':'鋁','铜':'銅','轴':'軸','齿':'齒','轮':'輪','电':'電','头':'頭','双':'雙','单':'單','数':'數','价':'價','费':'費','规':'規','项':'項','档':'檔','称':'稱','满':'滿','热':'熱','沟':'溝','体':'體','实':'實','总':'總','额':'額','质':'質','类':'類','组':'組','产':'產','买':'買','卖':'賣','区':'區','选':'選','别':'別','码':'碼','应':'應','该':'該','写':'寫','录':'錄','认':'認','证':'證','块':'塊','带':'帶','设':'設','备':'備','处':'處','间':'間','进':'進','过':'過','与':'與','为':'為'});
+
+function standardizeErpText(value){
+  let text=String(value||'');
+  const map={...BUILTIN_TRADITIONAL_TERMS};
+  (state.termDictionary||[]).forEach((row)=>{
+    const active=String(firstValue(row,['使用中','active'],'是'))!=='否';
+    const source=String(firstValue(row,['原始詞','source'])).trim();
+    const target=String(firstValue(row,['標準繁中詞','target'])).trim();
+    if(active&&source&&target)map[source]=target;
+  });
+  Object.keys(map).sort((a,b)=>b.length-a.length).forEach((source)=>{text=text.split(source).join(map[source]);});
+  return text.split('').map((char)=>COMMON_TRADITIONAL_CHARS[char]||char).join('').trim();
+}
+
+function dimensionMultiplier(unit){
+  const normalized=String(unit||'mm').toLowerCase().replace(/\s/g,'');
+  if(normalized==='cm'||normalized==='公分')return 10;
+  if(normalized==='m'||normalized==='公尺')return 1000;
+  if(normalized==='in'||normalized==='inch'||normalized==='吋')return 25.4;
+  return 1;
+}
+
+function parseDimensionDetails(text,fallbackUnit='mm'){
+  const source=String(text||'');
+  const globalUnitMatch=source.match(/(?:\/|單位[:：]?\s*)(mm|cm|m|in|inch|吋|公分|公尺)/i);
+  const globalUnit=globalUnitMatch?.[1]||fallbackUnit||'mm';
+  const groups=[];
+  const regex=/[W寬宽]?\s*(\d+(?:\.\d+)?)\s*(mm|cm|m|in|inch|吋|公分|公尺)?\s*[x×X*＊]\s*[H高]?\s*(\d+(?:\.\d+)?)\s*(mm|cm|m|in|inch|吋|公分|公尺)?/gi;
+  let match;
+  while((match=regex.exec(source))!==null){
+    const u1=match[2]||match[4]||globalUnit;
+    const u2=match[4]||match[2]||globalUnit;
+    const widthMm=Number(match[1])*dimensionMultiplier(u1);
+    const heightMm=Number(match[3])*dimensionMultiplier(u2);
+    if(widthMm>0&&heightMm>0)groups.push({widthMm,heightMm,qty:1,unit:u1,sourceText:match[0]});
+  }
+  return groups;
+}
+
+function summarizeEstimateDimensions(item){
+  let groups=[];
+  if(Array.isArray(item.dimensions))groups=item.dimensions.map((g)=>({widthMm:toNumber(g.widthMm)||toNumber(g.width)*dimensionMultiplier(g.unit||item.originalUnit),heightMm:toNumber(g.heightMm)||toNumber(g.height)*dimensionMultiplier(g.unit||item.originalUnit),qty:Math.max(1,toNumber(g.qty)||1),unit:g.unit||item.originalUnit||'mm',sourceText:g.sourceText||''})).filter((g)=>g.widthMm>0&&g.heightMm>0);
+  if(!groups.length)groups=parseDimensionDetails(item.originalSpec||item.spec,item.originalUnit||'mm');
+  if(!groups.length&&toNumber(item.widthMm)>0&&toNumber(item.heightMm)>0)groups=[{widthMm:toNumber(item.widthMm),heightMm:toNumber(item.heightMm),qty:1,unit:'mm',sourceText:'欄位'}];
+  if(!groups.length)return{groups:[],widthMm:0,heightMm:0,areaMm2:0,singleTsai:0,totalTsai:0,billingTsai:0,tier:'待確認',status:'待確認',confidence:0,longStrip:''};
+  let areaPerItem=0,maxWidth=0,maxHeight=0,maxAspect=1;
+  groups.forEach((g)=>{areaPerItem+=g.widthMm*g.heightMm*Math.max(1,toNumber(g.qty)||1);maxWidth=Math.max(maxWidth,g.widthMm);maxHeight=Math.max(maxHeight,g.heightMm);const min=Math.min(g.widthMm,g.heightMm);if(min>0)maxAspect=Math.max(maxAspect,Math.max(g.widthMm,g.heightMm)/min);});
+  const qty=Math.max(1,toNumber(item.qty)||1);
+  const singleTsai=areaPerItem/90000;
+  const totalTsai=singleTsai*qty;
+  let tier='面積才數',status=groups.length>1?'多組尺寸待確認':'已解析',longStrip='';
+  if(groups.length===1&&maxWidth<=100&&maxHeight<=100)tier='100×100最低價';
+  else if(groups.length===1&&maxWidth<=300&&maxHeight<=300)tier='300×300最低價';
+  else if(maxAspect>=4&&singleTsai<1){tier='長條件／需確認';status='待確認';longStrip=`長寬比 ${Math.round(maxAspect*10)/10}，請確認排版與最低加工費`;}
+  const billingTsai=(tier==='100×100最低價'||tier==='300×300最低價')?qty:Math.max(1,Math.ceil(totalTsai));
+  return{groups,widthMm:maxWidth,heightMm:maxHeight,areaMm2:areaPerItem*qty,singleTsai,totalTsai,billingTsai,tier,status,confidence:groups.length?95:0,longStrip};
+}
+
+function applyEstimateDimensionNormalization(item){
+  item.originalName=item.originalName||item.name||'';
+  item.normalizedName=standardizeErpText(item.normalizedName||item.name||item.originalName);
+  item.name=item.normalizedName;
+  item.originalMaterial=item.originalMaterial||item.material||'';
+  item.normalizedMaterial=standardizeErpText(item.normalizedMaterial||item.material||item.originalMaterial);
+  item.material=item.normalizedMaterial;
+  item.originalSpec=item.originalSpec||item.spec||'';
+  item.spec=standardizeErpText(item.spec||item.originalSpec);
+  item.printMethod=standardizeErpText(item.printMethod);
+  item.printSide=standardizeErpText(item.printSide);
+  item.whiteInk=standardizeErpText(item.whiteInk);
+  item.specialEffect=standardizeErpText(item.specialEffect);
+  const summary=summarizeEstimateDimensions(item);
+  item.dimensions=summary.groups;
+  item.dimensionDetailsJson=JSON.stringify(summary.groups);
+  item.widthMm=toNumber(item.widthMm)||summary.widthMm;
+  item.heightMm=toNumber(item.heightMm)||summary.heightMm;
+  item.exactAreaMm2=summary.areaMm2;
+  item.singleExactTsai=summary.singleTsai;
+  item.totalExactTsai=summary.totalTsai;
+  if(!item.billingTsaiManuallySet)item.billingTsai=summary.billingTsai;
+  item.sizeTier=item.sizeTier||summary.tier;
+  item.dimensionStatus=item.dimensionStatus||summary.status;
+  item.dimensionConfidence=toNumber(item.dimensionConfidence)||summary.confidence;
+  item.longStripWarning=item.longStripWarning||summary.longStrip;
+  return item;
+}
+
 function mapAiEstimateItem(raw, strategy, fileName) {
   const spec = String(raw.spec || '').trim();
   const parsedDimensions = parseDimensions(spec);
@@ -3467,8 +3584,17 @@ function mapAiEstimateItem(raw, strategy, fileName) {
   const item = {
     ...emptyEstimateItem(),
     code: String(raw.code || raw.fileName || '').trim(),
-    name: String(raw.name || '').trim(),
-    material: String(raw.material || '').trim(),
+    originalName: String(raw.originalName || raw.name || '').trim(),
+    normalizedName: String(raw.normalizedName || raw.name || '').trim(),
+    name: String(raw.normalizedName || raw.name || '').trim(),
+    originalMaterial: String(raw.originalMaterial || raw.material || '').trim(),
+    normalizedMaterial: String(raw.normalizedMaterial || raw.material || '').trim(),
+    material: String(raw.normalizedMaterial || raw.material || '').trim(),
+    originalSpec: String(raw.originalSpec || raw.spec || '').trim(),
+    originalUnit: String(raw.originalUnit || raw.sizeUnit || 'mm').trim(),
+    dimensions: Array.isArray(raw.dimensions) ? raw.dimensions : [],
+    dimensionStatus: String(raw.dimensionStatus || '').trim(),
+    dimensionConfidence: normalizeAiConfidence(raw.dimensionConfidence, 75),
     spec,
     thickness: String(raw.thickness || '').trim(),
     qty,
@@ -3483,6 +3609,7 @@ function mapAiEstimateItem(raw, strategy, fileName) {
     confidenceScore: normalizeAiConfidence(raw.confidence, 60),
   };
 
+  applyEstimateDimensionNormalization(item);
   const matchedPrice = bestMaterialPriceForItem(item);
   if (strategy === 'document_first' && visibleUnitPrice > 0) {
     useDocumentPriceForEstimate(item, visibleUnitPrice, raw.confidence, fileName);
@@ -3539,9 +3666,10 @@ function applyEstimateSourceAnalysis(result) {
   const missing = imported.filter((item) => !item.priceId && !item.manualPrice && toNumber(item.baseUnitPrice) <= 0).length;
   $('estimateAiBadge').textContent = 'AI 已帶入';
   setEstimateAiStatus(
-    `已帶入 ${imported.length} 筆：公司價格配對 ${companyMatched} 筆、文件單價 ${documentPriced} 筆、待補價格 ${missing} 筆。請人工確認後再儲存。`,
+    `已帶入 ${imported.length} 筆：公司價格配對 ${companyMatched} 筆、文件單價 ${documentPriced} 筆、待補價格 ${missing} 筆。`,
     missing ? 'warn' : 'success'
   );
+  return { imported: imported.length, companyMatched, documentPriced, missing };
 }
 
 async function analyzeEstimateSourceDocument() {
@@ -3560,8 +3688,17 @@ async function analyzeEstimateSourceDocument() {
       action: 'analyzeEstimateDocument',
       document: stripDataUrl(state.estimateDocumentPayload),
     }, { includeToken: true, timeoutMs: 240000 });
-    applyEstimateSourceAnalysis(response.result || {});
-    showNotice('AI 已帶入估價明細並完成自動計算；請檢查缺價與辨識內容。', 'success');
+    const summary = applyEstimateSourceAnalysis(response.result || {});
+    if (summary.missing > 0 && $('estimateAutoPriceMissing')?.checked && $('estimatePriceStrategy').value !== 'company_only') {
+      await estimateMissingPricesWithAi({ automatic: true });
+    } else {
+      showNotice(
+        summary.missing > 0
+          ? `AI 已辨識 ${summary.imported} 筆，但仍有 ${summary.missing} 筆缺價。可按「AI 補估缺價」或輸入公司價格。`
+          : 'AI 已帶入估價明細並完成試算；請人工確認後再儲存。',
+        summary.missing > 0 ? 'warn' : 'success'
+      );
+    }
   } catch (error) {
     $('estimateAiBadge').textContent = '分析失敗';
     setEstimateAiStatus(`AI 偵測失敗：${error.message}`, 'error');
@@ -3572,7 +3709,125 @@ async function analyzeEstimateSourceDocument() {
   }
 }
 
-function emptyEstimateItem(){return{code:'',name:'',material:'',spec:'',thickness:'',qty:1,unit:'',widthMm:0,heightMm:0,usage:1,wasteRate:10,priceId:'',baseUnitPrice:0,manualPrice:false,manualPriceConfidence:75,marketAdjustment:0,marketManuallySet:false,processingFee:0,otherFee:0,optimisticCost:0,baselineCost:0,conservativeCost:0,priceSource:'',confidenceScore:50,printMethod:'',printSide:'',whiteInk:'',specialEffect:'',isArtItem:'是',allowMaterialOptimization:'是',allowPrintOptimization:'是',constraints:''};}
+
+function missingEstimateItems(){
+  return state.estimateDraftItems
+    .map((item, clientIndex) => ({ item, clientIndex }))
+    .filter(({ item }) => item.name && !item.priceId && !item.manualPrice && toNumber(item.baseUnitPrice) <= 0);
+}
+
+function aiPriceConfidenceScore(value){
+  const text = String(value || '').trim();
+  if (text === '高') return 82;
+  if (text === '中') return 64;
+  if (text === '低') return 42;
+  return normalizeAiConfidence(value, 50);
+}
+
+async function estimateMissingPricesWithAi(options = {}){
+  const missing = missingEstimateItems();
+  if (!missing.length) {
+    if (options.manual) showNotice('目前沒有待補價格的品項。', 'success');
+    return { priced: 0, missing: 0 };
+  }
+
+  const button = $('estimateMissingPrices');
+  const analyzeButton = $('analyzeEstimateSource');
+  const oldButtonText = button?.textContent || 'AI 補估缺價';
+  if (button) {
+    button.disabled = true;
+    button.textContent = 'AI 估價中…';
+  }
+  if (options.automatic && analyzeButton) analyzeButton.disabled = true;
+
+  $('estimateAiBadge').textContent = 'AI 補估中';
+  setEstimateAiStatus(
+    `正在為 ${missing.length} 筆缺價品項查找公司相似價格與網路市場參考。結果屬預估，仍需人工確認。`,
+    'loading'
+  );
+
+  try {
+    const response = await secureApiRequest({
+      action: 'estimateMissingItemPrices',
+      items: missing.map(({ item, clientIndex }) => ({
+        clientIndex,
+        code: item.code,
+        name: item.name,
+        material: item.material,
+        thickness: item.thickness,
+        spec: item.spec,
+        widthMm: item.widthMm,
+        heightMm: item.heightMm,
+        qty: item.qty,
+        unit: item.unit,
+        printMethod: item.printMethod,
+        printSide: item.printSide,
+        whiteInk: item.whiteInk,
+        specialEffect: item.specialEffect,
+      })),
+    }, { includeToken: true, timeoutMs: 180000 });
+
+    const estimates = Array.isArray(response.result?.items) ? response.result.items : [];
+    let priced = 0;
+    const failedNotes = [];
+
+    estimates.forEach((result) => {
+      const index = Number(result.clientIndex);
+      const item = state.estimateDraftItems[index];
+      const unitPrice = Math.max(0, toNumber(result.estimatedUnitPrice));
+      if (!item || unitPrice <= 0) {
+        if (result?.reason) failedNotes.push(String(result.reason));
+        return;
+      }
+      item.manualPrice = true;
+      item.manualPriceConfidence = aiPriceConfidenceScore(result.confidence);
+      item.priceId = '';
+      item.baseUnitPrice = unitPrice;
+      item.priceSource = `AI市場參考價｜${String(result.basis || '依材質、尺寸與近期市場資訊估算').trim()}`;
+      item.marketAdjustment = 0;
+      item.marketManuallySet = true;
+      item.usage = Math.max(1, toNumber(item.qty));
+      item.usageManuallySet = true;
+      item.wasteRate = 0;
+      item.processingFee = 0;
+      recalculateEstimateItem(item);
+      priced += 1;
+    });
+
+    renderEstimateDraft();
+    const remaining = missingEstimateItems().length;
+    $('estimateAiBadge').textContent = remaining ? '部分已估價' : 'AI 已完成估價';
+    setEstimateAiStatus(
+      `AI 已補估 ${priced} 筆，尚有 ${remaining} 筆待補。AI 市場參考價不是正式供應商報價，請確認後再儲存。`,
+      remaining ? 'warn' : 'success'
+    );
+
+    if (priced) {
+      showNotice(
+        remaining
+          ? `已產生 ${priced} 筆 AI 參考價，仍有 ${remaining} 筆資料不足。`
+          : `已產生 ${priced} 筆 AI 參考價並完成三段試算。`,
+        remaining ? 'warn' : 'success'
+      );
+    } else {
+      showNotice(`AI 無法可靠估價。${failedNotes[0] ? ` ${failedNotes[0]}` : '請補充公司價格或人工單價。'}`, 'warn');
+    }
+    return { priced, missing: remaining };
+  } catch (error) {
+    $('estimateAiBadge').textContent = '補估失敗';
+    setEstimateAiStatus(`AI 補估價格失敗：${error.message}`, 'error');
+    showNotice(`AI 補估價格失敗：${error.message}。原本辨識明細仍保留，可人工輸入單價。`, 'error');
+    return { priced: 0, missing: missing.length, error };
+  } finally {
+    if (button) {
+      button.textContent = oldButtonText;
+      button.disabled = missingEstimateItems().length === 0;
+    }
+    if (options.automatic && analyzeButton) analyzeButton.disabled = !state.estimateDocumentPayload;
+  }
+}
+
+function emptyEstimateItem(){return{code:'',name:'',originalName:'',normalizedName:'',material:'',originalMaterial:'',normalizedMaterial:'',spec:'',originalSpec:'',originalUnit:'mm',dimensions:[],dimensionDetailsJson:'',thickness:'',qty:1,unit:'',widthMm:0,heightMm:0,exactAreaMm2:0,singleExactTsai:0,totalExactTsai:0,billingTsai:0,billingTsaiManuallySet:false,sizeTier:'待確認',dimensionStatus:'待確認',dimensionConfidence:0,longStripWarning:'',usage:1,wasteRate:10,priceId:'',baseUnitPrice:0,manualPrice:false,manualPriceConfidence:75,marketAdjustment:0,marketManuallySet:false,processingFee:0,otherFee:0,optimisticCost:0,baselineCost:0,conservativeCost:0,priceSource:'',confidenceScore:50,printMethod:'',printSide:'',whiteInk:'',specialEffect:'',isArtItem:'是',allowMaterialOptimization:'是',allowPrintOptimization:'是',constraints:''};}
 
 function bestMaterialPriceForItem(item){
   const active=state.materialPrices.filter((p)=>p.active!=='否');
@@ -3587,11 +3842,13 @@ function latestMarketAdjustment(material, category){
 
 function estimateUsage(item, price){
   if(toNumber(item.usage)>0&&item.usageManuallySet)return toNumber(item.usage);
-  const qty=Math.max(0,toNumber(item.qty));const areaM2=Math.max(0,toNumber(item.widthMm))*Math.max(0,toNumber(item.heightMm))/1_000_000*qty;
+  applyEstimateDimensionNormalization(item);
+  const qty=Math.max(0,toNumber(item.qty));
+  const areaM2=toNumber(item.exactAreaMm2)/1_000_000;
   const unit=price?.unit||item.unit||'件';let usage=qty;
   if(unit.includes('平方公尺'))usage=areaM2;
   else if(unit.includes('平方公分'))usage=areaM2*10000;
-  else if(unit.includes('才'))usage=areaM2/0.091809;
+  else if(unit.includes('才'))usage=toNumber(item.billingTsai)||toNumber(item.totalExactTsai)||1;
   else if(unit.includes('公尺'))usage=Math.max(toNumber(item.widthMm),toNumber(item.heightMm))/1000*qty;
   return usage||qty||1;
 }
@@ -3599,6 +3856,7 @@ function estimateUsage(item, price){
 function confidenceScoreForPrice(price){if(!price)return 25;let score=price.confidence==='高'?90:price.confidence==='中'?70:45;const ageDays=price.priceDate?(Date.now()-dateValue(price.priceDate))/86400000:999;if(ageDays>365)score-=25;else if(ageDays>180)score-=15;else if(ageDays>90)score-=7;if(price.source==='網路參考')score-=20;if(price.source==='公司成交價')score+=5;return Math.max(15,Math.min(98,score));}
 
 function recalculateEstimateItem(item){
+  applyEstimateDimensionNormalization(item);
   const useManualPrice = Boolean(item.manualPrice && toNumber(item.baseUnitPrice) > 0);
   const price = useManualPrice ? null : (state.materialPrices.find((p)=>p.id===item.priceId) || bestMaterialPriceForItem(item));
   if(price&&!item.priceId)item.priceId=price.id;
@@ -3658,8 +3916,9 @@ function renderEstimateDraft(){
 
   $('estimateItemRows').innerHTML=state.estimateDraftItems.map((item,index)=>{
     const hasPrice=Boolean(item.priceId || item.manualPrice || toNumber(item.baseUnitPrice)>0);
-    const priceState=hasPrice ? (item.priceId ? '公司價格' : '文件／人工價格') : '待補價格';
-    const priceClass=hasPrice ? 'ready' : 'missing';
+    const aiReferencePrice=/AI市場參考價/.test(item.priceSource||'');
+    const priceState=hasPrice ? (item.priceId ? '公司價格' : (aiReferencePrice ? 'AI參考價' : '文件／人工價格')) : '待補價格';
+    const priceClass=hasPrice ? (aiReferencePrice ? 'ai' : 'ready') : 'missing';
     return `<article class="estimateQuickCard" data-estimate-index="${index}">
       <header class="estimateQuickCardHead">
         <div class="estimateQuickTitle">
@@ -3685,16 +3944,33 @@ function renderEstimateDraft(){
         <label><span>單價</span><input class="tableInput numberInput manualPriceInput" data-estimate-field="baseUnitPrice" type="number" min="0" step="0.01" value="${roundDisplay(item.baseUnitPrice)}" placeholder="待配對"></label>
       </div>
 
+      <div class="estimateDimensionSummary ${item.dimensionStatus==='待確認'?'warning':''}">
+        <span><strong>繁中：</strong>${escapeHTML(item.normalizedName||item.name||'—')}</span>
+        <span><strong>尺寸：</strong>${item.widthMm&&item.heightMm?`${roundDisplay(item.widthMm)} × ${roundDisplay(item.heightMm)} mm`:'待確認'}</span>
+        <span><strong>級距：</strong>${escapeHTML(item.sizeTier||'待確認')}</span>
+        <span><strong>精確才數：</strong>${roundDisplay(item.totalExactTsai||0)}</span>
+        <span><strong>建議計價才數：</strong>${roundDisplay(item.billingTsai||0)}</span>
+        <span><strong>尺寸信心：</strong>${Math.round(toNumber(item.dimensionConfidence)||0)}%</span>
+        ${item.longStripWarning?`<span class="dimensionWarning">${escapeHTML(item.longStripWarning)}</span>`:''}
+      </div>
+
       <details class="estimateItemAdvanced">
         <summary>進階設定：公司價格、用量損耗、加工與印刷條件</summary>
         <div class="estimateAdvancedGrid">
           <section class="estimateFieldGroup">
-            <h4>代碼與尺寸</h4>
+            <h4>代碼與尺寸標準化</h4>
             <label><span>品項代碼</span><input class="tableInput" data-estimate-field="code" value="${escapeHTML(item.code)}" placeholder="品項代碼／檔名"></label>
+            <label><span>原始品名</span><input class="tableInput" data-estimate-field="originalName" value="${escapeHTML(item.originalName)}" placeholder="保留簡體或來源原文"></label>
+            <label><span>原始規格</span><input class="tableInput" data-estimate-field="originalSpec" value="${escapeHTML(item.originalSpec)}" placeholder="來源文件尺寸文字"></label>
             <div class="inlineFields">
               <label><span>寬 mm</span><input class="tableInput numberInput" data-estimate-field="widthMm" type="number" min="0" step="0.1" value="${item.widthMm||''}"></label>
               <label><span>高 mm</span><input class="tableInput numberInput" data-estimate-field="heightMm" type="number" min="0" step="0.1" value="${item.heightMm||''}"></label>
             </div>
+            <div class="inlineFields">
+              <label><span>精確才數</span><input class="tableInput numberInput" value="${roundDisplay(item.totalExactTsai)}" readonly></label>
+              <label><span>計價才數</span><input class="tableInput numberInput" data-estimate-field="billingTsai" type="number" min="0" step="0.01" value="${roundDisplay(item.billingTsai)}"></label>
+            </div>
+            <label><span>尺寸級距</span><input class="tableInput" value="${escapeHTML(item.sizeTier||'待確認')}" readonly></label>
           </section>
 
           <section class="estimateFieldGroup">
@@ -3749,6 +4025,7 @@ function updateEstimateQuickMetrics(){
   if($('estimateItemCount'))$('estimateItemCount').textContent=String(items.length);
   if($('estimateMatchedCount'))$('estimateMatchedCount').textContent=String(matched);
   if($('estimateMissingCount'))$('estimateMissingCount').textContent=String(missing);
+  if($('estimateMissingPrices'))$('estimateMissingPrices').disabled=missing===0;
 }
 
 function roundDisplay(value){const n=toNumber(value);return Math.round(n*10000)/10000;}
@@ -3758,9 +4035,10 @@ function handleEstimateItemInput(event){
   const row=event.target.closest('[data-estimate-index]'); if(!row)return;
   const index=Number(row.dataset.estimateIndex); const item=state.estimateDraftItems[index]; const field=event.target.dataset.estimateField; if(!item||!field)return;
   if(event.target.type==='checkbox') item[field]=event.target.checked?'是':'否';
-  else if(['qty','widthMm','heightMm','usage','wasteRate','marketAdjustment','processingFee','otherFee','baseUnitPrice'].includes(field)) item[field]=toNumber(event.target.value);
+  else if(['qty','widthMm','heightMm','billingTsai','usage','wasteRate','marketAdjustment','processingFee','otherFee','baseUnitPrice'].includes(field)) item[field]=toNumber(event.target.value);
   else item[field]=event.target.value;
   if(field==='usage') item.usageManuallySet=true;
+  if(field==='billingTsai') item.billingTsaiManuallySet=true;
   if(field==='marketAdjustment') item.marketManuallySet=true;
   if(field==='baseUnitPrice'){
     item.manualPrice=toNumber(item.baseUnitPrice)>0;
@@ -3775,10 +4053,26 @@ function handleEstimateItemInput(event){
     item.manualPrice=false;
     if(p){item.baseUnitPrice=p.basePrice;item.priceSource=[p.name,p.thickness,p.supplier,p.priceDate].filter(Boolean).join('｜');item.usageManuallySet=false;item.marketManuallySet=false;}
   }
+  if(['name','material','spec','originalName','originalMaterial','originalSpec','widthMm','heightMm','qty'].includes(field)){
+    if(field==='name') item.normalizedName=standardizeErpText(item.name);
+    if(field==='material') item.normalizedMaterial=standardizeErpText(item.material);
+    if(field==='spec'){
+      item.originalSpec=item.originalSpec||item.spec;
+      item.dimensions=[];item.sizeTier='';item.dimensionStatus='';item.longStripWarning='';item.billingTsaiManuallySet=false;
+    }
+    if(['widthMm','heightMm'].includes(field)){
+      item.sizeTier='';item.dimensionStatus='';item.longStripWarning='';item.billingTsaiManuallySet=false;
+      item.dimensions=(toNumber(item.widthMm)>0&&toNumber(item.heightMm)>0)
+        ? [{widthMm:toNumber(item.widthMm),heightMm:toNumber(item.heightMm),qty:1,unit:'mm',sourceText:'人工調整'}]
+        : [];
+    }
+    if(field==='qty'){item.sizeTier='';item.dimensionStatus='';item.longStripWarning='';}
+    applyEstimateDimensionNormalization(item);
+  }
   recalculateEstimateItem(item);
   updateEstimateRowSummary(row,item);
   updateEstimateTotals();
-  if(event.type==='change' && ['priceId','baseUnitPrice','material','thickness','spec','unit'].includes(field)) renderEstimateDraft();
+  if(event.type==='change' && ['priceId','baseUnitPrice','material','thickness','spec','unit','originalName','originalSpec','widthMm','heightMm','billingTsai'].includes(field)) renderEstimateDraft();
 }
 
 function updateEstimateRowSummary(row,item){
@@ -3819,8 +4113,8 @@ function updateEstimateTargetMode(){
   if($('loadMachineActualItems')) $('loadMachineActualItems').hidden=!isExisting;
 }
 
-function parseDimensions(text){const match=String(text||'').match(/[W寬]?\s*(\d+(?:\.\d+)?)\s*[x×X*]\s*[H高]?\s*(\d+(?:\.\d+)?)/i);return match?{widthMm:Number(match[1]),heightMm:Number(match[2])}:{widthMm:0,heightMm:0};}
-function loadActualItemsIntoEstimate(){const machineId=$('estimateMachine').value;if(!machineId){showNotice('請先選擇機台。','warn');return;}const orderIds=state.costOrders.filter((o)=>o.machineId===machineId&&o.type==='實際費用').map((o)=>o.id);const items=state.costItems.filter((i)=>orderIds.includes(i.costOrderId)&&i.itemType!=='附加費用');if(!items.length){showNotice('這台機台尚無實際費用品項。','warn');return;}state.estimateDraftItems=items.map((i)=>{const d=parseDimensions(i.spec);return{...emptyEstimateItem(),code:i.fileName||'',name:i.name,material:i.material,spec:i.spec,thickness:i.thickness,qty:i.qty||1,unit:i.unit||'件',widthMm:d.widthMm,heightMm:d.heightMm,baseUnitPrice:i.price,manualPrice:true,manualPriceConfidence:85,wasteRate:0,marketAdjustment:0,marketManuallySet:true,priceSource:'機台實際成本',confidenceScore:85};});const m=machineById(machineId);if(!$('estimateName').value)$('estimateName').value=`${m?.name||machineId} 美術材料估價`;renderEstimateDraft();showNotice(`已載入 ${items.length} 筆實際費用品項。`,'success');}
+function parseDimensions(text){const groups=parseDimensionDetails(text,'mm');return groups.length?{widthMm:groups[0].widthMm,heightMm:groups[0].heightMm}:{widthMm:0,heightMm:0};}
+function loadActualItemsIntoEstimate(){const machineId=$('estimateMachine').value;if(!machineId){showNotice('請先選擇機台。','warn');return;}const orderIds=state.costOrders.filter((o)=>o.machineId===machineId&&o.type==='實際費用').map((o)=>o.id);const items=state.costItems.filter((i)=>orderIds.includes(i.costOrderId)&&i.itemType!=='附加費用');if(!items.length){showNotice('這台機台尚無實際費用品項。','warn');return;}state.estimateDraftItems=items.map((i)=>{const d=parseDimensions(i.spec);return applyEstimateDimensionNormalization({...emptyEstimateItem(),code:i.fileName||'',originalName:i.name,normalizedName:standardizeErpText(i.name),name:standardizeErpText(i.name),originalMaterial:i.material,normalizedMaterial:standardizeErpText(i.material),material:standardizeErpText(i.material),originalSpec:i.spec,spec:standardizeErpText(i.spec),thickness:i.thickness,qty:i.qty||1,unit:i.unit||'件',widthMm:d.widthMm,heightMm:d.heightMm,baseUnitPrice:i.price,manualPrice:true,manualPriceConfidence:85,wasteRate:0,marketAdjustment:0,marketManuallySet:true,priceSource:'機台實際成本',confidenceScore:85});});const m=machineById(machineId);if(!$('estimateName').value)$('estimateName').value=`${m?.name||machineId} 美術材料估價`;renderEstimateDraft();showNotice(`已載入 ${items.length} 筆實際費用品項。`,'success');}
 
 function resetEstimateEditor(){state.currentEstimateId='';state.estimateDraftItems=[];$('estimateProjectForm').reset();$('estimateId').value='';$('estimateTargetType').value='new';$('estimateVersion').value='V1';$('estimateDate').value=todayValue();$('estimateStatus').value='草稿';clearEstimateSourceDocument();updateEstimateTargetMode();renderEstimateDraft();}
 function loadEstimateProject(id){const project=state.estimateProjects.find((p)=>p.id===id);if(!project)return;state.currentEstimateId=id;$('estimateId').value=id;$('estimateTargetType').value=project.machineId?'existing':'new';$('estimateMachine').value=project.machineId;$('estimateName').value=project.name;$('estimateVersion').value=project.version;$('estimateDate').value=project.date;$('estimateStatus').value=project.status;$('estimateNote').value=project.note;state.estimateDraftItems=state.estimateItems.filter((i)=>i.estimateId===id).map((i)=>({...i,usageManuallySet:true,marketManuallySet:true}));updateEstimateTargetMode();renderEstimateDraft();document.querySelector('[data-view="smartEstimate"]')?.click();}

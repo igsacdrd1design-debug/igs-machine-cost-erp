@@ -8,7 +8,7 @@
   <meta name="googlebot" content="noindex, nofollow, noarchive, nosnippet">
   <meta name="referrer" content="no-referrer">
   <title>IGS 機台材料成本 ERP</title>
-  <link rel="stylesheet" href="style.css?v=20260623-igs-v2-0-8">
+  <link rel="stylesheet" href="style.css?v=20260624-igs-v2-1-0">
 </head>
 <body class="authLocked">
   <section id="authGate" class="authGate" aria-labelledby="loginTitle">
@@ -711,9 +711,9 @@
     <section id="smartEstimate" class="view">
       <div class="quickIntro estimateIntro">
         <div>
-          <span class="eyebrow">v2.0.8 · 快速智能估價</span>
-          <h2>上傳文件，AI 帶入明細並立即試算</h2>
-          <p>先完成最少必要資料；尺寸、損耗、印刷與降本條件可在需要時再展開調整。</p>
+          <span class="eyebrow">v2.1 · 尺寸標準化＋繁中智能估價</span>
+          <h2>AI 轉繁中、拆長寬、換算 mm 與才數後立即試算</h2>
+          <p>保留來源原文，同時建立繁中標準品名、寬高尺寸、價格級距與精確才數。</p>
         </div>
         <div id="estimateStatusBadge" class="apiBadge">尚未建立估價</div>
       </div>
@@ -800,6 +800,10 @@
                 <option value="append">附加到目前明細</option>
               </select>
             </label>
+            <label class="checkboxField estimateAutoPriceOption">
+              <input id="estimateAutoPriceMissing" type="checkbox" checked>
+              <span>辨識後自動用 AI 補估缺價品項</span>
+            </label>
           </div>
 
           <div class="formActions estimateAiActions">
@@ -819,10 +823,11 @@
         <div class="panelHead estimateWorkspaceHead">
           <div>
             <h2>3. 快速試算明細</h2>
-            <p class="muted">先確認品項、材質、數量與單價；其他設定收在「進階設定」。</p>
+            <p class="muted">先確認繁中品名、材質、尺寸、數量與單價；系統自動顯示尺寸級距及才數。</p>
           </div>
           <div class="panelActions">
             <button id="addEstimateItem" class="button secondary" type="button">＋ 手動新增品項</button>
+            <button id="estimateMissingPrices" class="button secondary" type="button" disabled>AI 補估缺價</button>
             <button id="recalculateEstimate" class="button ghost" type="button">重新計算</button>
           </div>
         </div>
@@ -912,7 +917,7 @@
 
   <datalist id="supplierOptions"></datalist>
   <datalist id="machineAreaOptions"></datalist>
-  <script src="data.js?v=20260623-igs-v2-0-8"></script>
-  <script src="app.js?v=20260623-igs-v2-0-8"></script>
+  <script src="data.js?v=20260624-igs-v2-1-0"></script>
+  <script src="app.js?v=20260624-igs-v2-1-0"></script>
 </body>
 </html>
