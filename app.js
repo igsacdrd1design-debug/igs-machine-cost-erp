@@ -1,5 +1,5 @@
 // =====================================================
-// IGS 機台材料成本 ERP — 前端 v2.7 場景估價＋歷史組合包價
+// IGS 機台材料成本 ERP — 前端 v2.9 已確認函數基準版
 // 1. ERP 密碼登入
 // 2. 工作階段驗證
 // 3. 私人 Google Sheet 安全讀取
@@ -60,39 +60,39 @@ const pageDescriptions = {
   suppliers: "查看供應商與成本單金額。",
   machine360Setup: "上傳一至四張基準角度圖，使用 AI 補中間角度並建立可旋轉的主管成本頁。",
   priceCenter: "管理公司材料價格並查詢網路市場浮動。",
-  smartEstimate: "AI 讀取圖片或 PDF；可切換中國量產、台灣打樣與原材料場景，並優先套用歷史組合包價。",
+  smartEstimate: "AI 讀取圖片或 PDF；依使用者確認的面積、100×100、300×300基準規則估價，並可切換台灣打樣、中國打樣、中國量產與原材料場景。",
   artOptimization: "僅針對美術材料與印刷製程提出降本及視覺概念模擬。",
 };
 
 
 const BUILTIN_INTERNAL_PRICE_RULES = Object.freeze([
-  ["材料","透明壓克力",12,"100×100最低價","固定最低價",320,320],
-  ["材料","透明壓克力",12,"300×300最低價","固定最低價",580,580],
-  ["材料","透明壓克力",12,"面積才數","每才",303.7189333,303.7189333],
-  ["材料","透明壓克力",8,"100×100最低價","固定最低價",190,190],
-  ["材料","透明壓克力",8,"300×300最低價","固定最低價",340,340],
-  ["材料","透明壓克力",8,"面積才數","每才",178.0421333,178.0421333],
-  ["材料","透明壓克力",5,"100×100最低價","固定最低價",120,240],
-  ["材料","透明壓克力",5,"300×300最低價","固定最低價",210,420],
-  ["材料","透明壓克力",5,"面積才數","每才",109.9672,219.9344],
-  ["材料","透明壓克力",3,"100×100最低價","固定最低價",70,91],
-  ["材料","透明壓克力",3,"300×300最低價","固定最低價",126,163.8],
-  ["材料","透明壓克力",3,"面積才數","每才",65.98032,85.774416],
-  ["材料","PVC",1,"100×100最低價","固定最低價",50,50],
-  ["材料","PVC",1,"300×300最低價","固定最低價",84,84],
-  ["材料","PVC",1,"面積才數","每才",43.98688,43.98688],
-  ["材料","安迪板",5,"100×100最低價","固定最低價",20,20],
-  ["材料","安迪板",5,"300×300最低價","固定最低價",40,40],
-  ["材料","安迪板",5,"面積才數","每才",20.94613333,20.94613333],
-  ["材料","亞光貼紙",0,"100×100最低價","固定最低價",40,40],
-  ["材料","亞光貼紙",0,"300×300最低價","固定最低價",66,66],
-  ["材料","亞光貼紙",0,"面積才數","每才",34.56112,34.56112],
-  ["材料","透明貼紙",0,"100×100最低價","固定最低價",40,40],
-  ["材料","透明貼紙",0,"300×300最低價","固定最低價",66,66],
-  ["材料","透明貼紙",0,"面積才數","每才",34.56112,34.56112],
-  ["材料","鏡面貼紙",0,"100×100最低價","固定最低價",70,70],
-  ["材料","鏡面貼紙",0,"300×300最低價","固定最低價",118,118],
-  ["材料","鏡面貼紙",0,"面積才數","每才",61.79109933,61.79109933],
+  ["材料","透明壓克力",12,"100×100最低價","固定最低價",320,320,71,22,"壓克力"],
+  ["材料","透明壓克力",12,"300×300最低價","固定最低價",580,580,129,39,"壓克力"],
+  ["材料","透明壓克力",12,"面積才數","每才",303.7189333,303.7189333,67,20,"壓克力"],
+  ["材料","透明壓克力",8,"100×100最低價","固定最低價",190,190,42,13,"壓克力"],
+  ["材料","透明壓克力",8,"300×300最低價","固定最低價",340,340,76,23,"壓克力"],
+  ["材料","透明壓克力",8,"面積才數","每才",178.0421333,178.0421333,40,12,"壓克力"],
+  ["材料","透明壓克力",5,"100×100最低價","固定最低價",120,240,53,16,"壓克力"],
+  ["材料","透明壓克力",5,"300×300最低價","固定最低價",210,420,93,28,"壓克力"],
+  ["材料","透明壓克力",5,"面積才數","每才",109.9672,219.9344,49,15,"壓克力"],
+  ["材料","透明壓克力",3,"100×100最低價","固定最低價",70,91,20,6,"壓克力"],
+  ["材料","透明壓克力",3,"300×300最低價","固定最低價",126,163.8,36,11,"壓克力"],
+  ["材料","透明壓克力",3,"面積才數","每才",65.98032,85.774416,19,6,"壓克力"],
+  ["材料","PVC",1,"100×100最低價","固定最低價",50,50,11,3,"PVC"],
+  ["材料","PVC",1,"300×300最低價","固定最低價",84,84,19,6,"PVC"],
+  ["材料","PVC",1,"面積才數","每才",43.98688,43.98688,10,3,"PVC"],
+  ["材料","安迪板",5,"100×100最低價","固定最低價",20,20,4,1,"安迪板"],
+  ["材料","安迪板",5,"300×300最低價","固定最低價",40,40,9,3,"安迪板"],
+  ["材料","安迪板",5,"面積才數","每才",20.94613333,20.94613333,5,2,"安迪板"],
+  ["材料","亞光貼紙",0,"100×100最低價","固定最低價",40,40,9,3,"貼紙"],
+  ["材料","亞光貼紙",0,"300×300最低價","固定最低價",66,66,15,5,"貼紙"],
+  ["材料","亞光貼紙",0,"面積才數","每才",34.56112,34.56112,8,2,"貼紙"],
+  ["材料","透明貼紙",0,"100×100最低價","固定最低價",40,40,9,3,"貼紙"],
+  ["材料","透明貼紙",0,"300×300最低價","固定最低價",66,66,15,5,"貼紙"],
+  ["材料","透明貼紙",0,"面積才數","每才",34.56112,34.56112,8,2,"貼紙"],
+  ["材料","鏡面貼紙",0,"100×100最低價","固定最低價",70,70,16,5,"貼紙"],
+  ["材料","鏡面貼紙",0,"300×300最低價","固定最低價",118,118,26,8,"貼紙"],
+  ["材料","鏡面貼紙",0,"面積才數","每才",61.79109933,61.79109933,14,4,"貼紙"],
   ["印刷加工","四色印刷＋白",0,"100×100最低價","固定最低價",0,110,24,7,"印刷"],
   ["印刷加工","四色印刷＋白",0,"300×300最低價","固定最低價",0,200,44,13,"印刷"],
   ["印刷加工","四色印刷＋白",0,"面積才數","每才",0,104.7306667,23,7,"印刷"],
@@ -109,13 +109,29 @@ const BUILTIN_INTERNAL_PRICE_RULES = Object.freeze([
   ["組合包價","貼紙＋四色白＋裁切",0,"300×300最低價","固定最低價",0,200,44,25,"貼紙"],
   ["組合包價","貼紙＋四色白＋裁切",0,"面積才數","每收費才",0,104.7306667,23,7.5,"貼紙"]
 ].map((r,index)=>Object.freeze({
-  id:`BUILTIN-${String(index+1).padStart(3,'0')}`,
+  id:`IPR${String(index+1).padStart(3,'0')}`,
   type:r[0],name:r[1],category:r[9] || (r[0]==='材料'?'內部材料':'印刷'),
   thicknessMm:r[2],sizeTier:r[3],pricingMethod:r[4],
   rawTwd:r[5],sampleTwd:r[6],sampleRmb:r[7]||0,productionRmb:r[8]||0,
-  source:index>=30?'歷史資料與加工費候選分析':'內建內部基準',
-  certification:index>=30?'候選／需認證':'內部暫定',active:'是',note:index>=30?'v2.7 候選規則':'使用者提供價格表'
+  source:index<30?'使用者提供函數基準表':'歷史資料與加工費候選分析',
+  certification:index<30?'已確認基準':'候選／停用',active:index<30?'是':'否',
+  note:index<30?'依使用者 2026-06-24 提供之面積、100×100、300×300函數基準':'v2.9 預設停用；採購認證後再啟用'
 })));
+
+
+function mergedInternalPriceRules(){
+  const merged=new Map();
+  BUILTIN_INTERNAL_PRICE_RULES.forEach((rule,index)=>{
+    const key=String(rule.id||`BUILTIN-${index}`).trim();
+    merged.set(key,{...rule});
+  });
+  (state.internalPriceRules||[]).forEach((rule,index)=>{
+    const key=String(rule.id||`SHEET-${index}`).trim();
+    const prior=merged.get(key)||{};
+    merged.set(key,{...prior,...rule});
+  });
+  return [...merged.values()];
+}
 
 let authToken = sessionStorage.getItem(AUTH_TOKEN_KEY) || "";
 let authenticationReady = false;
@@ -3685,7 +3701,7 @@ async function handleMaterialPriceTableClick(event) {
 }
 
 function processPriceRules(){
-  const rows=state.internalPriceRules?.length?state.internalPriceRules:BUILTIN_INTERNAL_PRICE_RULES;
+  const rows=mergedInternalPriceRules();
   return rows.filter((row)=>row.active!=='否'&&row.type!=='材料');
 }
 
@@ -4912,8 +4928,8 @@ function emptyEstimateItem(){return{code:'',name:'',originalName:'',normalizedNa
 
 
 function internalPriceBasisKey(){
-  const value=$('estimatePriceBasis')?.value||'productionRmb';
-  return ['sampleTwd','rawTwd','sampleRmb','productionRmb'].includes(value)?value:'productionRmb';
+  const value=$('estimatePriceBasis')?.value||'sampleTwd';
+  return ['sampleTwd','rawTwd','sampleRmb','productionRmb'].includes(value)?value:'sampleTwd';
 }
 
 function internalPriceScenarioLabel(basisKey=internalPriceBasisKey()){
@@ -5001,7 +5017,7 @@ function internalRulePrice(rule,basisKey){
 
 function findInternalRule(type,name,thicknessMm,tier,basisKey){
   const target=type==='材料'?canonicalInternalMaterial(name):standardizeErpText(name||'');
-  const availableRules=state.internalPriceRules?.length?state.internalPriceRules:BUILTIN_INTERNAL_PRICE_RULES;
+  const availableRules=mergedInternalPriceRules();
   const rules=availableRules.filter((rule)=>
     rule.active!=='否' &&
     rule.type===type &&
@@ -5116,7 +5132,7 @@ function comboRuleMaterialCompatible(item,rule){
 }
 
 function findInternalComboRule(item,processTags,tier,basisKey){
-  const available=state.internalPriceRules?.length?state.internalPriceRules:BUILTIN_INTERNAL_PRICE_RULES;
+  const available=mergedInternalPriceRules();
   const candidates=available.filter((rule)=>
     rule.active!=='否'&&rule.type==='組合包價'&&rule.sizeTier===tier&&internalRulePrice(rule,basisKey)>0&&comboRuleMaterialCompatible(item,rule)
   ).map((rule)=>({rule,required:comboRuleRequiredTags(rule)}))
@@ -5142,7 +5158,7 @@ function internalRuleLineCost(rule,basisKey,context){
 }
 
 function comboMinimumLineCost(comboRule,basisKey){
-  const available=state.internalPriceRules?.length?state.internalPriceRules:BUILTIN_INTERNAL_PRICE_RULES;
+  const available=mergedInternalPriceRules();
   const same=available.find((rule)=>rule.active!=='否'&&rule.type==='組合包價'&&rule.name===comboRule.name&&rule.category===comboRule.category&&Math.abs(toNumber(rule.thicknessMm)-toNumber(comboRule.thicknessMm))<=0.11&&rule.sizeTier==='100×100最低價'&&internalRulePrice(rule,basisKey)>0);
   return same?internalRulePrice(same,basisKey):0;
 }
@@ -5159,7 +5175,7 @@ function estimateByInternalRules(item){
   const processTags=extractEstimateProcessTags(item);
   const context=internalLinePricingContext(item);
 
-  // 歷史資料多是材料＋印刷＋加工的整件包價；先比對組合，避免拆項重複相加。
+  // 組合包價僅在價格中心由採購手動啟用後使用；v2.9 預設依已確認材料與印刷基準拆項。
   const combo=findInternalComboRule(item,processTags,tier,basisKey);
   if(combo){
     const lineVariable=internalRuleLineCost(combo.rule,basisKey,context);
