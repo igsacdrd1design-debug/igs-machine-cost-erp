@@ -3178,7 +3178,6 @@ function setupV20() {
   $('generateSimulation').addEventListener('click', generateCurrentSimulation);
   $('simulationView').addEventListener('change', renderSimulationPreview);
 
-  if (!state.estimateDraftItems.length) state.estimateDraftItems = [emptyEstimateItem()];
   if (!$('materialPriceDate').value) $('materialPriceDate').value = todayValue();
   if (!$('estimateDate').value) $('estimateDate').value = todayValue();
   updateEstimateTargetMode();
@@ -3636,20 +3635,120 @@ function recalculateAllEstimateItems(){state.estimateDraftItems.forEach(recalcul
 
 function renderEstimateDraft(){
   if(!$('estimateItemRows'))return;
-  if(!state.estimateDraftItems.length)state.estimateDraftItems=[emptyEstimateItem()];
   recalculateAllEstimateItems();
-  const priceOptions='<option value="">自動配對／未指定</option>'+state.materialPrices.filter((p)=>p.active!=='否').map((p)=>`<option value="${escapeHTML(p.id)}">${escapeHTML(p.name)} ${escapeHTML(p.thickness)}｜${money(p.basePrice)}/${escapeHTML(p.unit)}</option>`).join('');
-  $('estimateItemRows').innerHTML=state.estimateDraftItems.map((item,index)=>`<article class="estimateItemCard" data-estimate-index="${index}">
-    <header class="estimateItemCardHead"><div><span class="itemIndex">品項 ${index+1}</span><strong>${escapeHTML(item.name||'尚未命名')}</strong><small data-estimate-price-source>${escapeHTML(item.priceSource||'尚未配對價格')}</small></div><div class="estimateCardCost" data-estimate-cost-summary><strong>${money(item.baselineCost)}</strong><small>信心 ${Math.round(item.confidenceScore)}%</small></div><button class="removeRow" type="button" data-remove-estimate="${index}">刪除</button></header>
-    <div class="estimateItemCardGrid">
-      <section class="estimateFieldGroup"><h4>品項資料</h4><label><span>品項名稱</span><input class="tableInput" data-estimate-field="name" value="${escapeHTML(item.name)}" placeholder="品項名稱"></label><label><span>品項代碼</span><input class="tableInput" data-estimate-field="code" value="${escapeHTML(item.code)}" placeholder="品項代碼／檔名"></label><label><span>材質</span><input class="tableInput" data-estimate-field="material" value="${escapeHTML(item.material)}" placeholder="壓克力、PVC、貼紙…"></label><label><span>厚度</span><input class="tableInput" data-estimate-field="thickness" value="${escapeHTML(item.thickness)}" placeholder="例如 3mm"></label><label class="wide"><span>規格</span><input class="tableInput" data-estimate-field="spec" value="${escapeHTML(item.spec)}" placeholder="規格／包裝"></label></section>
-      <section class="estimateFieldGroup"><h4>尺寸與數量</h4><div class="inlineFields"><label><span>寬 mm</span><input class="tableInput numberInput" data-estimate-field="widthMm" type="number" min="0" step="0.1" value="${item.widthMm||''}"></label><label><span>高 mm</span><input class="tableInput numberInput" data-estimate-field="heightMm" type="number" min="0" step="0.1" value="${item.heightMm||''}"></label></div><div class="inlineFields"><label><span>數量</span><input class="tableInput numberInput" data-estimate-field="qty" type="number" min="0" step="0.01" value="${item.qty}"></label><label><span>單位</span><input class="tableInput" data-estimate-field="unit" value="${escapeHTML(item.unit)}"></label></div><div class="inlineFields"><label><span>計價用量</span><input class="tableInput numberInput" data-estimate-field="usage" type="number" min="0" step="0.0001" value="${roundDisplay(item.usage)}"></label><label><span>損耗 %</span><input class="tableInput numberInput" data-estimate-field="wasteRate" type="number" min="0" max="100" step="0.1" value="${item.wasteRate}"></label></div></section>
-      <section class="estimateFieldGroup"><h4>價格計算</h4><label><span>公司價格配對</span><select class="tableInput priceSelect" data-estimate-field="priceId">${priceOptions}</select></label><label><span>人工／文件單價</span><input class="tableInput numberInput manualPriceInput" data-estimate-field="baseUnitPrice" type="number" min="0" step="0.01" value="${roundDisplay(item.baseUnitPrice)}"></label><div class="inlineFields"><label><span>市場調整 %</span><input class="tableInput numberInput" data-estimate-field="marketAdjustment" type="number" step="0.01" value="${item.marketAdjustment}"></label><label><span>加工費</span><input class="tableInput numberInput" data-estimate-field="processingFee" type="number" min="0" step="0.01" value="${item.processingFee}"></label></div><label><span>其他美術費用</span><input class="tableInput numberInput" data-estimate-field="otherFee" type="number" min="0" step="0.01" value="${item.otherFee}"></label></section>
-      <section class="estimateFieldGroup"><h4>印刷與降本條件</h4><div class="checkRow"><label><input type="checkbox" data-estimate-field="allowMaterialOptimization" ${item.allowMaterialOptimization!=='否'?'checked':''}>允許材質優化</label><label><input type="checkbox" data-estimate-field="allowPrintOptimization" ${item.allowPrintOptimization!=='否'?'checked':''}>允許印刷優化</label></div><label><span>印刷方式</span><input class="tableInput" data-estimate-field="printMethod" value="${escapeHTML(item.printMethod)}" placeholder="UV、背噴、貼膜…"></label><div class="inlineFields"><label><span>印刷面</span><input class="tableInput" data-estimate-field="printSide" value="${escapeHTML(item.printSide)}"></label><label><span>白墨範圍</span><input class="tableInput" data-estimate-field="whiteInk" value="${escapeHTML(item.whiteInk)}"></label></div><label><span>特殊效果</span><input class="tableInput" data-estimate-field="specialEffect" value="${escapeHTML(item.specialEffect)}"></label><label><span>不可變更條件</span><input class="tableInput" data-estimate-field="constraints" value="${escapeHTML(item.constraints)}" placeholder="例如：外觀、尺寸、孔位不得改"></label></section>
-    </div>
-  </article>`).join('');
-  state.estimateDraftItems.forEach((item,index)=>{const select=$('estimateItemRows').querySelector(`[data-estimate-index="${index}"] select[data-estimate-field="priceId"]`);if(select)select.value=item.priceId||'';});
+
+  const priceOptions='<option value="">自動配對／未指定</option>'+
+    state.materialPrices
+      .filter((p)=>p.active!=='否')
+      .map((p)=>`<option value="${escapeHTML(p.id)}">${escapeHTML(p.name)} ${escapeHTML(p.thickness)}｜${money(p.basePrice)}/${escapeHTML(p.unit)}</option>`)
+      .join('');
+
+  if(!state.estimateDraftItems.length){
+    $('estimateItemRows').innerHTML=`
+      <div class="estimateEmptyState">
+        <div class="estimateEmptyIcon">Σ</div>
+        <h3>尚未加入估價品項</h3>
+        <p>上傳圖片或 PDF，按「AI 辨識並立即試算」；也可以手動新增一筆。</p>
+        <button class="button secondary" type="button" data-empty-add-estimate>＋ 手動新增品項</button>
+      </div>`;
+    updateEstimateTotals();
+    updateEstimateQuickMetrics();
+    return;
+  }
+
+  $('estimateItemRows').innerHTML=state.estimateDraftItems.map((item,index)=>{
+    const hasPrice=Boolean(item.priceId || item.manualPrice || toNumber(item.baseUnitPrice)>0);
+    const priceState=hasPrice ? (item.priceId ? '公司價格' : '文件／人工價格') : '待補價格';
+    const priceClass=hasPrice ? 'ready' : 'missing';
+    return `<article class="estimateQuickCard" data-estimate-index="${index}">
+      <header class="estimateQuickCardHead">
+        <div class="estimateQuickTitle">
+          <span class="itemIndex">品項 ${index+1}</span>
+          <strong>${escapeHTML(item.name||'尚未命名')}</strong>
+          <small data-estimate-price-source>${escapeHTML(item.priceSource||'尚未配對價格')}</small>
+        </div>
+        <span class="estimatePriceState ${priceClass}">${priceState}</span>
+        <div class="estimateCardCost" data-estimate-cost-summary>
+          <strong>${money(item.baselineCost)}</strong>
+          <small>信心 ${Math.round(item.confidenceScore)}%</small>
+        </div>
+        <button class="removeRow" type="button" data-remove-estimate="${index}">刪除</button>
+      </header>
+
+      <div class="estimateQuickFields">
+        <label class="estimateFieldName"><span>品項名稱</span><input class="tableInput" data-estimate-field="name" value="${escapeHTML(item.name)}" placeholder="品項名稱"></label>
+        <label><span>材質</span><input class="tableInput" data-estimate-field="material" value="${escapeHTML(item.material)}" placeholder="壓克力、PVC、貼紙"></label>
+        <label><span>厚度</span><input class="tableInput" data-estimate-field="thickness" value="${escapeHTML(item.thickness)}" placeholder="3mm"></label>
+        <label class="estimateFieldSpec"><span>規格／尺寸</span><input class="tableInput" data-estimate-field="spec" value="${escapeHTML(item.spec)}" placeholder="W500 × H300mm"></label>
+        <label><span>數量</span><input class="tableInput numberInput" data-estimate-field="qty" type="number" min="0" step="0.01" value="${item.qty}"></label>
+        <label><span>單位</span><input class="tableInput" data-estimate-field="unit" value="${escapeHTML(item.unit)}" placeholder="件"></label>
+        <label><span>單價</span><input class="tableInput numberInput manualPriceInput" data-estimate-field="baseUnitPrice" type="number" min="0" step="0.01" value="${roundDisplay(item.baseUnitPrice)}" placeholder="待配對"></label>
+      </div>
+
+      <details class="estimateItemAdvanced">
+        <summary>進階設定：公司價格、用量損耗、加工與印刷條件</summary>
+        <div class="estimateAdvancedGrid">
+          <section class="estimateFieldGroup">
+            <h4>代碼與尺寸</h4>
+            <label><span>品項代碼</span><input class="tableInput" data-estimate-field="code" value="${escapeHTML(item.code)}" placeholder="品項代碼／檔名"></label>
+            <div class="inlineFields">
+              <label><span>寬 mm</span><input class="tableInput numberInput" data-estimate-field="widthMm" type="number" min="0" step="0.1" value="${item.widthMm||''}"></label>
+              <label><span>高 mm</span><input class="tableInput numberInput" data-estimate-field="heightMm" type="number" min="0" step="0.1" value="${item.heightMm||''}"></label>
+            </div>
+          </section>
+
+          <section class="estimateFieldGroup">
+            <h4>價格與用量</h4>
+            <label><span>公司價格配對</span><select class="tableInput priceSelect" data-estimate-field="priceId">${priceOptions}</select></label>
+            <div class="inlineFields">
+              <label><span>計價用量</span><input class="tableInput numberInput" data-estimate-field="usage" type="number" min="0" step="0.0001" value="${roundDisplay(item.usage)}"></label>
+              <label><span>損耗 %</span><input class="tableInput numberInput" data-estimate-field="wasteRate" type="number" min="0" max="100" step="0.1" value="${item.wasteRate}"></label>
+            </div>
+          </section>
+
+          <section class="estimateFieldGroup">
+            <h4>調整費用</h4>
+            <div class="inlineFields">
+              <label><span>市場調整 %</span><input class="tableInput numberInput" data-estimate-field="marketAdjustment" type="number" step="0.01" value="${item.marketAdjustment}"></label>
+              <label><span>加工費</span><input class="tableInput numberInput" data-estimate-field="processingFee" type="number" min="0" step="0.01" value="${item.processingFee}"></label>
+            </div>
+            <label><span>其他美術費用</span><input class="tableInput numberInput" data-estimate-field="otherFee" type="number" min="0" step="0.01" value="${item.otherFee}"></label>
+          </section>
+
+          <section class="estimateFieldGroup">
+            <h4>印刷與降本條件</h4>
+            <div class="checkRow">
+              <label><input type="checkbox" data-estimate-field="allowMaterialOptimization" ${item.allowMaterialOptimization!=='否'?'checked':''}>允許材質優化</label>
+              <label><input type="checkbox" data-estimate-field="allowPrintOptimization" ${item.allowPrintOptimization!=='否'?'checked':''}>允許印刷優化</label>
+            </div>
+            <label><span>印刷方式</span><input class="tableInput" data-estimate-field="printMethod" value="${escapeHTML(item.printMethod)}" placeholder="UV、背噴、貼膜"></label>
+            <div class="inlineFields">
+              <label><span>印刷面</span><input class="tableInput" data-estimate-field="printSide" value="${escapeHTML(item.printSide)}"></label>
+              <label><span>白墨範圍</span><input class="tableInput" data-estimate-field="whiteInk" value="${escapeHTML(item.whiteInk)}"></label>
+            </div>
+            <label><span>特殊效果</span><input class="tableInput" data-estimate-field="specialEffect" value="${escapeHTML(item.specialEffect)}"></label>
+            <label><span>不可變更條件</span><input class="tableInput" data-estimate-field="constraints" value="${escapeHTML(item.constraints)}" placeholder="外觀、尺寸、孔位不得改"></label>
+          </section>
+        </div>
+      </details>
+    </article>`;
+  }).join('');
+
+  state.estimateDraftItems.forEach((item,index)=>{
+    const select=$('estimateItemRows').querySelector(`[data-estimate-index="${index}"] select[data-estimate-field="priceId"]`);
+    if(select)select.value=item.priceId||'';
+  });
   updateEstimateTotals();
+  updateEstimateQuickMetrics();
+}
+
+function updateEstimateQuickMetrics(){
+  const items=state.estimateDraftItems||[];
+  const matched=items.filter((item)=>item.priceId || item.manualPrice || toNumber(item.baseUnitPrice)>0).length;
+  const missing=Math.max(0,items.length-matched);
+  if($('estimateItemCount'))$('estimateItemCount').textContent=String(items.length);
+  if($('estimateMatchedCount'))$('estimateMatchedCount').textContent=String(matched);
+  if($('estimateMissingCount'))$('estimateMissingCount').textContent=String(missing);
 }
 
 function roundDisplay(value){const n=toNumber(value);return Math.round(n*10000)/10000;}
@@ -3702,8 +3801,16 @@ function updateEstimateTotals(){
   $('estimateConservative').textContent=money(totals.conservative);
   $('estimateConfidence').textContent=`${Math.round(totals.confidence)}%`;
   $('estimateStatusBadge').textContent=state.currentEstimateId?`編輯 ${state.currentEstimateId}`:`草稿 ${state.estimateDraftItems.length} 筆`;
+  updateEstimateQuickMetrics();
 }
-function handleEstimateItemClick(event){const btn=event.target.closest('[data-remove-estimate]');if(!btn)return;state.estimateDraftItems.splice(Number(btn.dataset.removeEstimate),1);if(!state.estimateDraftItems.length)state.estimateDraftItems=[emptyEstimateItem()];renderEstimateDraft();}
+function handleEstimateItemClick(event){
+  const emptyAdd=event.target.closest('[data-empty-add-estimate]');
+  if(emptyAdd){state.estimateDraftItems.push(emptyEstimateItem());renderEstimateDraft();return;}
+  const btn=event.target.closest('[data-remove-estimate]');
+  if(!btn)return;
+  state.estimateDraftItems.splice(Number(btn.dataset.removeEstimate),1);
+  renderEstimateDraft();
+}
 
 function updateEstimateTargetMode(){
   const isExisting=$('estimateTargetType')?.value==='existing';
@@ -3715,8 +3822,8 @@ function updateEstimateTargetMode(){
 function parseDimensions(text){const match=String(text||'').match(/[W寬]?\s*(\d+(?:\.\d+)?)\s*[x×X*]\s*[H高]?\s*(\d+(?:\.\d+)?)/i);return match?{widthMm:Number(match[1]),heightMm:Number(match[2])}:{widthMm:0,heightMm:0};}
 function loadActualItemsIntoEstimate(){const machineId=$('estimateMachine').value;if(!machineId){showNotice('請先選擇機台。','warn');return;}const orderIds=state.costOrders.filter((o)=>o.machineId===machineId&&o.type==='實際費用').map((o)=>o.id);const items=state.costItems.filter((i)=>orderIds.includes(i.costOrderId)&&i.itemType!=='附加費用');if(!items.length){showNotice('這台機台尚無實際費用品項。','warn');return;}state.estimateDraftItems=items.map((i)=>{const d=parseDimensions(i.spec);return{...emptyEstimateItem(),code:i.fileName||'',name:i.name,material:i.material,spec:i.spec,thickness:i.thickness,qty:i.qty||1,unit:i.unit||'件',widthMm:d.widthMm,heightMm:d.heightMm,baseUnitPrice:i.price,manualPrice:true,manualPriceConfidence:85,wasteRate:0,marketAdjustment:0,marketManuallySet:true,priceSource:'機台實際成本',confidenceScore:85};});const m=machineById(machineId);if(!$('estimateName').value)$('estimateName').value=`${m?.name||machineId} 美術材料估價`;renderEstimateDraft();showNotice(`已載入 ${items.length} 筆實際費用品項。`,'success');}
 
-function resetEstimateEditor(){state.currentEstimateId='';state.estimateDraftItems=[emptyEstimateItem()];$('estimateProjectForm').reset();$('estimateId').value='';$('estimateTargetType').value='new';$('estimateVersion').value='V1';$('estimateDate').value=todayValue();$('estimateStatus').value='草稿';clearEstimateSourceDocument();updateEstimateTargetMode();renderEstimateDraft();}
-function loadEstimateProject(id){const project=state.estimateProjects.find((p)=>p.id===id);if(!project)return;state.currentEstimateId=id;$('estimateId').value=id;$('estimateTargetType').value=project.machineId?'existing':'new';$('estimateMachine').value=project.machineId;$('estimateName').value=project.name;$('estimateVersion').value=project.version;$('estimateDate').value=project.date;$('estimateStatus').value=project.status;$('estimateNote').value=project.note;state.estimateDraftItems=state.estimateItems.filter((i)=>i.estimateId===id).map((i)=>({...i,usageManuallySet:true,marketManuallySet:true}));if(!state.estimateDraftItems.length)state.estimateDraftItems=[emptyEstimateItem()];updateEstimateTargetMode();renderEstimateDraft();document.querySelector('[data-view="smartEstimate"]')?.click();}
+function resetEstimateEditor(){state.currentEstimateId='';state.estimateDraftItems=[];$('estimateProjectForm').reset();$('estimateId').value='';$('estimateTargetType').value='new';$('estimateVersion').value='V1';$('estimateDate').value=todayValue();$('estimateStatus').value='草稿';clearEstimateSourceDocument();updateEstimateTargetMode();renderEstimateDraft();}
+function loadEstimateProject(id){const project=state.estimateProjects.find((p)=>p.id===id);if(!project)return;state.currentEstimateId=id;$('estimateId').value=id;$('estimateTargetType').value=project.machineId?'existing':'new';$('estimateMachine').value=project.machineId;$('estimateName').value=project.name;$('estimateVersion').value=project.version;$('estimateDate').value=project.date;$('estimateStatus').value=project.status;$('estimateNote').value=project.note;state.estimateDraftItems=state.estimateItems.filter((i)=>i.estimateId===id).map((i)=>({...i,usageManuallySet:true,marketManuallySet:true}));updateEstimateTargetMode();renderEstimateDraft();document.querySelector('[data-view="smartEstimate"]')?.click();}
 
 async function saveCurrentEstimate(){
   const name=$('estimateName').value.trim();

@@ -1392,3 +1392,233 @@ td small { color: var(--muted); }
     min-height: 340px;
   }
 }
+
+
+/* v2.0.8 快速智能估價 */
+.estimateQuickGrid{
+  display:grid;
+  grid-template-columns:minmax(0,.9fr) minmax(0,1.1fr);
+  gap:16px;
+}
+.estimateProjectPanel,.estimateAiPanel,.estimateWorkspacePanel{min-width:0}
+.estimateProjectQuickForm{
+  display:grid;
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  gap:12px;
+}
+.estimateProjectQuickForm>label,
+.estimateAdvancedProjectGrid>label,
+.estimateAiOptions>label,
+.estimateQuickFields>label,
+.estimateAdvancedGrid label{
+  display:grid;
+  gap:6px;
+}
+.estimateProjectQuickForm label>span,
+.estimateAdvancedProjectGrid label>span,
+.estimateAiOptions label>span,
+.estimateQuickFields label>span,
+.estimateAdvancedGrid label>span{
+  color:var(--muted);
+  font-size:12px;
+  font-weight:700;
+}
+.estimateNameField{grid-column:1/-1}
+.estimateProjectActions{grid-column:1/-1}
+.estimateAdvancedProject{grid-column:1/-1;border:1px solid var(--line);border-radius:12px;background:#fbfaf6}
+.estimateAdvancedProject summary,.estimateRawDetails summary,.estimateItemAdvanced summary{
+  cursor:pointer;
+  list-style:none;
+  font-weight:800;
+  color:#385862;
+}
+.estimateAdvancedProject summary{padding:12px 14px}
+.estimateAdvancedProject summary::-webkit-details-marker,
+.estimateRawDetails summary::-webkit-details-marker,
+.estimateItemAdvanced summary::-webkit-details-marker{display:none}
+.estimateAdvancedProject summary::before,
+.estimateRawDetails summary::before,
+.estimateItemAdvanced summary::before{content:"＋";display:inline-block;margin-right:8px}
+.estimateAdvancedProject[open] summary::before,
+.estimateRawDetails[open] summary::before,
+.estimateItemAdvanced[open] summary::before{content:"－"}
+.estimateAdvancedProjectGrid{
+  display:grid;
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  gap:12px;
+  padding:0 14px 14px;
+}
+.estimateAdvancedProjectGrid .wide{grid-column:1/-1}
+
+.estimateUploadZone{
+  min-height:170px;
+  border:2px dashed #bfd3d8;
+  border-radius:16px;
+  background:#f4f9fa;
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  justify-content:center;
+  gap:8px;
+  padding:22px;
+  text-align:center;
+  cursor:pointer;
+  transition:.18s ease;
+}
+.estimateUploadZone:hover{border-color:#50808c;background:#eef7f8;transform:translateY(-1px)}
+.estimateUploadZone input{position:absolute;opacity:0;pointer-events:none}
+.estimateUploadZone strong{font-size:18px;color:#173945}
+.estimateUploadZone span{font-size:13px;color:var(--muted);overflow-wrap:anywhere}
+.estimateAiOptions{
+  display:grid;
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  gap:12px;
+  margin-top:14px;
+}
+.estimateAiActions{margin-top:14px}
+.estimateRawDetails{margin-top:12px;border:1px solid var(--line);border-radius:12px;background:#fbfaf6}
+.estimateRawDetails summary{padding:11px 13px;font-size:13px}
+.estimateRawDetails textarea{width:calc(100% - 24px);margin:0 12px 12px;resize:vertical;background:white}
+
+.estimateWorkspaceHead{align-items:flex-start}
+.estimateQuickMetrics{
+  display:grid;
+  grid-template-columns:repeat(3,minmax(0,160px));
+  gap:10px;
+  margin-bottom:14px;
+}
+.estimateQuickMetrics>div{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:12px;
+  padding:10px 12px;
+  border:1px solid var(--line);
+  border-radius:12px;
+  background:#f7faf9;
+}
+.estimateQuickMetrics span{font-size:12px;color:var(--muted)}
+.estimateQuickMetrics strong{font-size:20px}
+.estimateQuickMetrics .warning{background:#fff8e8;border-color:#ead7a5}
+
+.estimateQuickList{display:grid;gap:12px}
+.estimateEmptyState{
+  min-height:280px;
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  justify-content:center;
+  text-align:center;
+  border:2px dashed #d7ddd9;
+  border-radius:16px;
+  background:#fbfbf8;
+  padding:30px;
+}
+.estimateEmptyState h3{margin:8px 0 4px}
+.estimateEmptyState p{margin:0 0 16px;color:var(--muted)}
+.estimateEmptyIcon{
+  width:52px;height:52px;border-radius:16px;
+  display:grid;place-items:center;
+  font-size:28px;font-weight:900;
+  color:#fff;background:#567f8b;
+}
+.estimateQuickCard{
+  border:1px solid #d7e2e5;
+  border-radius:16px;
+  background:#fff;
+  overflow:hidden;
+  box-shadow:0 5px 16px rgba(25,67,78,.045);
+}
+.estimateQuickCardHead{
+  display:grid;
+  grid-template-columns:minmax(0,1fr) auto auto auto;
+  align-items:center;
+  gap:12px;
+  padding:12px 14px;
+  background:#f5f9f9;
+  border-bottom:1px solid #e2eaec;
+}
+.estimateQuickTitle{display:grid;min-width:0;gap:2px}
+.estimateQuickTitle strong{font-size:16px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.estimateQuickTitle small{color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.estimatePriceState{
+  border-radius:999px;
+  padding:5px 9px;
+  font-size:11px;
+  font-weight:800;
+  white-space:nowrap;
+}
+.estimatePriceState.ready{background:#e8f5ec;color:#2c7149}
+.estimatePriceState.missing{background:#fff0e8;color:#a54b2e}
+.estimateQuickFields{
+  display:grid;
+  grid-template-columns:minmax(170px,1.2fr) minmax(120px,.9fr) minmax(75px,.45fr) minmax(170px,1.15fr) minmax(70px,.42fr) minmax(72px,.42fr) minmax(110px,.65fr);
+  gap:10px;
+  padding:14px;
+  align-items:end;
+}
+.estimateQuickFields input{width:100%}
+.estimateItemAdvanced{
+  border-top:1px solid #edf1f2;
+  background:#fcfdfd;
+}
+.estimateItemAdvanced summary{padding:11px 14px;font-size:13px}
+.estimateAdvancedGrid{
+  display:grid;
+  grid-template-columns:repeat(4,minmax(0,1fr));
+  gap:12px;
+  padding:0 14px 14px;
+}
+.estimateAdvancedGrid .estimateFieldGroup{
+  border:1px solid #e0e8ea;
+  border-radius:12px;
+  background:white;
+  padding:12px;
+}
+.estimateAdvancedGrid .estimateFieldGroup h4{margin:0 0 10px}
+.estimateActionBar{
+  position:sticky;
+  bottom:10px;
+  z-index:10;
+  margin-top:16px;
+  padding:12px;
+  border:1px solid #d8ded9;
+  border-radius:16px;
+  background:rgba(255,253,248,.96);
+  box-shadow:0 12px 30px rgba(35,55,62,.12);
+  backdrop-filter:blur(10px);
+}
+.estimateActionBar .estimateTotals{margin:0}
+.estimateSaveActions{
+  display:flex;
+  justify-content:flex-end;
+  gap:10px;
+  margin-top:10px;
+}
+
+@media(max-width:1380px){
+  .estimateQuickFields{
+    grid-template-columns:repeat(4,minmax(0,1fr));
+  }
+  .estimateFieldName,.estimateFieldSpec{grid-column:span 2}
+  .estimateAdvancedGrid{grid-template-columns:repeat(2,minmax(0,1fr))}
+}
+@media(max-width:1050px){
+  .estimateQuickGrid{grid-template-columns:1fr}
+}
+@media(max-width:760px){
+  .estimateProjectQuickForm,
+  .estimateAdvancedProjectGrid,
+  .estimateAiOptions,
+  .estimateQuickFields,
+  .estimateAdvancedGrid{grid-template-columns:1fr}
+  .estimateNameField,.estimateFieldName,.estimateFieldSpec,.estimateAdvancedProjectGrid .wide{grid-column:auto}
+  .estimateQuickCardHead{grid-template-columns:1fr auto}
+  .estimatePriceState{justify-self:start}
+  .estimateCardCost{justify-self:end}
+  .estimateQuickCardHead .removeRow{grid-column:1/-1;justify-self:end}
+  .estimateQuickMetrics{grid-template-columns:repeat(3,minmax(0,1fr))}
+  .estimateActionBar{position:static}
+  .estimateSaveActions{flex-direction:column}
+  .estimateSaveActions .button{width:100%}
+}
