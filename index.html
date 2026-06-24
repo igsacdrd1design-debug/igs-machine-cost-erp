@@ -8,7 +8,7 @@
   <meta name="googlebot" content="noindex, nofollow, noarchive, nosnippet">
   <meta name="referrer" content="no-referrer">
   <title>IGS 機台材料成本 ERP</title>
-  <link rel="stylesheet" href="style.css?v=20260624-igs-v2-2">
+  <link rel="stylesheet" href="style.css?v=20260624-igs-v2-3">
 </head>
 <body class="authLocked">
   <section id="authGate" class="authGate" aria-labelledby="loginTitle">
@@ -642,9 +642,9 @@
     <section id="priceCenter" class="view">
       <div class="quickIntro priceIntro">
         <div>
-          <span class="eyebrow">v2.0 · 公司價格＋市場趨勢</span>
-          <h2>建立材料價格主檔，保留歷史報價並查詢網路浮動</h2>
-          <p>公司成交價永遠優先；網路資料只作市場調整參考，查詢結果必須人工確認後才會保存。</p>
+          <span class="eyebrow">v2.3 · 公司價格＋待認證歷史價＋市場趨勢</span>
+          <h2>建立正式價格主檔，認證近期歷史報價並監看市場浮動</h2>
+          <p>新報價先進入待認證區；補齊供應商、正式日期與稅別並人工認證後，才會影響智能估價基準。</p>
         </div>
         <div class="apiBadge connected">Gemini 3.5 Flash Grounding</div>
       </div>
@@ -701,11 +701,84 @@
         <div class="panelHead"><div><h2>價格資料</h2><p id="materialPriceCount" class="muted">共 0 筆</p></div><input id="materialPriceSearch" class="inlineSearch" type="search" placeholder="搜尋材料、分類、厚度、供應商"></div>
         <div class="tableWrap"><table class="v20Table"><thead><tr><th>材料</th><th>分類</th><th>厚度／規格</th><th>單位</th><th>單價</th><th>供應商</th><th>日期</th><th>來源</th><th>信心</th><th></th></tr></thead><tbody id="materialPriceRows"></tbody></table></div>
       </div>
+
+      <div class="panel priceReviewPanel">
+        <div class="panelHead">
+          <div>
+            <h2>3. 待認證歷史價格</h2>
+            <p class="muted">新取得的估價先匯入這裡；只有「已認證＋納入基準」才會參與智能估價。</p>
+          </div>
+          <div class="panelActions">
+            <label class="button secondary fileButton">匯入待認證 CSV<input id="priceReviewCsv" type="file" accept=".csv,text/csv" hidden></label>
+            <button id="exportPriceReviews" class="button ghost" type="button">匯出 CSV</button>
+          </div>
+        </div>
+
+        <div class="priceReviewMetrics">
+          <div><span>全部</span><strong id="priceReviewCount">0</strong></div>
+          <div><span>待認證</span><strong id="priceReviewPendingCount">0</strong></div>
+          <div class="approved"><span>已納入基準</span><strong id="priceReviewApprovedCount">0</strong></div>
+          <div class="missing"><span>待補價格</span><strong id="priceReviewMissingCount">0</strong></div>
+        </div>
+
+        <div class="priceReviewToolbar">
+          <input id="priceReviewSearch" class="inlineSearch" type="search" placeholder="搜尋品項、材質、專案、供應商">
+          <select id="priceReviewStatusFilter">
+            <option value="">全部狀態</option>
+            <option>待認證</option>
+            <option>已認證</option>
+            <option>待補價格</option>
+            <option>僅保存</option>
+            <option>異常價格</option>
+            <option>規格配對錯誤</option>
+          </select>
+        </div>
+        <div id="priceReviewRows" class="priceReviewRows"><div class="empty">尚未匯入待認證歷史價格。</div></div>
+      </div>
       <div class="panel">
         <div class="panelHead"><div><h2>市場指數紀錄</h2><p class="muted">經人工確認後保存的市場參考。</p></div></div>
         <div class="tableWrap"><table class="v20Table"><thead><tr><th>日期</th><th>分類</th><th>指數</th><th>變動率</th><th>來源</th><th>自動</th><th>摘要</th><th></th></tr></thead><tbody id="marketIndexRows"></tbody></table></div>
       </div>
     </section>
+
+
+    <dialog id="priceReviewDialog" class="priceReviewDialog">
+      <form id="priceReviewForm" class="priceReviewForm">
+        <div class="dialogHead">
+          <div>
+            <span class="eyebrow">價格認證</span>
+            <h2>檢視與認證歷史價格</h2>
+            <p>補齊正式報價日期、供應商與稅別後，才可納入智能估價基準。</p>
+          </div>
+          <button id="closePriceReviewDialog" class="dialogClose" type="button" aria-label="關閉">×</button>
+        </div>
+        <input id="priceReviewId" type="hidden">
+        <div class="priceReviewFormGrid">
+          <label class="wide"><span>品項名稱 *</span><input id="priceReviewItemName" type="text" required></label>
+          <label><span>品項代碼</span><input id="priceReviewItemCode" type="text"></label>
+          <label><span>專案／機台</span><input id="priceReviewProject" type="text"></label>
+          <label><span>標準材質</span><input id="priceReviewMaterial" type="text"></label>
+          <label><span>厚度 mm</span><input id="priceReviewThickness" type="number" min="0" step="0.1"></label>
+          <label><span>寬 mm</span><input id="priceReviewWidth" type="number" min="0" step="0.1"></label>
+          <label><span>高 mm</span><input id="priceReviewHeight" type="number" min="0" step="0.1"></label>
+          <label><span>數量</span><input id="priceReviewQty" type="number" min="0" step="0.01" value="1"></label>
+          <label><span>計價單位</span><input id="priceReviewUnit" type="text" value="件"></label>
+          <label><span>實際單價 TWD</span><input id="priceReviewUnitPrice" type="number" min="0" step="0.01"></label>
+          <label><span>正式報價日期</span><input id="priceReviewQuoteDate" type="date"></label>
+          <label><span>供應商</span><input id="priceReviewSupplier" type="text" list="supplierOptions"></label>
+          <label><span>稅別</span><select id="priceReviewTaxType"><option value="">待補</option><option>未稅</option><option>含稅</option><option>免稅</option><option>不確定</option></select></label>
+          <label><span>認證狀態</span><select id="priceReviewStatus"><option>待認證</option><option>已認證</option><option>待補價格</option><option>僅保存</option><option>異常價格</option><option>規格配對錯誤</option></select></label>
+          <label class="wide"><span>製程標籤</span><input id="priceReviewProcessTags" type="text" placeholder="例如：四色、白墨、裁切外型、導光"></label>
+          <label class="wide"><span>來源文件</span><input id="priceReviewSourceFile" type="text"></label>
+          <label class="wide"><span>來源備註</span><textarea id="priceReviewNote" rows="3"></textarea></label>
+          <label class="checkboxField wide"><input id="priceReviewIncludeBaseline" type="checkbox"><span>納入智能估價與歷史價格基準</span></label>
+        </div>
+        <div class="formActions">
+          <button id="savePriceReviewDialog" class="button primary" type="submit">儲存認證資料</button>
+          <button class="button ghost" type="button" onclick="document.getElementById('priceReviewDialog').close()">取消</button>
+        </div>
+      </form>
+    </dialog>
 
 
     <section id="smartEstimate" class="view">
@@ -963,7 +1036,7 @@
 
   <datalist id="supplierOptions"></datalist>
   <datalist id="machineAreaOptions"></datalist>
-  <script src="data.js?v=20260624-igs-v2-2"></script>
-  <script src="app.js?v=20260624-igs-v2-2"></script>
+  <script src="data.js?v=20260624-igs-v2-3"></script>
+  <script src="app.js?v=20260624-igs-v2-3"></script>
 </body>
 </html>

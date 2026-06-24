@@ -1684,3 +1684,327 @@ td small { color: var(--muted); }
 .estimatePriceState.partial{background:#fff1d8;color:#8a5b06}
 @media(max-width:900px){.estimateTextOptions{grid-template-columns:1fr 1fr}.estimateTextOptions .checkboxField{grid-column:1/-1}}
 @media(max-width:620px){.estimateTextOptions{grid-template-columns:1fr}.estimateTextOptions .checkboxField{grid-column:auto}.estimateTextActions .button{width:100%}}
+
+
+/* =====================================================
+ * v2.3 價格待認證與認證工作流
+ * ===================================================== */
+
+.priceReviewPanel {
+  margin-top: 18px;
+}
+
+.priceReviewMetrics {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(120px, 1fr));
+  gap: 10px;
+  margin: 14px 0;
+}
+
+.priceReviewMetrics > div {
+  padding: 12px 14px;
+  border: 1px solid #dfd7c8;
+  border-radius: 14px;
+  background: #f8f5ee;
+}
+
+.priceReviewMetrics > div.approved {
+  background: #eaf6ee;
+  border-color: #cfe7d4;
+}
+
+.priceReviewMetrics > div.missing {
+  background: #fff4df;
+  border-color: #eed4a3;
+}
+
+.priceReviewMetrics span {
+  display: block;
+  color: #766f62;
+  font-size: 0.82rem;
+}
+
+.priceReviewMetrics strong {
+  display: block;
+  margin-top: 2px;
+  font-size: 1.35rem;
+  color: #17324d;
+}
+
+.priceReviewToolbar {
+  display: grid;
+  grid-template-columns: minmax(240px, 1fr) 190px;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.priceReviewToolbar select {
+  min-height: 42px;
+  border: 1px solid #d8d2c4;
+  border-radius: 12px;
+  background: #fff;
+  padding: 0 12px;
+}
+
+.priceReviewRows {
+  display: grid;
+  gap: 12px;
+}
+
+.priceReviewCard {
+  display: grid;
+  grid-template-columns: minmax(300px, 1.6fr) minmax(125px, 0.55fr) minmax(150px, 0.7fr) minmax(180px, 0.8fr) auto;
+  gap: 14px;
+  align-items: center;
+  padding: 14px;
+  border: 1px solid #ddd6c8;
+  border-radius: 16px;
+  background: #fff;
+}
+
+.priceReviewMain {
+  min-width: 0;
+}
+
+.priceReviewTitle {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 4px 9px;
+  align-items: center;
+}
+
+.priceReviewTitle strong {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  color: #17324d;
+}
+
+.priceReviewTitle small {
+  grid-column: 2;
+  color: #7c7568;
+  overflow-wrap: anywhere;
+}
+
+.priceReviewStatus {
+  grid-row: 1 / span 2;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 68px;
+  padding: 5px 8px;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  background: #eef2f3;
+  color: #52636a;
+}
+
+.priceReviewStatus.ready {
+  background: #e4f4e8;
+  color: #23613c;
+}
+
+.priceReviewStatus.pending {
+  background: #fff1d9;
+  color: #9a5c00;
+}
+
+.priceReviewStatus.missing {
+  background: #fde7df;
+  color: #a23a1f;
+}
+
+.priceReviewStatus.muted {
+  background: #ecebea;
+  color: #6d6964;
+}
+
+.priceReviewSpec {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 9px;
+}
+
+.priceReviewSpec span {
+  padding: 4px 7px;
+  border-radius: 8px;
+  background: #f2f6f7;
+  color: #50666d;
+  font-size: 0.78rem;
+}
+
+.priceReviewPrice,
+.priceReviewCompare,
+.priceReviewMeta {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.priceReviewPrice small,
+.priceReviewCompare small,
+.priceReviewMeta {
+  color: #7c7568;
+  font-size: 0.78rem;
+}
+
+.priceReviewPrice strong,
+.priceReviewCompare strong {
+  color: #17324d;
+  font-size: 1.05rem;
+}
+
+.priceReviewPrice span,
+.priceReviewCompare span {
+  color: #6e685f;
+  font-size: 0.78rem;
+}
+
+.priceReviewMeta span {
+  overflow-wrap: anywhere;
+}
+
+.priceReviewActions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.button.compact {
+  min-height: 34px;
+  padding: 7px 10px;
+  font-size: 0.8rem;
+}
+
+.priceReviewDialog {
+  width: min(880px, calc(100vw - 32px));
+  max-height: calc(100vh - 36px);
+  padding: 0;
+  border: 1px solid #3f4f56;
+  border-radius: 20px;
+  background: #fbfaf6;
+  box-shadow: 0 28px 80px rgba(18, 37, 46, 0.32);
+}
+
+.priceReviewDialog::backdrop {
+  background: rgba(15, 31, 39, 0.58);
+  backdrop-filter: blur(3px);
+}
+
+.priceReviewForm {
+  padding: 22px;
+  overflow: auto;
+  max-height: calc(100vh - 38px);
+}
+
+.priceReviewForm .dialogHead {
+  display: flex;
+  justify-content: space-between;
+  gap: 20px;
+  margin-bottom: 18px;
+}
+
+.priceReviewForm .dialogHead h2 {
+  margin: 3px 0 5px;
+}
+
+.priceReviewForm .dialogHead p {
+  margin: 0;
+  color: #756f65;
+}
+
+.priceReviewFormGrid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.priceReviewFormGrid label {
+  display: grid;
+  gap: 5px;
+}
+
+.priceReviewFormGrid label.wide {
+  grid-column: span 4;
+}
+
+.priceReviewFormGrid input,
+.priceReviewFormGrid select,
+.priceReviewFormGrid textarea {
+  width: 100%;
+  min-height: 42px;
+  border: 1px solid #d8d2c4;
+  border-radius: 11px;
+  background: #fff;
+  padding: 9px 11px;
+}
+
+.priceReviewFormGrid textarea {
+  min-height: 82px;
+  resize: vertical;
+}
+
+@media (max-width: 1180px) {
+  .priceReviewCard {
+    grid-template-columns: minmax(280px, 1.4fr) 140px 160px;
+  }
+
+  .priceReviewMeta,
+  .priceReviewActions {
+    grid-column: span 3;
+  }
+
+  .priceReviewActions {
+    justify-content: flex-start;
+  }
+}
+
+@media (max-width: 760px) {
+  .priceReviewMetrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .priceReviewToolbar {
+    grid-template-columns: 1fr;
+  }
+
+  .priceReviewCard {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .priceReviewMain,
+  .priceReviewMeta,
+  .priceReviewActions {
+    grid-column: span 2;
+  }
+
+  .priceReviewFormGrid {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .priceReviewFormGrid label.wide {
+    grid-column: span 2;
+  }
+}
+
+@media (max-width: 520px) {
+  .priceReviewCard {
+    grid-template-columns: 1fr;
+  }
+
+  .priceReviewMain,
+  .priceReviewMeta,
+  .priceReviewActions {
+    grid-column: 1;
+  }
+
+  .priceReviewFormGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .priceReviewFormGrid label.wide {
+    grid-column: 1;
+  }
+}

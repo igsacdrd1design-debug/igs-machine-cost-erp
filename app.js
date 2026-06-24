@@ -1,5 +1,5 @@
 // =====================================================
-// IGS 機台材料成本 ERP — 前端 v2.2
+// IGS 機台材料成本 ERP — 前端 v2.3
 // 1. ERP 密碼登入
 // 2. 工作階段驗證
 // 3. 私人 Google Sheet 安全讀取
@@ -94,6 +94,7 @@ let state = {
   termDictionary: [],
   sizeRules: [],
   internalPriceRules: [],
+  priceReviews: [],
   estimateDraftItems: [],
   currentMarketResearch: null,
   currentOptimization: null,
@@ -538,6 +539,7 @@ function resetPrivateState() {
   state.termDictionary = [];
   state.sizeRules = [];
   state.internalPriceRules = [];
+  state.priceReviews = [];
   state.estimateDraftItems = [];
   state.currentMarketResearch = null;
   state.currentOptimization = null;
@@ -2289,6 +2291,7 @@ async function loadData() {
     state.termDictionary = Array.isArray(result.termDictionary) ? result.termDictionary : [];
     state.sizeRules = Array.isArray(result.sizeRules) ? result.sizeRules : [];
     state.internalPriceRules = (Array.isArray(result.internalPriceRules) ? result.internalPriceRules : []).map(normalizeInternalPriceRule);
+    state.priceReviews = (Array.isArray(result.priceReviews) ? result.priceReviews : []).map(normalizePriceReview);
 
     populateControls();
     renderAll();
@@ -2386,6 +2389,7 @@ function renderAll() {
   renderMachineTotals();
   renderSuppliers();
   renderMaterialPrices();
+  renderPriceReviews();
   renderMarketIndexes();
   renderEstimateProjects();
   renderEstimateDraft();
@@ -3067,6 +3071,34 @@ function normalizeMaterialPrice(row) {
   };
 }
 
+function normalizePriceReview(row) {
+  return {
+    id: String(firstValue(row, ["價格紀錄ID", "id"])),
+    sourceFile: String(firstValue(row, ["來源文件", "sourceFile"])),
+    sourceRow: toNumber(firstValue(row, ["來源列", "sourceRow"])),
+    fileSavedDate: normalizeDate(firstValue(row, ["檔案最後儲存日", "fileSavedDate"])),
+    quoteDate: normalizeDate(firstValue(row, ["正式報價日期", "quoteDate"])),
+    supplier: String(firstValue(row, ["供應商", "supplier"])),
+    project: String(firstValue(row, ["專案／機台", "project"])),
+    itemCode: String(firstValue(row, ["品項代碼", "itemCode"])),
+    itemName: String(firstValue(row, ["繁中品項名稱", "itemName"])),
+    material: String(firstValue(row, ["標準材質", "material"])),
+    thicknessMm: toNumber(firstValue(row, ["厚度mm", "thicknessMm"])),
+    widthMm: toNumber(firstValue(row, ["Wmm", "widthMm"])),
+    heightMm: toNumber(firstValue(row, ["Hmm", "heightMm"])),
+    qty: toNumber(firstValue(row, ["數量", "qty"], 1)) || 1,
+    unit: String(firstValue(row, ["計價單位", "unit"], "件")),
+    unitPrice: toNumber(firstValue(row, ["實際單價TWD", "unitPrice"])),
+    processTags: String(firstValue(row, ["製程標籤", "processTags"])),
+    taxType: String(firstValue(row, ["稅別", "taxType"])),
+    status: String(firstValue(row, ["認證狀態", "status"], "待認證")),
+    includeBaseline: String(firstValue(row, ["是否納入基準", "includeBaseline"], "否")),
+    note: String(firstValue(row, ["來源備註", "note"])),
+    createdAt: String(firstValue(row, ["建立時間", "createdAt"])),
+    updatedAt: String(firstValue(row, ["更新時間", "updatedAt"])),
+  };
+}
+
 
 function normalizeInternalPriceRule(row) {
   return {
@@ -3234,6 +3266,13 @@ function setupV20() {
   $('materialPriceSearch').addEventListener('input', renderMaterialPrices);
   $('materialPriceCsv').addEventListener('change', importMaterialPriceCsv);
   $('exportMaterialPrices').addEventListener('click', exportMaterialPricesCsv);
+  $('priceReviewCsv')?.addEventListener('change', importPriceReviewCsv);
+  $('exportPriceReviews')?.addEventListener('click', exportPriceReviewsCsv);
+  $('priceReviewSearch')?.addEventListener('input', renderPriceReviews);
+  $('priceReviewStatusFilter')?.addEventListener('change', renderPriceReviews);
+  $('priceReviewRows')?.addEventListener('click', handlePriceReviewRowsClick);
+  $('priceReviewForm')?.addEventListener('submit', savePriceReviewFromDialog);
+  $('closePriceReviewDialog')?.addEventListener('click', closePriceReviewDialog);
   $('marketResearchForm').addEventListener('submit', researchMarketFromForm);
   $('marketResearchResult').addEventListener('click', handleMarketResearchClick);
   $('marketIndexRows').addEventListener('click', handleMarketIndexClick);
@@ -3384,6 +3423,369 @@ function renderMaterialPrices() {
     <td>${escapeHTML(p.source)}</td><td><span class="${confidenceClass(p.confidence)}">${escapeHTML(p.confidence)}</span></td>
     <td><div class="rowActions"><button class="linkButton" data-edit-price="${escapeHTML(p.id)}">修改</button><button class="linkButton dangerText" data-delete-price="${escapeHTML(p.id)}">刪除</button></div></td>
   </tr>`).join('') : '<tr><td colspan="10" class="empty">尚未建立材料價格。</td></tr>';
+}
+
+
+function priceReviewToRecord(review) {
+  return {
+    id: review.id,
+    sourceFile: review.sourceFile,
+    sourceRow: review.sourceRow,
+    fileSavedDate: review.fileSavedDate,
+    quoteDate: review.quoteDate,
+    supplier: review.supplier,
+    project: review.project,
+    itemCode: review.itemCode,
+    itemName: review.itemName,
+    material: review.material,
+    thicknessMm: review.thicknessMm,
+    widthMm: review.widthMm,
+    heightMm: review.heightMm,
+    qty: review.qty,
+    unit: review.unit,
+    unitPrice: review.unitPrice || "",
+    processTags: review.processTags,
+    taxType: review.taxType,
+    status: review.status,
+    includeBaseline: review.includeBaseline,
+    note: review.note,
+  };
+}
+
+function approvedPriceReviews() {
+  return state.priceReviews.filter((row) =>
+    row.status === '已認證' &&
+    row.includeBaseline === '是' &&
+    toNumber(row.unitPrice) > 0
+  );
+}
+
+function medianNumber(values) {
+  const nums = values.map(toNumber).filter((value) => Number.isFinite(value) && value > 0).sort((a,b)=>a-b);
+  if (!nums.length) return 0;
+  const middle = Math.floor(nums.length / 2);
+  return nums.length % 2 ? nums[middle] : (nums[middle - 1] + nums[middle]) / 2;
+}
+
+function reviewSimilarityScore(review, target) {
+  let score = 0;
+  const targetCode = norm(target.itemCode || target.code || '');
+  const targetName = norm(target.itemName || target.name || '');
+  const targetMaterial = norm(target.material || '');
+  const reviewCode = norm(review.itemCode || '');
+  const reviewName = norm(review.itemName || '');
+  const reviewMaterial = norm(review.material || '');
+
+  if (targetCode && reviewCode && targetCode === reviewCode) score += 45;
+  if (targetName && reviewName) {
+    if (targetName === reviewName) score += 35;
+    else if (targetName.includes(reviewName) || reviewName.includes(targetName)) score += 22;
+  }
+  if (targetMaterial && reviewMaterial) {
+    if (targetMaterial === reviewMaterial) score += 30;
+    else if (targetMaterial.includes(reviewMaterial) || reviewMaterial.includes(targetMaterial)) score += 18;
+  }
+
+  const targetThickness = toNumber(String(target.thickness || target.thicknessMm || '').replace(/[^\d.]/g,''));
+  if (targetThickness && review.thicknessMm) {
+    const diff = Math.abs(targetThickness - review.thicknessMm);
+    if (diff <= 0.1) score += 18;
+    else if (diff <= 1) score += 8;
+  }
+
+  const targetW = toNumber(target.widthMm);
+  const targetH = toNumber(target.heightMm);
+  if (targetW && targetH && review.widthMm && review.heightMm) {
+    const direct = Math.max(Math.abs(targetW-review.widthMm)/review.widthMm, Math.abs(targetH-review.heightMm)/review.heightMm);
+    const rotated = Math.max(Math.abs(targetW-review.heightMm)/review.heightMm, Math.abs(targetH-review.widthMm)/review.widthMm);
+    const ratioDiff = Math.min(direct, rotated);
+    if (ratioDiff <= 0.03) score += 35;
+    else if (ratioDiff <= 0.10) score += 25;
+    else if (ratioDiff <= 0.20) score += 12;
+  }
+
+  const targetTags = new Set((target.processTags || extractEstimateProcessTags(target) || []).map ? (target.processTags || extractEstimateProcessTags(target)).map(norm) : String(target.processTags||'').split(/[、,，＋+]/).map(norm));
+  const reviewTags = String(review.processTags || '').split(/[、,，＋+]/).map(norm).filter(Boolean);
+  if (targetTags.size && reviewTags.length) {
+    const matched = reviewTags.filter((tag) => targetTags.has(tag)).length;
+    score += Math.min(15, matched * 5);
+  }
+
+  return score;
+}
+
+function priceReviewBaselineFor(review) {
+  const candidates = approvedPriceReviews()
+    .filter((row) => row.id !== review.id)
+    .map((row) => ({ row, score: reviewSimilarityScore(row, review) }))
+    .filter((entry) => entry.score >= 55)
+    .sort((a,b)=>b.score-a.score);
+  if (!candidates.length) return null;
+  const maxScore = candidates[0].score;
+  const peers = candidates.filter((entry) => entry.score >= maxScore - 5).slice(0, 8);
+  return {
+    value: medianNumber(peers.map((entry)=>entry.row.unitPrice)),
+    count: peers.length,
+    score: maxScore,
+  };
+}
+
+function priceReviewStatusClass(status) {
+  if (status === '已認證') return 'ready';
+  if (status === '待補價格' || status === '異常價格') return 'missing';
+  if (status === '僅保存' || status === '規格配對錯誤') return 'muted';
+  return 'pending';
+}
+
+function renderPriceReviews() {
+  if (!$('priceReviewRows')) return;
+  const keyword = norm($('priceReviewSearch')?.value || '');
+  const statusFilter = $('priceReviewStatusFilter')?.value || '';
+  const rows = [...state.priceReviews]
+    .filter((row) => !statusFilter || row.status === statusFilter)
+    .filter((row) => !keyword || norm([
+      row.sourceFile,row.project,row.itemCode,row.itemName,row.material,row.processTags,row.supplier,row.note
+    ].join(' ')).includes(keyword))
+    .sort((a,b)=>dateValue(b.quoteDate || b.fileSavedDate || b.updatedAt)-dateValue(a.quoteDate || a.fileSavedDate || a.updatedAt));
+
+  const pending = state.priceReviews.filter((row)=>row.status==='待認證').length;
+  const approved = state.priceReviews.filter((row)=>row.status==='已認證'&&row.includeBaseline==='是').length;
+  const missing = state.priceReviews.filter((row)=>row.status==='待補價格').length;
+  if ($('priceReviewCount')) $('priceReviewCount').textContent = String(state.priceReviews.length);
+  if ($('priceReviewPendingCount')) $('priceReviewPendingCount').textContent = String(pending);
+  if ($('priceReviewApprovedCount')) $('priceReviewApprovedCount').textContent = String(approved);
+  if ($('priceReviewMissingCount')) $('priceReviewMissingCount').textContent = String(missing);
+
+  $('priceReviewRows').innerHTML = rows.length ? rows.map((row)=>{
+    const baseline = priceReviewBaselineFor(row);
+    const difference = baseline?.value && row.unitPrice ? (row.unitPrice-baseline.value)/baseline.value*100 : null;
+    const dimensions = row.widthMm && row.heightMm ? `${roundDisplay(row.widthMm)} × ${roundDisplay(row.heightMm)}mm` : '尺寸待補';
+    return `<article class="priceReviewCard">
+      <div class="priceReviewMain">
+        <div class="priceReviewTitle">
+          <span class="priceReviewStatus ${priceReviewStatusClass(row.status)}">${escapeHTML(row.status)}</span>
+          <strong>${escapeHTML(row.itemName || '未命名品項')}</strong>
+          <small>${escapeHTML([row.itemCode,row.project].filter(Boolean).join('｜') || row.sourceFile || '—')}</small>
+        </div>
+        <div class="priceReviewSpec">
+          <span>${escapeHTML(row.material || '材質待補')}${row.thicknessMm?` ${roundDisplay(row.thicknessMm)}mm`:''}</span>
+          <span>${escapeHTML(dimensions)}</span>
+          <span>${escapeHTML(row.processTags || '製程待補')}</span>
+        </div>
+      </div>
+      <div class="priceReviewPrice">
+        <small>實際單價</small>
+        <strong>${row.unitPrice ? money(row.unitPrice) : '待補'}</strong>
+        <span>${escapeHTML(row.unit || '件')}｜數量 ${roundDisplay(row.qty||1)}</span>
+      </div>
+      <div class="priceReviewCompare">
+        <small>內部相似基準</small>
+        <strong>${baseline?.value ? money(baseline.value) : '尚無基準'}</strong>
+        <span>${baseline ? `${baseline.count}筆｜${difference===null?'':`${difference>=0?'+':''}${difference.toFixed(1)}%`}` : '認證後開始累積'}</span>
+      </div>
+      <div class="priceReviewMeta">
+        <span>報價日：${escapeHTML(row.quoteDate || '待補')}</span>
+        <span>供應商：${escapeHTML(row.supplier || '待補')}</span>
+        <span>稅別：${escapeHTML(row.taxType || '待補')}</span>
+      </div>
+      <div class="priceReviewActions">
+        <button class="button ghost compact" type="button" data-edit-review="${escapeHTML(row.id)}">檢視／修改</button>
+        ${row.unitPrice?`<button class="button primary compact" type="button" data-certify-review="${escapeHTML(row.id)}">認證並納入</button>`:''}
+        <button class="linkButton dangerText" type="button" data-delete-review="${escapeHTML(row.id)}">刪除</button>
+      </div>
+    </article>`;
+  }).join('') : '<div class="empty">沒有符合條件的待認證價格。</div>';
+}
+
+function openPriceReviewDialog(review) {
+  if (!review || !$('priceReviewDialog')) return;
+  $('priceReviewId').value = review.id || '';
+  $('priceReviewItemName').value = review.itemName || '';
+  $('priceReviewItemCode').value = review.itemCode || '';
+  $('priceReviewMaterial').value = review.material || '';
+  $('priceReviewThickness').value = review.thicknessMm || '';
+  $('priceReviewWidth').value = review.widthMm || '';
+  $('priceReviewHeight').value = review.heightMm || '';
+  $('priceReviewQty').value = review.qty || 1;
+  $('priceReviewUnit').value = review.unit || '件';
+  $('priceReviewUnitPrice').value = review.unitPrice || '';
+  $('priceReviewProject').value = review.project || '';
+  $('priceReviewSupplier').value = review.supplier || '';
+  $('priceReviewQuoteDate').value = review.quoteDate || '';
+  $('priceReviewTaxType').value = review.taxType || '';
+  $('priceReviewProcessTags').value = review.processTags || '';
+  $('priceReviewStatus').value = review.status || '待認證';
+  $('priceReviewIncludeBaseline').checked = review.includeBaseline === '是';
+  $('priceReviewSourceFile').value = review.sourceFile || '';
+  $('priceReviewNote').value = review.note || '';
+  $('priceReviewDialog').showModal();
+}
+
+function closePriceReviewDialog() {
+  $('priceReviewDialog')?.close();
+}
+
+function priceReviewFromDialog() {
+  const existing = state.priceReviews.find((row)=>row.id===$('priceReviewId').value) || {};
+  const status = $('priceReviewStatus').value;
+  return {
+    ...priceReviewToRecord(existing),
+    id: $('priceReviewId').value,
+    itemName: $('priceReviewItemName').value.trim(),
+    itemCode: $('priceReviewItemCode').value.trim(),
+    material: $('priceReviewMaterial').value.trim(),
+    thicknessMm: toNumber($('priceReviewThickness').value),
+    widthMm: toNumber($('priceReviewWidth').value),
+    heightMm: toNumber($('priceReviewHeight').value),
+    qty: toNumber($('priceReviewQty').value) || 1,
+    unit: $('priceReviewUnit').value.trim() || '件',
+    unitPrice: $('priceReviewUnitPrice').value === '' ? '' : toNumber($('priceReviewUnitPrice').value),
+    project: $('priceReviewProject').value.trim(),
+    supplier: $('priceReviewSupplier').value.trim(),
+    quoteDate: $('priceReviewQuoteDate').value,
+    taxType: $('priceReviewTaxType').value.trim(),
+    processTags: $('priceReviewProcessTags').value.trim(),
+    status,
+    includeBaseline: $('priceReviewIncludeBaseline').checked || status === '已認證' ? '是' : '否',
+    sourceFile: $('priceReviewSourceFile').value.trim(),
+    note: $('priceReviewNote').value.trim(),
+  };
+}
+
+async function savePriceReviewRecords(records, successMessage='待認證價格已儲存。') {
+  const response = await secureApiRequest({action:'savePriceReviews',records},{timeoutMs:90000});
+  const saved = (response.result?.records || []).map(normalizePriceReview);
+  saved.forEach((item)=>{
+    const index = state.priceReviews.findIndex((row)=>row.id===item.id);
+    if (index >= 0) state.priceReviews[index]=item; else state.priceReviews.push(item);
+  });
+  renderPriceReviews();
+  renderEstimateDraft();
+  showNotice(successMessage,'success');
+  return saved;
+}
+
+async function savePriceReviewFromDialog(event) {
+  event.preventDefault();
+  const record = priceReviewFromDialog();
+  if (!record.itemName) { showNotice('請輸入品項名稱。','warn'); return; }
+  if (record.status === '已認證' && (!record.unitPrice || !record.quoteDate || !record.supplier)) {
+    showNotice('正式認證前，請補齊單價、正式報價日期與供應商。','warn');
+    return;
+  }
+  const button = $('savePriceReviewDialog');
+  button.disabled = true;
+  try {
+    await savePriceReviewRecords([record], record.status==='已認證'?'價格已認證並納入智能估價。':'待認證價格已更新。');
+    closePriceReviewDialog();
+  } catch(error) {
+    showNotice(`儲存失敗：${error.message}`,'error');
+  } finally {
+    button.disabled = false;
+  }
+}
+
+async function handlePriceReviewRowsClick(event) {
+  const edit = event.target.closest('[data-edit-review]');
+  if (edit) {
+    openPriceReviewDialog(state.priceReviews.find((row)=>row.id===edit.dataset.editReview));
+    return;
+  }
+  const certify = event.target.closest('[data-certify-review]');
+  if (certify) {
+    const review = state.priceReviews.find((row)=>row.id===certify.dataset.certifyReview);
+    if (!review) return;
+    if (!review.quoteDate || !review.supplier) {
+      openPriceReviewDialog({...review,status:'已認證',includeBaseline:'是'});
+      showNotice('請補齊正式報價日期與供應商後再認證。','warn');
+      return;
+    }
+    if (!confirm(`確定將「${review.itemName}」認證並納入智能估價基準嗎？`)) return;
+    try {
+      await savePriceReviewRecords([{...priceReviewToRecord(review),status:'已認證',includeBaseline:'是'}],'價格已認證並納入智能估價。');
+    } catch(error) { showNotice(`認證失敗：${error.message}`,'error'); }
+    return;
+  }
+  const del = event.target.closest('[data-delete-review]');
+  if (!del) return;
+  const review = state.priceReviews.find((row)=>row.id===del.dataset.deleteReview);
+  if (!confirm(`確定刪除「${review?.itemName || del.dataset.deleteReview}」嗎？`)) return;
+  try {
+    await secureApiRequest({action:'deletePriceReview',id:del.dataset.deleteReview},{timeoutMs:30000});
+    state.priceReviews=state.priceReviews.filter((row)=>row.id!==del.dataset.deleteReview);
+    renderPriceReviews(); renderEstimateDraft();
+    showNotice('待認證價格已刪除。','success');
+  } catch(error) { showNotice(`刪除失敗：${error.message}`,'error'); }
+}
+
+function mapPriceReviewCsvRow(headers, row) {
+  const map = {};
+  headers.forEach((header,index)=>{map[String(header||'').trim()]=row[index] ?? '';});
+  return {
+    id: map['價格紀錄ID'],
+    sourceFile: map['來源文件'],
+    sourceRow: map['來源列'],
+    fileSavedDate: map['檔案最後儲存日'],
+    quoteDate: map['正式報價日期'],
+    supplier: map['供應商'],
+    project: map['專案／機台'],
+    itemCode: map['品項代碼'],
+    itemName: map['繁中品項名稱'] || map['品項名稱'],
+    material: map['標準材質'] || map['材質'],
+    thicknessMm: map['厚度mm'],
+    widthMm: map['Wmm'],
+    heightMm: map['Hmm'],
+    qty: map['數量'] || 1,
+    unit: map['計價單位'] || '件',
+    unitPrice: map['實際單價TWD'],
+    processTags: map['製程標籤'],
+    taxType: map['稅別'],
+    status: map['認證狀態'] || (map['實際單價TWD'] ? '待認證' : '待補價格'),
+    includeBaseline: map['是否納入基準'] || '否',
+    note: map['來源備註'],
+  };
+}
+
+async function importPriceReviewCsv(event) {
+  const file = event.target.files?.[0];
+  event.target.value = '';
+  if (!file) return;
+  try {
+    const rows = parseCsv(await file.text()).filter((row)=>row.some((cell)=>String(cell||'').trim()));
+    if (rows.length < 2) throw new Error('CSV 沒有可匯入的資料。');
+    const headers = rows[0].map((value)=>String(value||'').trim());
+    const records = rows.slice(1).map((row)=>mapPriceReviewCsvRow(headers,row)).filter((row)=>row.itemName);
+    if (!records.length) throw new Error('找不到「繁中品項名稱」欄位或有效資料。');
+    await savePriceReviewRecords(records,`已匯入 ${records.length} 筆待認證歷史價格。`);
+  } catch(error) {
+    showNotice(`匯入失敗：${error.message}`,'error');
+  }
+}
+
+function exportPriceReviewsCsv() {
+  if (!state.priceReviews.length) { showNotice('目前沒有待認證價格可匯出。','warn'); return; }
+  const header = ['價格紀錄ID','來源文件','來源列','檔案最後儲存日','正式報價日期','供應商','專案／機台','品項代碼','繁中品項名稱','標準材質','厚度mm','Wmm','Hmm','數量','計價單位','實際單價TWD','製程標籤','稅別','認證狀態','是否納入基準','來源備註'];
+  const body = state.priceReviews.map((row)=>[
+    row.id,row.sourceFile,row.sourceRow,row.fileSavedDate,row.quoteDate,row.supplier,row.project,row.itemCode,row.itemName,row.material,row.thicknessMm,row.widthMm,row.heightMm,row.qty,row.unit,row.unitPrice,row.processTags,row.taxType,row.status,row.includeBaseline,row.note
+  ]);
+  downloadCsv([header,...body],'IGS_價格待認證.csv');
+}
+
+function bestApprovedHistoricalPriceForItem(item) {
+  const candidates = approvedPriceReviews()
+    .map((row)=>({row,score:reviewSimilarityScore(row,item)}))
+    .filter((entry)=>entry.score>=70)
+    .sort((a,b)=>b.score-a.score);
+  if (!candidates.length) return null;
+  const maxScore = candidates[0].score;
+  const peers = candidates.filter((entry)=>entry.score>=maxScore-5).slice(0,8);
+  return {
+    unitPrice: medianNumber(peers.map((entry)=>entry.row.unitPrice)),
+    score: maxScore,
+    count: peers.length,
+    confidence: Math.max(65,Math.min(96,60+maxScore*0.35)),
+    records: peers.map((entry)=>entry.row),
+  };
 }
 
 function parseCsv(text) {
@@ -4043,7 +4445,7 @@ async function estimateMissingPricesWithAi(options = {}){
   }
 }
 
-function emptyEstimateItem(){return{code:'',name:'',originalName:'',normalizedName:'',material:'',originalMaterial:'',normalizedMaterial:'',spec:'',originalSpec:'',originalUnit:'mm',dimensions:[],dimensionDetailsJson:'',thickness:'',qty:1,unit:'',widthMm:0,heightMm:0,exactAreaMm2:0,singleExactTsai:0,totalExactTsai:0,billingTsai:0,billingTsaiManuallySet:false,sizeTier:'待確認',dimensionStatus:'待確認',dimensionConfidence:0,longStripWarning:'',usage:1,wasteRate:10,priceId:'',baseUnitPrice:0,manualPrice:false,manualPriceConfidence:75,marketAdjustment:0,marketManuallySet:false,processingFee:0,otherFee:0,optimisticCost:0,baselineCost:0,conservativeCost:0,priceSource:'',confidenceScore:50,printMethod:'',printSide:'',whiteInk:'',specialEffect:'',isArtItem:'是',allowMaterialOptimization:'是',allowPrintOptimization:'是',constraints:'',internalRuleApplied:false,internalRuleDetails:'',costBreakdown:[],missingProcessTags:[],priceFingerprint:'',partialEstimate:false};}
+function emptyEstimateItem(){return{code:'',name:'',originalName:'',normalizedName:'',material:'',originalMaterial:'',normalizedMaterial:'',spec:'',originalSpec:'',originalUnit:'mm',dimensions:[],dimensionDetailsJson:'',thickness:'',qty:1,unit:'',widthMm:0,heightMm:0,exactAreaMm2:0,singleExactTsai:0,totalExactTsai:0,billingTsai:0,billingTsaiManuallySet:false,sizeTier:'待確認',dimensionStatus:'待確認',dimensionConfidence:0,longStripWarning:'',usage:1,wasteRate:10,priceId:'',baseUnitPrice:0,manualPrice:false,manualPriceConfidence:75,marketAdjustment:0,marketManuallySet:false,processingFee:0,otherFee:0,optimisticCost:0,baselineCost:0,conservativeCost:0,priceSource:'',confidenceScore:50,printMethod:'',printSide:'',whiteInk:'',specialEffect:'',isArtItem:'是',allowMaterialOptimization:'是',allowPrintOptimization:'是',constraints:'',internalRuleApplied:false,internalRuleDetails:'',historicalPriceApplied:false,costBreakdown:[],missingProcessTags:[],priceFingerprint:'',partialEstimate:false};}
 
 
 function internalPriceBasisKey(){
@@ -4243,12 +4645,38 @@ function recalculateEstimateItem(item){
     item.usageManuallySet=false;
   }
 
+  const historicalMatch=useManualPrice?null:bestApprovedHistoricalPriceForItem(item);
   const price=useManualPrice?null:(state.materialPrices.find((p)=>p.id===item.priceId)||bestMaterialPriceForItem(item));
   let internalEstimate=null;
 
-  if(price&&!item.priceId)item.priceId=price.id;
+  if(!useManualPrice&&item.historicalPriceApplied){
+    item.baseUnitPrice=0;
+    item.priceSource='';
+    item.historicalPriceApplied=false;
+    item.usageManuallySet=false;
+  }
 
-  if(price){
+  if(historicalMatch&&historicalMatch.score>=82){
+    item.priceId='';
+    item.manualPrice=false;
+    item.internalRuleApplied=false;
+    item.historicalPriceApplied=true;
+    item.baseUnitPrice=historicalMatch.unitPrice;
+    item.priceSource=`已認證歷史價｜${historicalMatch.count}筆中位數｜匹配分數 ${historicalMatch.score}`;
+    item.unit='件';
+    item.usage=Math.max(1,toNumber(item.qty)||1);
+    item.usageManuallySet=true;
+    item.wasteRate=0;
+    item.marketAdjustment=0;
+    item.marketManuallySet=true;
+    item.costBreakdown=[{label:'已認證歷史整件價',amount:historicalMatch.unitPrice,type:'歷史'}];
+    item.missingProcessTags=[];
+    item.partialEstimate=false;
+  }else if(price&&!item.priceId)item.priceId=price.id;
+
+  if(historicalMatch&&historicalMatch.score>=82){
+    // 已套用經人工認證的相同／高度相似歷史整件價。
+  }else if(price){
     item.manualPrice=false;
     item.internalRuleApplied=false;
     item.baseUnitPrice=price.basePrice;
@@ -4293,12 +4721,15 @@ function recalculateEstimateItem(item){
 
   const usageWithWaste=item.usage*(1+Math.max(0,toNumber(item.wasteRate))/100);
   const materialCost=usageWithWaste*toNumber(item.baseUnitPrice)*(1+toNumber(item.marketAdjustment)/100);
-  const base=Math.max(toNumber(price?.minimumFee),materialCost+toNumber(item.processingFee)+toNumber(item.otherFee));
+  const minimumFee=item.historicalPriceApplied?0:toNumber(price?.minimumFee);
+  const base=Math.max(minimumFee,materialCost+toNumber(item.processingFee)+toNumber(item.otherFee));
   const confidence=useManualPrice
     ? Math.max(20,Math.min(98,toNumber(item.manualPriceConfidence)||75))
-    : internalEstimate
-      ? internalEstimate.confidence
-      : confidenceScoreForPrice(price);
+    : item.historicalPriceApplied && historicalMatch
+      ? historicalMatch.confidence
+      : internalEstimate
+        ? internalEstimate.confidence
+        : confidenceScoreForPrice(price);
   item.confidenceScore=confidence;
   const uncertainty=confidence>=80?0.05:confidence>=60?0.10:0.18;
   item.baselineCost=base;
@@ -4336,7 +4767,8 @@ function renderEstimateDraft(){
     const hasPrice=Boolean(item.priceId || item.manualPrice || toNumber(item.baseUnitPrice)>0);
     const aiReferencePrice=/AI市場參考價/.test(item.priceSource||'');
     const internalRulePrice=/內部價格規則/.test(item.priceSource||'');
-    const priceState=hasPrice ? (item.partialEstimate ? '部分估價' : (item.priceId ? '公司價格' : (internalRulePrice ? '內部規則' : (aiReferencePrice ? 'AI參考價' : '文件／人工價格')))) : '待補價格';
+    const historicalPrice=/已認證歷史價/.test(item.priceSource||'');
+    const priceState=hasPrice ? (item.partialEstimate ? '部分估價' : (item.priceId ? '公司價格' : (historicalPrice ? '歷史基準' : (internalRulePrice ? '內部規則' : (aiReferencePrice ? 'AI參考價' : '文件／人工價格'))))) : '待補價格';
     const priceClass=hasPrice ? (aiReferencePrice ? 'ai' : 'ready') : 'missing';
     return `<article class="estimateQuickCard" data-estimate-index="${index}">
       <header class="estimateQuickCardHead">
