@@ -8,7 +8,7 @@
   <meta name="googlebot" content="noindex, nofollow, noarchive, nosnippet">
   <meta name="referrer" content="no-referrer">
   <title>IGS 機台材料成本 ERP</title>
-  <link rel="stylesheet" href="style.css?v=20260624-igs-v2-5-personal-ai">
+  <link rel="stylesheet" href="style.css?v=20260624-igs-v3-2-processing-grade">
 </head>
 <body class="authLocked">
   <section id="authGate" class="authGate" aria-labelledby="loginTitle">
@@ -822,9 +822,9 @@
     <section id="smartEstimate" class="view">
       <div class="quickIntro estimateIntro">
         <div>
-          <span class="eyebrow">v2.9 · 已確認函數基準價格</span>
+          <span class="eyebrow">v3.2 · 原材＋印刷＋加工分級估價</span>
           <h2>貼上品項明細或上傳文件，自動拆尺寸、製程並產生低中高估價</h2>
-          <p>AI 額度不足時仍可使用文字解析與內部價格規則；缺少的加工價格會清楚標示，不會當成免費。</p>
+          <p>加工外型會依 L1～L4 自動分級，並可人工調整；3D膜、折彎等特殊製程另外加價。</p>
         </div>
         <div id="estimateStatusBadge" class="apiBadge">尚未建立估價</div>
       </div>
@@ -868,12 +868,13 @@
             <label>
               <span>內部估價基準</span>
               <select id="estimatePriceBasis">
-                <option value="sampleTwd">台灣打樣 TWD（預設，公司確認基準）</option>
+                <option value="sampleTwd">台灣歷史拆項 TWD（預設：精確面積＋加工分級）</option>
+                <option value="sampleTwdFloor">台灣函數最低價 TWD（100×100／300×300級距）</option>
                 <option value="sampleRmb">中國打樣 RMB → TWD（公司確認基準）</option>
                 <option value="productionRmb">中國量產 RMB → TWD（公司確認基準）</option>
                 <option value="rawTwd">原材料 TWD（只含原材，不含完整加工）</option>
               </select>
-              <small>三個尺寸級距皆使用你提供的函數基準；RMB 場景再依下方人民幣匯率換算。</small>
+              <small>台灣歷史拆項：材料與印刷用精確面積，加上 L1～L4 最低加工包價，較貼近已提供的台灣實際打樣；函數最低價模式則保留100×100與300×300級距。</small>
             </label>
 
             <div class="estimateProjectActions">
@@ -1107,6 +1108,6 @@
   <datalist id="estimateWhiteInkOptions"></datalist>
   <datalist id="estimateSpecialEffectOptions"></datalist>
   <script src="data.js?v=20260624-igs-v2-4"></script>
-  <script src="app.js?v=20260624-igs-v2-6-precise-estimate"></script>
+  <script src="app.js?v=20260624-igs-v3-2-processing-grade"></script>
 </body>
 </html>

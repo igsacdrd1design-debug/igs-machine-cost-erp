@@ -2125,3 +2125,5 @@ td small { color: var(--muted); }
   .topbarActions .searchBox { width: 100%; }
   .topbarActions .searchBox input { width: 100%; }
 }
+
+.fieldHint{margin:.35rem 0 .75rem;color:var(--muted,#6d7478);font-size:.82rem;line-height:1.5;}

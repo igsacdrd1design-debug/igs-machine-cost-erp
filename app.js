@@ -1,5 +1,5 @@
 // =====================================================
-// IGS 機台材料成本 ERP — 前端 v2.9 已確認函數基準版
+// IGS 機台材料成本 ERP — 前端 v3.2 加工分級估價版
 // 1. ERP 密碼登入
 // 2. 工作階段驗證
 // 3. 私人 Google Sheet 安全讀取
@@ -60,10 +60,28 @@ const pageDescriptions = {
   suppliers: "查看供應商與成本單金額。",
   machine360Setup: "上傳一至四張基準角度圖，使用 AI 補中間角度並建立可旋轉的主管成本頁。",
   priceCenter: "管理公司材料價格並查詢網路市場浮動。",
-  smartEstimate: "AI 讀取圖片或 PDF；依使用者確認的面積、100×100、300×300基準規則估價，並可切換台灣打樣、中國打樣、中國量產與原材料場景。",
+  smartEstimate: "AI 讀取圖片或 PDF；依已確認材料、印刷基準與 L1～L4 加工等級估價，特殊製程另行加價。",
   artOptimization: "僅針對美術材料與印刷製程提出降本及視覺概念模擬。",
 };
 
+
+
+const PROCESSING_LEVEL_CONFIG = Object.freeze({
+  NONE: Object.freeze({ code: 'NONE', label: '不計加工等級', ruleName: '', base: 0, low: 0, high: 0 }),
+  L1: Object.freeze({ code: 'L1', label: 'L1 基本加工', ruleName: 'L1 基本加工', base: 120, low: 100, high: 180 }),
+  L2: Object.freeze({ code: 'L2', label: 'L2 一般異形', ruleName: 'L2 一般異形', base: 340, low: 280, high: 400 }),
+  L3: Object.freeze({ code: 'L3', label: 'L3 複雜異形', ruleName: 'L3 複雜異形', base: 410, low: 350, high: 480 }),
+  L4: Object.freeze({ code: 'L4', label: 'L4 高複雜加工', ruleName: 'L4 高複雜加工', base: 610, low: 520, high: 700 }),
+});
+
+const PROCESSING_LEVEL_OPTIONS = Object.freeze([
+  ['AUTO', '自動判斷'],
+  ['NONE', '不計加工等級'],
+  ['L1', 'L1 基本加工｜100～180，基準120'],
+  ['L2', 'L2 一般異形｜280～400，基準340'],
+  ['L3', 'L3 複雜異形｜350～480，基準410'],
+  ['L4', 'L4 高複雜加工｜520～700，基準610'],
+]);
 
 const BUILTIN_INTERNAL_PRICE_RULES = Object.freeze([
   ["材料","透明壓克力",12,"100×100最低價","固定最低價",320,320,71,22,"壓克力"],
@@ -107,16 +125,39 @@ const BUILTIN_INTERNAL_PRICE_RULES = Object.freeze([
   ["組合包價","PVC1mm＋四色白＋裁切",1,"面積才數","每收費才",0,200,44,17,"PVC"],
   ["組合包價","貼紙＋四色白＋裁切",0,"100×100最低價","固定最低價",0,110,24,25,"貼紙"],
   ["組合包價","貼紙＋四色白＋裁切",0,"300×300最低價","固定最低價",0,200,44,25,"貼紙"],
-  ["組合包價","貼紙＋四色白＋裁切",0,"面積才數","每收費才",0,104.7306667,23,7.5,"貼紙"]
-].map((r,index)=>Object.freeze({
-  id:`IPR${String(index+1).padStart(3,'0')}`,
-  type:r[0],name:r[1],category:r[9] || (r[0]==='材料'?'內部材料':'印刷'),
-  thicknessMm:r[2],sizeTier:r[3],pricingMethod:r[4],
-  rawTwd:r[5],sampleTwd:r[6],sampleRmb:r[7]||0,productionRmb:r[8]||0,
-  source:index<30?'使用者提供函數基準表':'歷史資料與加工費候選分析',
-  certification:index<30?'已確認基準':'候選／停用',active:index<30?'是':'否',
-  note:index<30?'依使用者 2026-06-24 提供之面積、100×100、300×300函數基準':'v2.9 預設停用；採購認證後再啟用'
-})));
+  ["組合包價","貼紙＋四色白＋裁切",0,"面積才數","每收費才",0,104.7306667,23,7.5,"貼紙"],
+  ["加工等級","L1 基本加工",0,"每件一次","固定最低價",0,120,0,0,"加工"],
+  ["加工等級","L2 一般異形",0,"每件一次","固定最低價",0,340,0,0,"加工"],
+  ["加工等級","L3 複雜異形",0,"每件一次","固定最低價",0,410,0,0,"加工"],
+  ["加工等級","L4 高複雜加工",0,"每件一次","固定最低價",0,610,0,0,"加工"],
+  ["印刷加工","3D膜",0,"每件一次","固定最低價",0,280,0,0,"貼合"],
+  ["印刷加工","壓克力折彎",0,"每件一次","固定最低價",0,110,0,0,"加工"]
+].map((r,index)=>{
+  const id=`IPR${String(index+1).padStart(3,'0')}`;
+  const confirmed=index<30;
+  const temporaryActive=['IPR043','IPR044','IPR045','IPR046','IPR047','IPR048'].includes(id);
+  return Object.freeze({
+    id,
+    type:r[0],name:r[1],category:r[9] || (r[0]==='材料'?'內部材料':'印刷'),
+    thicknessMm:r[2],sizeTier:r[3],pricingMethod:r[4],
+    rawTwd:r[5],sampleTwd:r[6],sampleRmb:r[7]||0,productionRmb:r[8]||0,
+    source:confirmed?'使用者提供函數基準表':temporaryActive?'台灣歷史打樣差額分析':'歷史資料與加工費候選分析',
+    certification:confirmed?'已確認基準':temporaryActive?'歷史候選／自動套用':'候選／停用',
+    active:(confirmed||temporaryActive)?'是':'否',
+    note:confirmed
+      ?'依使用者 2026-06-24 提供之面積、100×100、300×300函數基準'
+      :temporaryActive
+        ?({
+          IPR043:'小件、簡單外框、少量孔洞；基準120元，參考100～180元',
+          IPR044:'一般曲線、多轉角或一般異形；基準340元，參考280～400元',
+          IPR045:'角色輪廓、多孔洞或複雜外型；基準410元，參考350～480元',
+          IPR046:'細碎輪廓、多層印刷對位或高複雜加工；基準610元，參考520～700元',
+          IPR047:'3D膜候選增量280元／件',
+          IPR048:'壓克力單道折彎候選110元／件'
+        }[id]||'台灣歷史打樣候選規則')
+        :'候選規則預設停用；採購認證後再啟用'
+  });
+}));
 
 
 function mergedInternalPriceRules(){
@@ -3471,6 +3512,9 @@ function normalizeEstimateItem(row) {
     baseUnitPrice: toNumber(firstValue(row, ["基準單價", "baseUnitPrice"])),
     marketAdjustment: toNumber(firstValue(row, ["市場調整率", "marketAdjustment"])),
     processingFee: toNumber(firstValue(row, ["加工費", "processingFee"])),
+    processingLevel: String(firstValue(row, ["加工等級", "processingLevel"], "AUTO")) || "AUTO",
+    processingLevelSource: String(firstValue(row, ["加工等級來源", "processingLevelSource"], "自動判斷")),
+    processingLevelReason: String(firstValue(row, ["加工判斷理由", "processingLevelReason"])),
     otherFee: toNumber(firstValue(row, ["其他費用", "otherFee"])),
     optimisticCost: toNumber(firstValue(row, ["樂觀成本", "optimisticCost"])),
     baselineCost: toNumber(firstValue(row, ["基準成本", "baselineCost"])),
@@ -4924,19 +4968,30 @@ async function estimateMissingPricesWithAi(options = {}){
   }
 }
 
-function emptyEstimateItem(){return{code:'',name:'',originalName:'',normalizedName:'',material:'',originalMaterial:'',normalizedMaterial:'',spec:'',originalSpec:'',originalUnit:'mm',dimensions:[],dimensionDetailsJson:'',thickness:'',qty:1,unit:'',widthMm:0,heightMm:0,exactAreaMm2:0,singleExactTsai:0,totalExactTsai:0,billingTsai:0,billingTsaiManuallySet:false,sizeTier:'待確認',dimensionStatus:'待確認',dimensionConfidence:0,longStripWarning:'',usage:1,wasteRate:10,priceId:'',baseUnitPrice:0,manualPrice:false,manualPriceConfidence:75,priceManuallySelected:false,marketAdjustment:0,marketManuallySet:false,processingFee:0,otherFee:0,optimisticCost:0,baselineCost:0,conservativeCost:0,priceSource:'',confidenceScore:50,printMethod:'',printSide:'',whiteInk:'',specialEffect:'',isArtItem:'是',allowMaterialOptimization:'是',allowPrintOptimization:'是',constraints:'',internalRuleApplied:false,internalRuleDetails:'',historicalPriceApplied:false,costBreakdown:[],missingProcessTags:[],priceFingerprint:'',partialEstimate:false};}
+function emptyEstimateItem(){return{code:'',name:'',originalName:'',normalizedName:'',material:'',originalMaterial:'',normalizedMaterial:'',spec:'',originalSpec:'',originalUnit:'mm',dimensions:[],dimensionDetailsJson:'',thickness:'',qty:1,unit:'',widthMm:0,heightMm:0,exactAreaMm2:0,singleExactTsai:0,totalExactTsai:0,billingTsai:0,billingTsaiManuallySet:false,sizeTier:'待確認',dimensionStatus:'待確認',dimensionConfidence:0,longStripWarning:'',usage:1,wasteRate:10,priceId:'',baseUnitPrice:0,manualPrice:false,manualPriceConfidence:75,priceManuallySelected:false,marketAdjustment:0,marketManuallySet:false,processingFee:0,processingLevel:'AUTO',processingLevelSource:'自動判斷',processingLevelReason:'',processingLevelResolved:'',processingRangeLow:0,processingRangeBase:0,processingRangeHigh:0,otherFee:0,optimisticCost:0,baselineCost:0,conservativeCost:0,priceSource:'',confidenceScore:50,printMethod:'',printSide:'',whiteInk:'',specialEffect:'',isArtItem:'是',allowMaterialOptimization:'是',allowPrintOptimization:'是',constraints:'',internalRuleApplied:false,internalRuleDetails:'',historicalPriceApplied:false,costBreakdown:[],missingProcessTags:[],priceFingerprint:'',partialEstimate:false};}
 
 
 function internalPriceBasisKey(){
   const value=$('estimatePriceBasis')?.value||'sampleTwd';
-  return ['sampleTwd','rawTwd','sampleRmb','productionRmb'].includes(value)?value:'sampleTwd';
+  return ['sampleTwd','sampleTwdFloor','rawTwd','sampleRmb','productionRmb'].includes(value)?value:'sampleTwd';
 }
 
 function internalPriceScenarioLabel(basisKey=internalPriceBasisKey()){
   if(basisKey==='productionRmb')return`中國量產 RMB 換算（匯率 ${currentEstimateCnyRate()}）`;
   if(basisKey==='sampleRmb')return`中國打樣 RMB 換算（匯率 ${currentEstimateCnyRate()}）`;
   if(basisKey==='rawTwd')return'原材料 TWD';
-  return'台灣打樣 TWD';
+  if(basisKey==='sampleTwdFloor')return'台灣函數最低價 TWD（100×100／300×300級距）';
+  return'台灣歷史拆項 TWD（精確面積＋加工分級）';
+}
+
+function internalMaterialBasisKey(basisKey=internalPriceBasisKey()){
+  // 台灣拆項估價時，材料必須使用原材價；印刷與加工才使用打樣價。
+  // 避免「已含打樣加成的材料價」再疊加完整印刷費造成重複計價。
+  return (basisKey==='sampleTwd'||basisKey==='sampleTwdFloor')?'rawTwd':basisKey;
+}
+
+function internalProcessBasisKey(basisKey=internalPriceBasisKey()){
+  return basisKey==='sampleTwdFloor'?'sampleTwd':basisKey;
 }
 
 function numericThickness(value){
@@ -4997,21 +5052,25 @@ function canonicalInternalMaterial(value){
   return descriptor.family;
 }
 
-function effectiveInternalTier(item){
+function effectiveInternalTier(item,basisKey=internalPriceBasisKey()){
   applyEstimateDimensionNormalization(item);
-  const tier=String(item.sizeTier||'');
-  if(tier==='100×100最低價'||tier==='300×300最低價'||tier==='面積才數')return tier;
   const w=toNumber(item.widthMm),h=toNumber(item.heightMm);
+  // 台灣歷史拆項使用精確面積，最低處理成本改由 L1～L4 加工等級吸收。
+  // 這能避免小件同時被「300×300材料最低價＋印刷最低價＋加工最低費」重複墊高。
+  if(basisKey==='sampleTwd'&&w>0&&h>0)return'面積才數';
   if(w>0&&h>0){
     if(w<=100&&h<=100)return'100×100最低價';
     if(w<=300&&h<=300)return'300×300最低價';
     return'面積才數';
   }
+  const tier=String(item.sizeTier||'');
+  if(tier==='100×100最低價'||tier==='300×300最低價'||tier==='面積才數')return tier;
   return '';
 }
 
 function internalRulePrice(rule,basisKey){
-  const amount=Math.max(0,toNumber(rule?.[basisKey]));
+  const priceKey=basisKey==='sampleTwdFloor'?'sampleTwd':basisKey;
+  const amount=Math.max(0,toNumber(rule?.[priceKey]));
   return (basisKey==='sampleRmb'||basisKey==='productionRmb')?amount*currentEstimateCnyRate():amount;
 }
 
@@ -5079,6 +5138,62 @@ function extractEstimateProcessTags(item){
   if(/燒光|拋光/.test(text))tags.push('燒光');
   if(/銑槽|銑溝/.test(text))tags.push('銑槽／銑溝');
   return[...new Set(tags)];
+}
+
+
+function processingLevelRule(levelCode,basisKey){
+  const config=PROCESSING_LEVEL_CONFIG[levelCode];
+  if(!config||!config.ruleName)return null;
+  return mergedInternalPriceRules().find((rule)=>
+    rule.active!=='否'&&
+    rule.type==='加工等級'&&
+    standardizeErpText(rule.name||'')===config.ruleName&&
+    rule.sizeTier==='每件一次'&&
+    internalRulePrice(rule,basisKey)>0
+  )||null;
+}
+
+function resolveEstimateProcessingLevel(item,processTags){
+  const hasCutting=processTags.includes('裁切外型');
+  const requested=String(item.processingLevel||'AUTO').toUpperCase();
+  if(!hasCutting){
+    item.processingLevelResolved='NONE';
+    item.processingLevelSource='無裁切製程';
+    item.processingLevelReason='未辨識到裁切外型，不加加工等級費。';
+    return{code:'NONE',source:'無裁切製程',reason:item.processingLevelReason,manual:false};
+  }
+  if(requested!=='AUTO'&&PROCESSING_LEVEL_CONFIG[requested]){
+    const config=PROCESSING_LEVEL_CONFIG[requested];
+    item.processingLevelResolved=requested;
+    item.processingLevelSource='人工指定';
+    item.processingLevelReason=requested==='NONE'?'人工指定不計加工等級。':`人工指定 ${config.label}。`;
+    return{code:requested,source:'人工指定',reason:item.processingLevelReason,manual:true};
+  }
+
+  const text=standardizeErpText([
+    item.code,item.name,item.originalName,item.material,item.spec,item.originalSpec,
+    item.printMethod,item.printSide,item.whiteInk,item.specialEffect,item.constraints
+  ].filter(Boolean).join(' '));
+  const exactTsai=Math.max(0,toNumber(item.singleExactTsai)||toNumber(item.totalExactTsai)||0);
+  let code='L1';
+  let reason='小件或簡單外框，未辨識到高複雜特徵。';
+
+  if(/喇叭|齒輪|細碎|高複雜|精細輪廓|多重孔|多層印刷|直噴兩次|白色.*兩次|黑色直噴|黑墨|不透光銀底|銀底/.test(text)){
+    code='L4';
+    reason='辨識到細碎輪廓、多層印刷對位、黑／銀底或高複雜特徵。';
+  }else if(/角色|人物|多孔|鏤空|複雜輪廓|內孔|大型異形|造型板/.test(text)){
+    code='L3';
+    reason=/角色|人物/.test(text)?'辨識到角色／人物輪廓，採複雜異形。':'辨識到多孔、鏤空或複雜輪廓。';
+  }else if(/異形|曲線|圓弧|多轉角|導光|積分板|輪廓/.test(text)){
+    code='L2';
+    reason=/導光|積分板/.test(text)?'辨識到導光／積分板類一般異形。':'辨識到曲線、多轉角或一般異形。';
+  }
+
+  item.processingLevel='AUTO';
+  item.processingLevelResolved=code;
+  item.processingLevelSource='規則自動判斷';
+  item.processingLevelReason=reason;
+  return{code,source:'規則自動判斷',reason,manual:false};
 }
 
 const PROCESS_RULE_NAME_ALIASES=Object.freeze({
@@ -5154,7 +5269,8 @@ function internalRuleLineCost(rule,basisKey,context){
   if(!rate)return 0;
   if(rule?.pricingMethod==='每才')return rate*Math.max(0.01,context.totalExact);
   if(rule?.pricingMethod==='每收費才')return rate*Math.max(1,context.totalBilling);
-  return rate;
+  // 固定最低價與「每件一次」都應按數量計算，避免多件仍只收一次。
+  return rate*Math.max(1,context.qty);
 }
 
 function comboMinimumLineCost(comboRule,basisKey){
@@ -5165,17 +5281,19 @@ function comboMinimumLineCost(comboRule,basisKey){
 
 function estimateByInternalRules(item){
   applyEstimateDimensionNormalization(item);
-  const tier=effectiveInternalTier(item);
+  const basisKey=internalPriceBasisKey();
+  const tier=effectiveInternalTier(item,basisKey);
   if(!tier)return null;
   item.sizeTier=tier;
-  const basisKey=internalPriceBasisKey();
+  const materialBasisKey=internalMaterialBasisKey(basisKey);
+  const processBasisKey=internalProcessBasisKey(basisKey);
   const scenarioLabel=internalPriceScenarioLabel(basisKey);
   const thickness=numericThickness(item.thickness);
   const materialName=canonicalInternalMaterial(item.material||item.name);
   const processTags=extractEstimateProcessTags(item);
   const context=internalLinePricingContext(item);
 
-  // 組合包價僅在價格中心由採購手動啟用後使用；v2.9 預設依已確認材料與印刷基準拆項。
+  // 組合包價僅在價格中心由採購手動啟用後使用；v3.2 預設採原材＋印刷＋加工分級。
   const combo=findInternalComboRule(item,processTags,tier,basisKey);
   if(combo){
     const lineVariable=internalRuleLineCost(combo.rule,basisKey,context);
@@ -5187,9 +5305,9 @@ function estimateByInternalRules(item){
 
     processTags.forEach((tag)=>{
       if(covered.has(tag))return;
-      const rule=findProcessRuleForTag(tag,tier,basisKey)||findProcessRuleForTag(tag,'每件一次',basisKey);
+      const rule=findProcessRuleForTag(tag,tier,processBasisKey)||findProcessRuleForTag(tag,'每件一次',processBasisKey);
       if(!rule)return;
-      const amount=internalRuleLineCost(rule,basisKey,context);
+      const amount=internalRuleLineCost(rule,processBasisKey,context);
       lineExtra+=amount;
       breakdown.push({label:rule.name,amount:amount/context.qty,type:'追加製程'});
       covered.add(tag);
@@ -5211,7 +5329,7 @@ function estimateByInternalRules(item){
     };
   }
 
-  const materialRule=findInternalRule('材料',materialName,thickness,tier,basisKey);
+  const materialRule=findInternalRule('材料',materialName,thickness,tier,materialBasisKey);
   if(!materialRule){
     item.costBreakdown=[];
     item.missingProcessTags=[materialName||'材料價格',...processTags];
@@ -5219,15 +5337,42 @@ function estimateByInternalRules(item){
     return null;
   }
 
-  const lineMaterial=internalRuleLineCost(materialRule,basisKey,context);
+  const lineMaterial=internalRuleLineCost(materialRule,materialBasisKey,context);
   const breakdown=[{label:`${materialRule.name}${materialRule.thicknessMm?` ${materialRule.thicknessMm}mm`:''}`,amount:lineMaterial/context.qty,type:'材料'}];
   const covered=new Set();
   let lineProcess=0;
+  let processingRange=null;
+
+  if(processTags.includes('裁切外型')){
+    const level=resolveEstimateProcessingLevel(item,processTags);
+    if(level.code==='NONE'){
+      covered.add('裁切外型');
+      breakdown.push({label:'加工等級：不計',amount:0,type:'加工等級'});
+    }else{
+      const config=PROCESSING_LEVEL_CONFIG[level.code];
+      const gradeRule=processingLevelRule(level.code,processBasisKey);
+      if(config&&gradeRule){
+        const amount=internalRuleLineCost(gradeRule,processBasisKey,context);
+        lineProcess+=amount;
+        covered.add('裁切外型');
+        breakdown.push({label:`${config.label}（${level.source}）`,amount:amount/context.qty,type:'加工等級'});
+        processingRange={
+          code:level.code,
+          baseLine:amount,
+          lowLine:config.low*context.qty,
+          highLine:config.high*context.qty,
+          reason:level.reason,
+        };
+      }
+    }
+  }else{
+    resolveEstimateProcessingLevel(item,processTags);
+  }
 
   if(processTags.includes('四色直噴')&&processTags.includes('白色直噴')){
-    const combined=findInternalRule('印刷加工','四色印刷＋白',0,tier,basisKey);
+    const combined=findInternalRule('印刷加工','四色印刷＋白',0,tier,processBasisKey);
     if(combined){
-      const amount=internalRuleLineCost(combined,basisKey,context);
+      const amount=internalRuleLineCost(combined,processBasisKey,context);
       lineProcess+=amount;
       breakdown.push({label:combined.name,amount:amount/context.qty,type:'印刷'});
       covered.add('四色直噴');covered.add('白色直噴');
@@ -5236,9 +5381,9 @@ function estimateByInternalRules(item){
 
   processTags.forEach((tag)=>{
     if(covered.has(tag))return;
-    const rule=findProcessRuleForTag(tag,tier,basisKey)||findProcessRuleForTag(tag,'每件一次',basisKey);
+    const rule=findProcessRuleForTag(tag,tier,processBasisKey)||findProcessRuleForTag(tag,'每件一次',processBasisKey);
     if(!rule)return;
-    const amount=internalRuleLineCost(rule,basisKey,context);
+    const amount=internalRuleLineCost(rule,processBasisKey,context);
     lineProcess+=amount;
     breakdown.push({label:rule.name,amount:amount/context.qty,type:'製程'});
     covered.add(tag);
@@ -5249,7 +5394,7 @@ function estimateByInternalRules(item){
   if(unitPrice<=0)return null;
 
   const details=[
-    `${materialRule.name}${materialRule.thicknessMm?` ${materialRule.thicknessMm}mm`:''} ${tier}`,
+    `${materialRule.name}${materialRule.thicknessMm?` ${materialRule.thicknessMm}mm`:''} ${tier}（${materialBasisKey==='rawTwd'?'原材價':'場景價'}）`,
     ...breakdown.filter((row)=>row.type!=='材料').map((row)=>row.label),
     `整列精確才數 ${Math.round(context.totalExact*10000)/10000}`,
     `整列計價才數 ${context.totalBilling}`
@@ -5259,10 +5404,21 @@ function estimateByInternalRules(item){
   item.missingProcessTags=missing;
   item.partialEstimate=missing.length>0;
   item.priceFingerprint=[materialName,item.thickness,tier,...processTags].filter(Boolean).join('｜');
-  const confidence=(item.dimensionStatus==='已解析'?78:62)+(processTags.length&&!missing.length?5:0)-Math.min(35,missing.length*8);
+  const confidence=(item.dimensionStatus==='已解析'?78:62)+(processTags.length&&!missing.length?5:0)-Math.min(35,missing.length*8)-(item.processingLevelSource==='規則自動判斷'&&processTags.includes('裁切外型')?6:0);
+  const optimisticUnitPrice=processingRange
+    ? Math.max(0,(lineMaterial+lineProcess-processingRange.baseLine+processingRange.lowLine)/context.qty)
+    : null;
+  const conservativeUnitPrice=processingRange
+    ? Math.max(0,(lineMaterial+lineProcess-processingRange.baseLine+processingRange.highLine)/context.qty)
+    : null;
+  item.processingRangeLow=processingRange?processingRange.lowLine/context.qty:0;
+  item.processingRangeBase=processingRange?processingRange.baseLine/context.qty:0;
+  item.processingRangeHigh=processingRange?processingRange.highLine/context.qty:0;
   return{
     unitPrice,
-    source:`內部拆項規則｜${details.join('＋')}｜${scenarioLabel}${missing.length?`｜待補製程：${missing.join('、')}`:''}`,
+    optimisticUnitPrice,
+    conservativeUnitPrice,
+    source:`內部拆項規則｜${details.join('＋')}｜${scenarioLabel}${processingRange?`｜加工${processingRange.code}`:''}${missing.length?`｜待補製程：${missing.join('、')}`:''}`,
     confidence:Math.max(35,Math.min(90,confidence)),
     details:details.join('＋'),
     breakdown,
@@ -5436,8 +5592,15 @@ function recalculateEstimateItem(item){
   item.confidenceScore=confidence;
   const uncertainty=confidence>=80?0.05:confidence>=60?0.10:0.18;
   item.baselineCost=base;
-  item.optimisticCost=Math.max(0,base*(1-uncertainty));
-  item.conservativeCost=base*(1+uncertainty);
+  if(internalEstimate&&Number.isFinite(internalEstimate.optimisticUnitPrice)&&Number.isFinite(internalEstimate.conservativeUnitPrice)){
+    const qty=Math.max(1,toNumber(item.qty)||1);
+    const manualExtras=toNumber(item.processingFee)+toNumber(item.otherFee);
+    item.optimisticCost=Math.max(0,internalEstimate.optimisticUnitPrice*qty+manualExtras);
+    item.conservativeCost=Math.max(item.baselineCost,internalEstimate.conservativeUnitPrice*qty+manualExtras);
+  }else{
+    item.optimisticCost=Math.max(0,base*(1-uncertainty));
+    item.conservativeCost=base*(1+uncertainty);
+  }
   return item;
 }
 
@@ -5469,10 +5632,14 @@ function renderEstimateDraft(){
   $('estimateItemRows').innerHTML=state.estimateDraftItems.map((item,index)=>{
     const hasPrice=Boolean(item.priceId || item.manualPrice || toNumber(item.baseUnitPrice)>0);
     const aiReferencePrice=/AI市場參考價|AI內部資料參考價/.test(item.priceSource||'');
-    const internalRulePrice=/內部價格規則/.test(item.priceSource||'');
+    const internalRulePrice=/內部價格規則|內部拆項規則/.test(item.priceSource||'');
     const historicalPrice=/已認證歷史價/.test(item.priceSource||'');
     const priceState=hasPrice ? (item.partialEstimate ? '部分估價' : (item.priceId ? '公司價格' : (historicalPrice ? '歷史基準' : (internalRulePrice ? '內部規則' : (aiReferencePrice ? 'AI參考價' : '文件／人工價格'))))) : '待補價格';
     const priceClass=hasPrice ? (aiReferencePrice ? 'ai' : 'ready') : 'missing';
+    const processingLevelOptions=PROCESSING_LEVEL_OPTIONS.map(([value,label])=>`<option value="${value}" ${String(item.processingLevel||'AUTO').toUpperCase()===value?'selected':''}>${escapeHTML(label)}</option>`).join('');
+    const processingDisplay=item.processingLevelResolved&&item.processingLevelResolved!=='NONE'
+      ? `${item.processingLevelResolved}｜${item.processingLevelSource||'自動判斷'}`
+      : (item.processingLevelResolved==='NONE'?'不計加工':'尚未判斷');
     return `<article class="estimateQuickCard" data-estimate-index="${index}">
       <header class="estimateQuickCardHead">
         <div class="estimateQuickTitle">
@@ -5509,6 +5676,7 @@ function renderEstimateDraft(){
         <span><strong>精確才數：</strong>${roundDisplay(item.totalExactTsai||0)}</span>
         <span><strong>建議計價才數：</strong>${roundDisplay(item.billingTsai||0)}</span>
         <span><strong>尺寸信心：</strong>${Math.round(toNumber(item.dimensionConfidence)||0)}%</span>
+        <span><strong>加工判斷：</strong>${escapeHTML(processingDisplay)}</span>
         ${item.longStripWarning?`<span class="dimensionWarning">${escapeHTML(item.longStripWarning)}</span>`:''}
       </div>
 
@@ -5541,10 +5709,12 @@ function renderEstimateDraft(){
           </section>
 
           <section class="estimateFieldGroup">
-            <h4>調整費用</h4>
+            <h4>加工分級與調整</h4>
+            <label><span>加工等級</span><select class="tableInput" data-estimate-field="processingLevel">${processingLevelOptions}</select></label>
+            <p class="fieldHint">${escapeHTML(item.processingLevelReason||'系統會依外型、孔洞、印刷層次與尺寸自動判斷；可人工改成 L1～L4。')}</p>
             <div class="inlineFields">
               <label><span>市場調整 %</span><input class="tableInput numberInput" data-estimate-field="marketAdjustment" type="number" step="0.01" value="${item.marketAdjustment}"></label>
-              <label><span>加工費</span><input class="tableInput numberInput" data-estimate-field="processingFee" type="number" min="0" step="0.01" value="${item.processingFee}"></label>
+              <label><span>人工加工調整</span><input class="tableInput numberInput" data-estimate-field="processingFee" type="number" min="0" step="0.01" value="${item.processingFee}"></label>
             </div>
             <label><span>其他美術費用</span><input class="tableInput numberInput" data-estimate-field="otherFee" type="number" min="0" step="0.01" value="${item.otherFee}"></label>
           </section>
@@ -5600,6 +5770,11 @@ function handleEstimateItemInput(event){
   if(field==='usage') item.usageManuallySet=true;
   if(field==='billingTsai') item.billingTsaiManuallySet=true;
   if(field==='marketAdjustment') item.marketManuallySet=true;
+  if(field==='processingLevel'){
+    item.processingLevel=String(item.processingLevel||'AUTO').toUpperCase();
+    item.processingLevelSource=item.processingLevel==='AUTO'?'規則自動判斷':'人工指定';
+    item.processingLevelResolved='';
+  }
   if(field==='baseUnitPrice'){
     item.manualPrice=toNumber(item.baseUnitPrice)>0;
     item.manualPriceConfidence=80;
@@ -5637,7 +5812,7 @@ function handleEstimateItemInput(event){
   recalculateEstimateItem(item);
   updateEstimateRowSummary(row,item);
   updateEstimateTotals();
-  if(event.type==='change' && ['priceId','baseUnitPrice','material','thickness','spec','unit','originalName','originalSpec','widthMm','heightMm','billingTsai'].includes(field)) renderEstimateDraft();
+  if(event.type==='change' && ['priceId','baseUnitPrice','material','thickness','spec','unit','originalName','originalSpec','widthMm','heightMm','billingTsai','processingLevel','printMethod','printSide','whiteInk','specialEffect','constraints'].includes(field)) renderEstimateDraft();
 }
 
 function updateEstimateRowSummary(row,item){
