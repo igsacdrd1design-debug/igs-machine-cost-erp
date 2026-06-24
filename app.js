@@ -1,3 +1,4 @@
+/* IGS ERP app.js — 11 項估價核心修正版（數量／損耗／市場調整／尺寸／正則／執行期／會計精度） */
 // =====================================================
 // IGS 機台材料成本 ERP — 前端 v3.2 加工分級估價版
 // 1. ERP 密碼登入
@@ -246,6 +247,10 @@ function toNumber(value) {
   if (typeof value === "number") return Number.isFinite(value) ? value : 0;
   const number = Number(String(value ?? "").replace(/[$,，\s]/g, ""));
   return Number.isFinite(number) ? number : 0;
+}
+
+function roundCurrency(value) {
+  return Math.round((toNumber(value) + Number.EPSILON) * 100) / 100;
 }
 
 function norm(value) {
@@ -4397,7 +4402,7 @@ function renderMarketResearchResult() {
   if(!r){box.className='marketResearchResult empty';box.textContent='尚未查詢。';return;}
   const trendClass=toNumber(r.changePercent)>=0?'up':'down';
   box.className='marketResearchResult';
-  box.innerHTML=`<h3>${escapeHTML(r.indexName)}</h3><div class="marketTrend"><strong class="${trendClass}">${toNumber(r.changePercent)>=0?'+':''}${toNumber(r.changePercent).toFixed(2)}%</strong><span>參考指數 ${toNumber(r.indexValue).toFixed(2)}｜信心 ${escapeHTML(r.confidence)}</span></div><p>${escapeHTML(r.summary)}</p><div class="sourceList">${(r.evidence||[]).map((e)=>`<div><strong>${escapeHTML(e.title||'來源')}</strong><br><small>${escapeHTML(e.date||'')}</small><p>${escapeHTML(e.note||'')}</p>${e.url?`<a href="${escapeHTML(e.url)}" target="_blank" rel="noopener noreferrer">查看來源</a>`:''}</div>`).join('')}</div><div class="formActions"><button class="button primary" type="button" data-save-market>人工確認並保存指數</button></div>`;
+  box.innerHTML=`<h3>${escapeHTML(r.indexName)}</h3><div class="marketTrend"><strong class="${trendClass}">${toNumber(r.changePercent)>=0?'+':''}${toNumber(r.changePercent).toFixed(2)}%</strong><span>參考指數 ${toNumber(r.indexValue).toFixed(2)}｜信心 ${escapeHTML(r.confidence)}</span></div><p>${escapeHTML(r.summary)}</p><div class="sourceList">${(r.evidence||[]).map((e)=>`<div><strong>${escapeHTML(e.title||'來源')}</strong><br><small>${escapeHTML(e.date||'')}</small><p>${escapeHTML(e.note||'')}</p>${e.url?`<a href="${escapeHTML(e.url)}" target="_blank" rel="noopener noreferrer">查看來源</a>`:''}</div>`).join('')}</div><div class="formActions"><label class="checkRow"><input id="marketAutoUpdate" type="checkbox"> 將此指數納入每週自動更新</label><button class="button primary" type="button" data-save-market>人工確認並保存指數</button></div>`;
 }
 
 async function handleMarketResearchClick(event){
@@ -4405,7 +4410,8 @@ async function handleMarketResearchClick(event){
   const button=event.target.closest('[data-save-market]');button.disabled=true;button.textContent='儲存中…';
   try{
     const r=state.currentMarketResearch;
-    const record={...r, source:'Gemini Google Search', sourceUrls:(r.evidence||[]).map((e)=>e.url).filter(Boolean).join('\n'), autoUpdate:$('marketAutoUpdate').checked?'是':'否', active:'是'};
+    const autoUpdateElement=$('marketAutoUpdate');
+    const record={...r, source:'Gemini Google Search', sourceUrls:(r.evidence||[]).map((e)=>e.url).filter(Boolean).join('\n'), autoUpdate:autoUpdateElement?.checked?'是':'否', active:'是'};
     const response=await secureApiRequest({action:'saveMarketIndex',record},{timeoutMs:60000});
     const saved=(response.result?.records||[]).map(normalizeMarketIndex);state.marketIndexes.push(...saved);renderMarketIndexes();showNotice('市場指數已保存；不會自動覆蓋公司價格。','success');
   }catch(error){showNotice(`市場指數儲存失敗：${error.message}`,'error');}
@@ -4651,10 +4657,12 @@ function dimensionMultiplier(unit){
 
 function parseDimensionDetails(text,fallbackUnit='mm'){
   const source=String(text||'');
-  const globalUnitMatch=source.match(/(?:\/|單位[:：]?\s*)(mm|cm|m|in|inch|吋|公分|公尺)/i);
+  const globalUnitMatch=source.match(/(?:單位[:：]?\s*)(mm|cm|m|in|inch|吋|公分|公尺)/i);
   const globalUnit=globalUnitMatch?.[1]||fallbackUnit||'mm';
   const groups=[];
-  const regex=/[W寬宽]?\s*(\d+(?:\.\d+)?)\s*(mm|cm|m|in|inch|吋|公分|公尺)?\s*[x×X*＊]\s*[H高]?\s*(\d+(?:\.\d+)?)\s*(mm|cm|m|in|inch|吋|公分|公尺)?/gi;
+  // 支援 x、×、*、／、/、、、「與」及「和」等常見尺寸分隔符。
+  const separator='(?:[x×X*＊/／、]|與|和|by)';
+  const regex=new RegExp(`[W寬宽]?\\s*(\\d+(?:\\.\\d+)?)\\s*(mm|cm|m|in|inch|吋|公分|公尺)?\\s*${separator}\\s*[H高]?\\s*(\\d+(?:\\.\\d+)?)\\s*(mm|cm|m|in|inch|吋|公分|公尺)?`,'gi');
   let match;
   while((match=regex.exec(source))!==null){
     const u1=match[2]||match[4]||globalUnit;
@@ -4677,10 +4685,13 @@ function summarizeEstimateDimensions(item){
   const qty=Math.max(1,toNumber(item.qty)||1);
   const singleTsai=areaPerItem/90000;
   const totalTsai=singleTsai*qty;
+  const sideLong=Math.max(maxWidth,maxHeight);
+  const sideShort=Math.min(maxWidth,maxHeight);
   let tier='面積才數',status=groups.length>1?'多組尺寸待確認':'已解析',longStrip='';
-  if(groups.length===1&&maxWidth<=100&&maxHeight<=100)tier='100×100最低價';
-  else if(groups.length===1&&maxWidth<=300&&maxHeight<=300)tier='300×300最低價';
+  if(groups.length===1&&sideLong<=100&&sideShort<=100)tier='100×100最低價';
+  else if(groups.length===1&&sideLong<=300&&sideShort<=300)tier='300×300最低價';
   else if(maxAspect>=4&&singleTsai<1){tier='長條件／需確認';status='待確認';longStrip=`長寬比 ${Math.round(maxAspect*10)/10}，請確認排版與最低加工費`;}
+  // billingTsai 一律代表整列（已包含 qty）的總計價才數。
   const billingTsai=(tier==='100×100最低價'||tier==='300×300最低價')?qty:Math.max(1,Math.ceil(totalTsai));
   return{groups,widthMm:maxWidth,heightMm:maxHeight,areaMm2:areaPerItem*qty,singleTsai,totalTsai,billingTsai,tier,status,confidence:groups.length?95:0,longStrip};
 }
@@ -5055,12 +5066,12 @@ function canonicalInternalMaterial(value){
 function effectiveInternalTier(item,basisKey=internalPriceBasisKey()){
   applyEstimateDimensionNormalization(item);
   const w=toNumber(item.widthMm),h=toNumber(item.heightMm);
+  const sideLong=Math.max(w,h),sideShort=Math.min(w,h);
   // 台灣歷史拆項使用精確面積，最低處理成本改由 L1～L4 加工等級吸收。
-  // 這能避免小件同時被「300×300材料最低價＋印刷最低價＋加工最低費」重複墊高。
-  if(basisKey==='sampleTwd'&&w>0&&h>0)return'面積才數';
-  if(w>0&&h>0){
-    if(w<=100&&h<=100)return'100×100最低價';
-    if(w<=300&&h<=300)return'300×300最低價';
+  if(basisKey==='sampleTwd'&&sideLong>0&&sideShort>0)return'面積才數';
+  if(sideLong>0&&sideShort>0){
+    if(sideLong<=100&&sideShort<=100)return'100×100最低價';
+    if(sideLong<=300&&sideShort<=300)return'300×300最低價';
     return'面積才數';
   }
   const tier=String(item.sizeTier||'');
@@ -5074,8 +5085,34 @@ function internalRulePrice(rule,basisKey){
   return (basisKey==='sampleRmb'||basisKey==='productionRmb')?amount*currentEstimateCnyRate():amount;
 }
 
+function defaultInternalThicknessMm(materialName){
+  const descriptor=materialDescriptor(materialName);
+  if(!descriptor.requiresThickness)return 0;
+  if(descriptor.family==='壓克力')return 3;
+  if(descriptor.family==='PVC')return 1;
+  if(descriptor.family==='安迪板')return 5;
+  if(descriptor.family==='PC'||descriptor.family==='PET')return 1;
+  return 3;
+}
+
+function resolveInternalRuleThickness(materialName,thicknessMm){
+  const descriptor=materialDescriptor(materialName);
+  const explicit=Math.max(0,toNumber(thicknessMm));
+  if(!descriptor.requiresThickness||explicit>0){
+    return{value:explicit,usedFallback:false,warning:''};
+  }
+  const fallback=defaultInternalThicknessMm(materialName);
+  return{
+    value:fallback,
+    usedFallback:fallback>0,
+    warning:fallback>0?`未填厚度，已暫以 ${fallback}mm 試算；請確認後再儲存正式估價。`:''
+  };
+}
+
 function findInternalRule(type,name,thicknessMm,tier,basisKey){
   const target=type==='材料'?canonicalInternalMaterial(name):standardizeErpText(name||'');
+  const thicknessResolution=type==='材料'?resolveInternalRuleThickness(target,thicknessMm):{value:thicknessMm,usedFallback:false};
+  const effectiveThickness=toNumber(thicknessResolution.value);
   const availableRules=mergedInternalPriceRules();
   const rules=availableRules.filter((rule)=>
     rule.active!=='否' &&
@@ -5094,10 +5131,10 @@ function findInternalRule(type,name,thicknessMm,tier,basisKey){
       const rt=toNumber(rule.thicknessMm);
       const descriptor=materialDescriptor(target);
       if(descriptor.requiresThickness){
-        if(!(thicknessMm>0&&rt>0&&Math.abs(rt-thicknessMm)<=0.11))return;
-        score+=40;
-      }else if(thicknessMm>0&&rt>0){
-        if(Math.abs(rt-thicknessMm)>0.11)return;
+        if(!(effectiveThickness>0&&rt>0&&Math.abs(rt-effectiveThickness)<=0.11))return;
+        score+=thicknessResolution.usedFallback?25:40;
+      }else if(effectiveThickness>0&&rt>0){
+        if(Math.abs(rt-effectiveThickness)>0.11)return;
         score+=25;
       }
     }else{
@@ -5119,24 +5156,45 @@ function needsCmykWhitePrice(item){
 }
 
 
+function isProcessMentionNegated(text,start,end){
+  const prefix=String(text||'').slice(Math.max(0,start-16),start);
+  const suffix=String(text||'').slice(end,Math.min(String(text||'').length,end+10));
+  const negativePrefix=/(?:不需要|不需|不用|不要|不做|沒有|無需|無須|毋須|免|非|無|未|不|請勿|禁止|避免)\s*(?:再|要|做|進行|使用|採用|包含|加做)?\s*$/;
+  const negativeSuffix=/^\s*(?:不需要|不用|不要|取消|免除|排除)/;
+  return negativePrefix.test(prefix)||negativeSuffix.test(suffix);
+}
+
+function hasAffirmativeProcessMention(text,pattern){
+  const source=String(text||'');
+  const regex=pattern instanceof RegExp
+    ? new RegExp(pattern.source,[...new Set(`${pattern.flags.replace(/g/g,'')}g`)].join(''))
+    : new RegExp(String(pattern),'g');
+  let match;
+  while((match=regex.exec(source))!==null){
+    if(!isProcessMentionNegated(source,match.index,match.index+match[0].length))return true;
+    if(match[0]==='')regex.lastIndex+=1;
+  }
+  return false;
+}
+
 function extractEstimateProcessTags(item){
   const text=standardizeErpText([item.printMethod,item.printSide,item.whiteInk,item.specialEffect,item.constraints,item.spec,item.originalSpec,item.name].filter(Boolean).join(' '));
   const tags=[];
-  if(/四色|CMYK/i.test(text))tags.push('四色直噴');
-  if(/白墨|白色直噴|印白|白底/.test(text))tags.push('白色直噴');
-  if(/黑色直噴|黑墨|四色黑/.test(text))tags.push('黑色直噴');
-  if(/不透光銀底|銀底/.test(text))tags.push('不透光銀底印刷');
-  if(/鏡面貼紙|鏡面貼合/.test(text))tags.push('鏡面貼紙');
-  if(/3D\s*膜|滿天星/i.test(text))tags.push('3D膜');
-  if(/亮膜/.test(text))tags.push('亮膜');
-  if(/霧膜/.test(text))tags.push('霧膜');
-  if(/裁切外型|切割外型|需?裁切|外型切割/.test(text))tags.push('裁切外型');
-  if(/折彎|熱摺彎/.test(text))tags.push('壓克力折彎');
-  if(/雕刻/.test(text))tags.push('雕刻');
-  if(/鑽孔/.test(text))tags.push('鑽孔');
-  if(/導\s*C\s*角/i.test(text))tags.push('導C角');
-  if(/燒光|拋光/.test(text))tags.push('燒光');
-  if(/銑槽|銑溝/.test(text))tags.push('銑槽／銑溝');
+  if(hasAffirmativeProcessMention(text,/四色|CMYK/i))tags.push('四色直噴');
+  if(hasAffirmativeProcessMention(text,/白墨|白色直噴|印白|白底/))tags.push('白色直噴');
+  if(hasAffirmativeProcessMention(text,/黑色直噴|黑墨|四色黑/))tags.push('黑色直噴');
+  if(hasAffirmativeProcessMention(text,/不透光銀底|銀底/))tags.push('不透光銀底印刷');
+  if(hasAffirmativeProcessMention(text,/鏡面貼紙|鏡面貼合/))tags.push('鏡面貼紙');
+  if(hasAffirmativeProcessMention(text,/3D\s*膜|滿天星/i))tags.push('3D膜');
+  if(hasAffirmativeProcessMention(text,/亮膜/))tags.push('亮膜');
+  if(hasAffirmativeProcessMention(text,/霧膜/))tags.push('霧膜');
+  if(hasAffirmativeProcessMention(text,/裁切外型|切割外型|需?裁切|外型切割/))tags.push('裁切外型');
+  if(hasAffirmativeProcessMention(text,/折彎|熱摺彎/))tags.push('壓克力折彎');
+  if(hasAffirmativeProcessMention(text,/雕刻/))tags.push('雕刻');
+  if(hasAffirmativeProcessMention(text,/鑽孔/))tags.push('鑽孔');
+  if(hasAffirmativeProcessMention(text,/導\s*C\s*角/i))tags.push('導C角');
+  if(hasAffirmativeProcessMention(text,/燒光|拋光/))tags.push('燒光');
+  if(hasAffirmativeProcessMention(text,/銑槽|銑溝/))tags.push('銑槽／銑溝');
   return[...new Set(tags)];
 }
 
@@ -5170,23 +5228,20 @@ function resolveEstimateProcessingLevel(item,processTags){
     return{code:requested,source:'人工指定',reason:item.processingLevelReason,manual:true};
   }
 
-  const text=standardizeErpText([
-    item.code,item.name,item.originalName,item.material,item.spec,item.originalSpec,
-    item.printMethod,item.printSide,item.whiteInk,item.specialEffect,item.constraints
-  ].filter(Boolean).join(' '));
-  const exactTsai=Math.max(0,toNumber(item.singleExactTsai)||toNumber(item.totalExactTsai)||0);
+  // 自動等級只允許讀取規格與已確認的製程標籤；不掃描品名、備註或不可變更條件。
+  const text=standardizeErpText([item.spec,item.originalSpec,(processTags||[]).join(' ')].filter(Boolean).join(' '));
   let code='L1';
   let reason='小件或簡單外框，未辨識到高複雜特徵。';
 
-  if(/喇叭|齒輪|細碎|高複雜|精細輪廓|多重孔|多層印刷|直噴兩次|白色.*兩次|黑色直噴|黑墨|不透光銀底|銀底/.test(text)){
+  if(hasAffirmativeProcessMention(text,/喇叭|齒輪|細碎輪廓|精細輪廓|多重孔|多層印刷|直噴兩次|白色.*兩次|黑色直噴|黑墨|不透光銀底|銀底/)){
     code='L4';
-    reason='辨識到細碎輪廓、多層印刷對位、黑／銀底或高複雜特徵。';
-  }else if(/角色|人物|多孔|鏤空|複雜輪廓|內孔|大型異形|造型板/.test(text)){
+    reason='規格或製程標籤顯示細碎輪廓、多層印刷對位、黑／銀底等高複雜特徵。';
+  }else if(hasAffirmativeProcessMention(text,/角色輪廓|人物輪廓|多孔|鏤空|複雜輪廓|內孔|大型異形|造型板/)){
     code='L3';
-    reason=/角色|人物/.test(text)?'辨識到角色／人物輪廓，採複雜異形。':'辨識到多孔、鏤空或複雜輪廓。';
-  }else if(/異形|曲線|圓弧|多轉角|導光|積分板|輪廓/.test(text)){
+    reason=/角色輪廓|人物輪廓/.test(text)?'規格顯示角色／人物輪廓，採複雜異形。':'規格顯示多孔、鏤空或複雜輪廓。';
+  }else if(hasAffirmativeProcessMention(text,/異形|曲線|圓弧|多轉角|導光|積分板|輪廓/)){
     code='L2';
-    reason=/導光|積分板/.test(text)?'辨識到導光／積分板類一般異形。':'辨識到曲線、多轉角或一般異形。';
+    reason=/導光|積分板/.test(text)?'規格顯示導光／積分板類一般異形。':'規格顯示曲線、多轉角或一般異形。';
   }
 
   item.processingLevel='AUTO';
@@ -5242,7 +5297,7 @@ function comboRuleMaterialCompatible(item,rule){
     if(target.variant&&target.variant!=='未指定'&&target.variant!=='透明')return false;
   }else return false;
   const wanted=toNumber(rule.thicknessMm);
-  const actual=numericThickness(item.thickness);
+  const actual=resolveInternalRuleThickness(item.material||item.name,numericThickness(item.thickness)).value;
   return !wanted || (actual>0&&Math.abs(actual-wanted)<=0.11);
 }
 
@@ -5288,12 +5343,13 @@ function estimateByInternalRules(item){
   const materialBasisKey=internalMaterialBasisKey(basisKey);
   const processBasisKey=internalProcessBasisKey(basisKey);
   const scenarioLabel=internalPriceScenarioLabel(basisKey);
-  const thickness=numericThickness(item.thickness);
   const materialName=canonicalInternalMaterial(item.material||item.name);
+  const thicknessResolution=resolveInternalRuleThickness(materialName,numericThickness(item.thickness));
+  const thickness=thicknessResolution.value;
   const processTags=extractEstimateProcessTags(item);
   const context=internalLinePricingContext(item);
 
-  // 組合包價僅在價格中心由採購手動啟用後使用；v3.2 預設採原材＋印刷＋加工分級。
+  // 組合包價視為已包含材料損耗與加工的整包價格，不再額外套材料損耗。
   const combo=findInternalComboRule(item,processTags,tier,basisKey);
   if(combo){
     const lineVariable=internalRuleLineCost(combo.rule,basisKey,context);
@@ -5314,18 +5370,26 @@ function estimateByInternalRules(item){
     });
 
     const missing=processTags.filter((tag)=>!covered.has(tag));
-    const unitPrice=(linePackage+lineExtra)/context.qty;
+    const totalLine=linePackage+lineExtra;
+    const unitPrice=totalLine/context.qty;
     item.costBreakdown=breakdown;
     item.missingProcessTags=missing;
     item.partialEstimate=missing.length>0;
     item.priceFingerprint=[materialName,item.thickness,tier,...processTags].filter(Boolean).join('｜');
     return{
       unitPrice,
+      materialUnitPrice:0,
+      processUnitPrice:unitPrice,
+      materialLineTotal:0,
+      processLineTotal:totalLine,
+      optimisticProcessLineTotal:null,
+      conservativeProcessLineTotal:null,
       source:`歷史組合包價｜${combo.rule.name}｜${scenarioLabel}${missing.length?`｜待補製程：${missing.join('、')}`:''}`,
       confidence:Math.max(45,Math.min(90,82-Math.min(30,missing.length*8))),
       details:`${combo.rule.name}｜計價才數 ${context.totalBilling}｜${scenarioLabel}`,
       breakdown,
       missing,
+      isCompositePrice:true,
     };
   }
 
@@ -5395,6 +5459,7 @@ function estimateByInternalRules(item){
 
   const details=[
     `${materialRule.name}${materialRule.thicknessMm?` ${materialRule.thicknessMm}mm`:''} ${tier}（${materialBasisKey==='rawTwd'?'原材價':'場景價'}）`,
+    thicknessResolution.usedFallback?thicknessResolution.warning:'',
     ...breakdown.filter((row)=>row.type!=='材料').map((row)=>row.label),
     `整列精確才數 ${Math.round(context.totalExact*10000)/10000}`,
     `整列計價才數 ${context.totalBilling}`
@@ -5404,18 +5469,26 @@ function estimateByInternalRules(item){
   item.missingProcessTags=missing;
   item.partialEstimate=missing.length>0;
   item.priceFingerprint=[materialName,item.thickness,tier,...processTags].filter(Boolean).join('｜');
-  const confidence=(item.dimensionStatus==='已解析'?78:62)+(processTags.length&&!missing.length?5:0)-Math.min(35,missing.length*8)-(item.processingLevelSource==='規則自動判斷'&&processTags.includes('裁切外型')?6:0);
-  const optimisticUnitPrice=processingRange
-    ? Math.max(0,(lineMaterial+lineProcess-processingRange.baseLine+processingRange.lowLine)/context.qty)
+  const confidence=(item.dimensionStatus==='已解析'?78:62)+(processTags.length&&!missing.length?5:0)-Math.min(35,missing.length*8)-(item.processingLevelSource==='規則自動判斷'&&processTags.includes('裁切外型')?6:0)-(thicknessResolution.usedFallback?12:0);
+  const optimisticProcessLine=processingRange
+    ? Math.max(0,lineProcess-processingRange.baseLine+processingRange.lowLine)
     : null;
-  const conservativeUnitPrice=processingRange
-    ? Math.max(0,(lineMaterial+lineProcess-processingRange.baseLine+processingRange.highLine)/context.qty)
+  const conservativeProcessLine=processingRange
+    ? Math.max(0,lineProcess-processingRange.baseLine+processingRange.highLine)
     : null;
+  const optimisticUnitPrice=optimisticProcessLine!==null?(lineMaterial+optimisticProcessLine)/context.qty:null;
+  const conservativeUnitPrice=conservativeProcessLine!==null?(lineMaterial+conservativeProcessLine)/context.qty:null;
   item.processingRangeLow=processingRange?processingRange.lowLine/context.qty:0;
   item.processingRangeBase=processingRange?processingRange.baseLine/context.qty:0;
   item.processingRangeHigh=processingRange?processingRange.highLine/context.qty:0;
   return{
     unitPrice,
+    materialUnitPrice:lineMaterial/context.qty,
+    processUnitPrice:lineProcess/context.qty,
+    materialLineTotal:lineMaterial,
+    processLineTotal:lineProcess,
+    optimisticProcessLineTotal:optimisticProcessLine,
+    conservativeProcessLineTotal:conservativeProcessLine,
     optimisticUnitPrice,
     conservativeUnitPrice,
     source:`內部拆項規則｜${details.join('＋')}｜${scenarioLabel}${processingRange?`｜加工${processingRange.code}`:''}${missing.length?`｜待補製程：${missing.join('、')}`:''}`,
@@ -5423,6 +5496,7 @@ function estimateByInternalRules(item){
     details:details.join('＋'),
     breakdown,
     missing,
+    isCompositePrice:false,
   };
 }
 
@@ -5470,10 +5544,11 @@ function latestMarketAdjustment(material, category){
 }
 
 function estimateUsage(item, price){
+  // usage 的契約：永遠是「整列總用量」，已包含 qty；後續不得再次乘 qty。
   if(toNumber(item.usage)>0&&item.usageManuallySet)return toNumber(item.usage);
   applyEstimateDimensionNormalization(item);
   const qty=Math.max(0,toNumber(item.qty));
-  const areaM2=toNumber(item.exactAreaMm2)/1_000_000;
+  const areaM2=toNumber(item.exactAreaMm2)/1_000_000; // exactAreaMm2 已包含整列數量。
   const unit=price?.unit||item.unit||'件';let usage=qty;
   if(unit.includes('平方公尺'))usage=areaM2;
   else if(unit.includes('平方公分'))usage=areaM2*10000;
@@ -5487,6 +5562,7 @@ function confidenceScoreForPrice(price){if(!price)return 25;let score=price.conf
 function recalculateEstimateItem(item){
   applyEstimateDimensionNormalization(item);
 
+  const qty=Math.max(1,toNumber(item.qty)||1);
   const useManualPrice=Boolean(item.manualPrice&&toNumber(item.baseUnitPrice)>0);
   if(!useManualPrice&&item.internalRuleApplied){
     item.baseUnitPrice=0;
@@ -5523,7 +5599,7 @@ function recalculateEstimateItem(item){
     item.baseUnitPrice=historicalMatch.unitPrice;
     item.priceSource=`已認證歷史價｜${historicalMatch.count}筆中位數｜匹配分數 ${historicalMatch.score}`;
     item.unit='件';
-    item.usage=Math.max(1,toNumber(item.qty)||1);
+    item.usage=qty;
     item.usageManuallySet=true;
     item.wasteRate=0;
     item.marketAdjustment=0;
@@ -5554,11 +5630,9 @@ function recalculateEstimateItem(item){
       item.baseUnitPrice=internalEstimate.unitPrice;
       item.priceSource=internalEstimate.source;
       item.unit=item.unit||'件';
-      item.usage=Math.max(1,toNumber(item.qty)||1);
+      item.usage=qty;
       item.usageManuallySet=true;
-      item.wasteRate=0;
-      item.marketAdjustment=0;
-      item.marketManuallySet=true;
+      // 不再把損耗率或市場調整強制歸零；下方會只對正確維度套用。
     }
   }
 
@@ -5570,18 +5644,43 @@ function recalculateEstimateItem(item){
     item.partialEstimate=false;
     if(!item.priceSource)item.priceSource='人工輸入單價';
     item.marketAdjustment=item.marketManuallySet?toNumber(item.marketAdjustment):0;
-  }else if(!internalEstimate&&!item.marketManuallySet){
+  }else if(!item.marketManuallySet&&!item.historicalPriceApplied){
     item.marketAdjustment=latestMarketAdjustment(item.material,price?.category);
-  }else if(!internalEstimate){
+  }else{
     item.marketAdjustment=toNumber(item.marketAdjustment);
   }
 
   if(!internalEstimate)item.usage=estimateUsage(item,price);
 
-  const usageWithWaste=item.usage*(1+Math.max(0,toNumber(item.wasteRate))/100);
-  const materialCost=usageWithWaste*toNumber(item.baseUnitPrice)*(1+toNumber(item.marketAdjustment)/100);
+  const wasteFactor=1+Math.max(0,toNumber(item.wasteRate))/100;
+  const marketFactor=Math.max(0,1+toNumber(item.marketAdjustment)/100);
+  // processingFee、otherFee 的既有 payload 欄位統一定義為「單件人工外加費」。
+  const manualExtrasPerUnit=toNumber(item.processingFee)+toNumber(item.otherFee);
+  const manualExtras=manualExtrasPerUnit*qty;
   const minimumFee=item.historicalPriceApplied?0:toNumber(price?.minimumFee);
-  const base=Math.max(minimumFee,materialCost+toNumber(item.processingFee)+toNumber(item.otherFee));
+
+  let baselineCore=0;
+  let optimisticCore=null;
+  let conservativeCore=null;
+
+  if(internalEstimate){
+    const materialLine=toNumber(internalEstimate.materialLineTotal);
+    const processLine=toNumber(internalEstimate.processLineTotal);
+    // 損耗只套材料本體；印刷、CNC 與加工等製程不套材料損耗。
+    const materialWithWaste=materialLine*wasteFactor;
+    baselineCore=(materialWithWaste+processLine)*marketFactor;
+
+    if(Number.isFinite(internalEstimate.optimisticProcessLineTotal)&&Number.isFinite(internalEstimate.conservativeProcessLineTotal)){
+      optimisticCore=(materialWithWaste+toNumber(internalEstimate.optimisticProcessLineTotal))*marketFactor;
+      conservativeCore=(materialWithWaste+toNumber(internalEstimate.conservativeProcessLineTotal))*marketFactor;
+    }
+  }else{
+    // usage 已是整列總用量，禁止再次乘 qty。
+    const materialLine=toNumber(item.usage)*toNumber(item.baseUnitPrice);
+    baselineCore=materialLine*wasteFactor*marketFactor;
+  }
+
+  const rawBaseline=Math.max(minimumFee,baselineCore+manualExtras);
   const confidence=useManualPrice
     ? Math.max(20,Math.min(98,toNumber(item.manualPriceConfidence)||75))
     : item.historicalPriceApplied && historicalMatch
@@ -5591,16 +5690,21 @@ function recalculateEstimateItem(item){
         : confidenceScoreForPrice(price);
   item.confidenceScore=confidence;
   const uncertainty=confidence>=80?0.05:confidence>=60?0.10:0.18;
-  item.baselineCost=base;
-  if(internalEstimate&&Number.isFinite(internalEstimate.optimisticUnitPrice)&&Number.isFinite(internalEstimate.conservativeUnitPrice)){
-    const qty=Math.max(1,toNumber(item.qty)||1);
-    const manualExtras=toNumber(item.processingFee)+toNumber(item.otherFee);
-    item.optimisticCost=Math.max(0,internalEstimate.optimisticUnitPrice*qty+manualExtras);
-    item.conservativeCost=Math.max(item.baselineCost,internalEstimate.conservativeUnitPrice*qty+manualExtras);
+
+  let rawOptimistic;
+  let rawConservative;
+  if(optimisticCore!==null&&conservativeCore!==null){
+    rawOptimistic=Math.max(minimumFee,optimisticCore+manualExtras);
+    rawConservative=Math.max(rawBaseline,conservativeCore+manualExtras);
   }else{
-    item.optimisticCost=Math.max(0,base*(1-uncertainty));
-    item.conservativeCost=base*(1+uncertainty);
+    rawOptimistic=Math.max(minimumFee,rawBaseline*(1-uncertainty));
+    rawConservative=rawBaseline*(1+uncertainty);
   }
+
+  // 所有明細成本在寫入狀態前固定到分，避免畫面分項與總計出現 0.01 誤差。
+  item.baselineCost=roundCurrency(rawBaseline);
+  item.optimisticCost=roundCurrency(Math.max(0,rawOptimistic));
+  item.conservativeCost=roundCurrency(Math.max(item.baselineCost,rawConservative));
   return item;
 }
 
@@ -5640,6 +5744,8 @@ function renderEstimateDraft(){
     const processingDisplay=item.processingLevelResolved&&item.processingLevelResolved!=='NONE'
       ? `${item.processingLevelResolved}｜${item.processingLevelSource||'自動判斷'}`
       : (item.processingLevelResolved==='NONE'?'不計加工':'尚未判斷');
+    const thicknessFallback=resolveInternalRuleThickness(item.material||item.name,numericThickness(item.thickness));
+    const thicknessFallbackWarning=item.internalRuleApplied&&thicknessFallback.usedFallback?thicknessFallback.warning:'';
     return `<article class="estimateQuickCard" data-estimate-index="${index}">
       <header class="estimateQuickCardHead">
         <div class="estimateQuickTitle">
@@ -5674,10 +5780,11 @@ function renderEstimateDraft(){
         <span><strong>尺寸：</strong>${item.widthMm&&item.heightMm?`${roundDisplay(item.widthMm)} × ${roundDisplay(item.heightMm)} mm`:'待確認'}</span>
         <span><strong>級距：</strong>${escapeHTML(item.sizeTier||'待確認')}</span>
         <span><strong>精確才數：</strong>${roundDisplay(item.totalExactTsai||0)}</span>
-        <span><strong>建議計價才數：</strong>${roundDisplay(item.billingTsai||0)}</span>
+        <span><strong>整列建議計價才數：</strong>${roundDisplay(item.billingTsai||0)}</span>
         <span><strong>尺寸信心：</strong>${Math.round(toNumber(item.dimensionConfidence)||0)}%</span>
         <span><strong>加工判斷：</strong>${escapeHTML(processingDisplay)}</span>
         ${item.longStripWarning?`<span class="dimensionWarning">${escapeHTML(item.longStripWarning)}</span>`:''}
+        ${thicknessFallbackWarning?`<span class="dimensionWarning">${escapeHTML(thicknessFallbackWarning)}</span>`:''}
       </div>
 
       <details class="estimateItemAdvanced">
@@ -5694,7 +5801,7 @@ function renderEstimateDraft(){
             </div>
             <div class="inlineFields">
               <label><span>精確才數</span><input class="tableInput numberInput" value="${roundDisplay(item.totalExactTsai)}" readonly></label>
-              <label><span>計價才數</span><input class="tableInput numberInput" data-estimate-field="billingTsai" type="number" min="0" step="0.01" value="${roundDisplay(item.billingTsai)}"></label>
+              <label><span>整列計價才數</span><input class="tableInput numberInput" data-estimate-field="billingTsai" type="number" min="0" step="0.01" value="${roundDisplay(item.billingTsai)}"></label>
             </div>
             <label><span>尺寸級距</span><input class="tableInput" value="${escapeHTML(item.sizeTier||'待確認')}" readonly></label>
           </section>
@@ -5703,9 +5810,10 @@ function renderEstimateDraft(){
             <h4>價格與用量</h4>
             <label><span>公司價格配對</span><select class="tableInput priceSelect" data-estimate-field="priceId">${priceOptions}</select></label>
             <div class="inlineFields">
-              <label><span>計價用量</span><input class="tableInput numberInput" data-estimate-field="usage" type="number" min="0" step="0.0001" value="${roundDisplay(item.usage)}"></label>
+              <label><span>整列計價用量</span><input class="tableInput numberInput" data-estimate-field="usage" type="number" min="0" step="0.0001" value="${roundDisplay(item.usage)}"></label>
               <label><span>損耗 %</span><input class="tableInput numberInput" data-estimate-field="wasteRate" type="number" min="0" max="100" step="0.1" value="${item.wasteRate}"></label>
             </div>
+            <p class="fieldHint">計價用量為整列總用量，已包含數量；損耗只套用材料本體。</p>
           </section>
 
           <section class="estimateFieldGroup">
@@ -5714,9 +5822,10 @@ function renderEstimateDraft(){
             <p class="fieldHint">${escapeHTML(item.processingLevelReason||'系統會依外型、孔洞、印刷層次與尺寸自動判斷；可人工改成 L1～L4。')}</p>
             <div class="inlineFields">
               <label><span>市場調整 %</span><input class="tableInput numberInput" data-estimate-field="marketAdjustment" type="number" step="0.01" value="${item.marketAdjustment}"></label>
-              <label><span>人工加工調整</span><input class="tableInput numberInput" data-estimate-field="processingFee" type="number" min="0" step="0.01" value="${item.processingFee}"></label>
+              <label><span>單件人工加工調整</span><input class="tableInput numberInput" data-estimate-field="processingFee" type="number" min="0" step="0.01" value="${item.processingFee}"></label>
             </div>
-            <label><span>其他美術費用</span><input class="tableInput numberInput" data-estimate-field="otherFee" type="number" min="0" step="0.01" value="${item.otherFee}"></label>
+            <label><span>單件其他美術費用</span><input class="tableInput numberInput" data-estimate-field="otherFee" type="number" min="0" step="0.01" value="${item.otherFee}"></label>
+            <p class="fieldHint">兩項皆為單件外加費，系統會自動乘以數量。</p>
           </section>
 
           <section class="estimateFieldGroup">
@@ -5759,7 +5868,19 @@ function updateEstimateQuickMetrics(){
 }
 
 function roundDisplay(value){const n=toNumber(value);return Math.round(n*10000)/10000;}
-function estimateTotals(){const count=state.estimateDraftItems.length||1;return state.estimateDraftItems.reduce((a,i)=>({optimistic:a.optimistic+toNumber(i.optimisticCost),baseline:a.baseline+toNumber(i.baselineCost),conservative:a.conservative+toNumber(i.conservativeCost),confidence:a.confidence+toNumber(i.confidenceScore)/count}),{optimistic:0,baseline:0,conservative:0,confidence:0});}
+function estimateTotals(){
+  const count=state.estimateDraftItems.length||1;
+  const totals=state.estimateDraftItems.reduce((a,i)=>({
+    optimistic:a.optimistic+roundCurrency(i.optimisticCost),
+    baseline:a.baseline+roundCurrency(i.baselineCost),
+    conservative:a.conservative+roundCurrency(i.conservativeCost),
+    confidence:a.confidence+toNumber(i.confidenceScore)/count
+  }),{optimistic:0,baseline:0,conservative:0,confidence:0});
+  totals.optimistic=roundCurrency(totals.optimistic);
+  totals.baseline=roundCurrency(totals.baseline);
+  totals.conservative=roundCurrency(totals.conservative);
+  return totals;
+}
 
 function handleEstimateItemInput(event){
   const row=event.target.closest('[data-estimate-index]'); if(!row)return;
