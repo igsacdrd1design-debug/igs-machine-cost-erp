@@ -8,7 +8,7 @@
   <meta name="googlebot" content="noindex, nofollow, noarchive, nosnippet">
   <meta name="referrer" content="no-referrer">
   <title>IGS 機台材料成本 ERP</title>
-  <link rel="stylesheet" href="style.css?v=20260624-igs-v2-1-0">
+  <link rel="stylesheet" href="style.css?v=20260624-igs-v2-1-1">
 </head>
 <body class="authLocked">
   <section id="authGate" class="authGate" aria-labelledby="loginTitle">
@@ -711,7 +711,7 @@
     <section id="smartEstimate" class="view">
       <div class="quickIntro estimateIntro">
         <div>
-          <span class="eyebrow">v2.1 · 尺寸標準化＋繁中智能估價</span>
+          <span class="eyebrow">v2.1.1 · 內部規則＋尺寸標準化智能估價</span>
           <h2>AI 轉繁中、拆長寬、換算 mm 與才數後立即試算</h2>
           <p>保留來源原文，同時建立繁中標準品名、寬高尺寸、價格級距與精確才數。</p>
         </div>
@@ -752,6 +752,14 @@
             <label>
               <span>估價日期</span>
               <input id="estimateDate" type="date">
+            </label>
+
+            <label>
+              <span>內部估價基準</span>
+              <select id="estimatePriceBasis">
+                <option value="sampleTwd">打樣 TWD（預設）</option>
+                <option value="rawTwd">原材料 TWD</option>
+              </select>
             </label>
 
             <div class="estimateProjectActions">
@@ -802,7 +810,7 @@
             </label>
             <label class="checkboxField estimateAutoPriceOption">
               <input id="estimateAutoPriceMissing" type="checkbox" checked>
-              <span>辨識後自動用 AI 補估缺價品項</span>
+              <span>先用內部規則自動試算；仍缺價才用 AI 補估</span>
             </label>
           </div>
 
@@ -917,7 +925,7 @@
 
   <datalist id="supplierOptions"></datalist>
   <datalist id="machineAreaOptions"></datalist>
-  <script src="data.js?v=20260624-igs-v2-1-0"></script>
-  <script src="app.js?v=20260624-igs-v2-1-0"></script>
+  <script src="data.js?v=20260624-igs-v2-1-1"></script>
+  <script src="app.js?v=20260624-igs-v2-1-1"></script>
 </body>
 </html>
