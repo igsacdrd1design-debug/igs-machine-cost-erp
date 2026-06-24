@@ -1,5 +1,5 @@
 // =====================================================
-// IGS 機台材料成本 ERP — 前端 v2.4
+// IGS 機台材料成本 ERP — 前端 v2.5 個人 AI 額度
 // 1. ERP 密碼登入
 // 2. 工作階段驗證
 // 3. 私人 Google Sheet 安全讀取
@@ -106,6 +106,7 @@ const BUILTIN_INTERNAL_PRICE_RULES = Object.freeze([
 
 let authToken = sessionStorage.getItem(AUTH_TOKEN_KEY) || "";
 let authenticationReady = false;
+let aiCredentialStatus = { configured: false, source: "none", label: "尚未設定 AI 額度", maskedKey: "" };
 
 let state = {
   machines: [],
@@ -509,6 +510,13 @@ document.addEventListener("DOMContentLoaded", () => {
 function setupAuthentication() {
   $("loginForm").addEventListener("submit", handleLoginSubmit);
   $("logoutButton").addEventListener("click", logoutErp);
+  $("aiAccountButton").addEventListener("click", openAiCredentialDialog);
+  $("closeAiCredentialDialog").addEventListener("click", closeAiCredentialDialog);
+  $("aiCredentialForm").addEventListener("submit", savePersonalGeminiKey);
+  $("clearPersonalGeminiKey").addEventListener("click", clearPersonalGeminiKey);
+  $("aiCredentialDialog").addEventListener("click", (event) => {
+    if (event.target === $("aiCredentialDialog")) closeAiCredentialDialog();
+  });
 }
 
 async function restoreAuthentication() {
@@ -518,10 +526,11 @@ async function restoreAuthentication() {
 
   setLoginBusy(true, "正在驗證登入…");
   try {
-    await secureApiRequest(
+    const response = await secureApiRequest(
       { action: "validateSession" },
       { includeToken: true, timeoutMs: 30000 }
     );
+    updateAiCredentialUi(response.result?.aiCredential);
     unlockErp();
     await loadData();
   } catch (error) {
@@ -535,6 +544,7 @@ async function restoreAuthentication() {
 async function handleLoginSubmit(event) {
   event.preventDefault();
   const password = $("loginPassword").value;
+  const geminiApiKey = $("loginGeminiApiKey").value.trim();
   if (!password) return;
 
   hideLoginError();
@@ -542,7 +552,7 @@ async function handleLoginSubmit(event) {
 
   try {
     const response = await secureApiRequest(
-      { action: "login", password },
+      { action: "login", password, geminiApiKey },
       { includeToken: false, timeoutMs: 30000 }
     );
 
@@ -550,7 +560,9 @@ async function handleLoginSubmit(event) {
     if (!authToken) throw new Error("伺服器沒有回傳登入憑證");
 
     sessionStorage.setItem(AUTH_TOKEN_KEY, authToken);
+    updateAiCredentialUi(response.aiCredential);
     $("loginPassword").value = "";
+    $("loginGeminiApiKey").value = "";
     unlockErp();
     await loadData();
   } catch (error) {
@@ -580,6 +592,8 @@ async function logoutErp() {
   resetPrivateState();
   lockErp();
   $("loginPassword").value = "";
+  $("loginGeminiApiKey").value = "";
+  updateAiCredentialUi(null);
   hideNotice();
   setDataStatus("等待登入", "");
   window.scrollTo({ top: 0 });
@@ -640,7 +654,129 @@ function resetPrivateState() {
 function clearAuthentication() {
   authToken = "";
   authenticationReady = false;
+  aiCredentialStatus = { configured: false, source: "none", label: "尚未設定 AI 額度", maskedKey: "" };
   sessionStorage.removeItem(AUTH_TOKEN_KEY);
+}
+
+function updateAiCredentialUi(status) {
+  aiCredentialStatus = status && typeof status === "object"
+    ? status
+    : { configured: false, source: "none", label: "尚未設定 AI 額度", maskedKey: "" };
+
+  const button = $("aiAccountButton");
+  if (!button) return;
+  button.classList.remove("personal", "company", "missing");
+  button.classList.add(aiCredentialStatus.source === "personal"
+    ? "personal"
+    : aiCredentialStatus.source === "company"
+      ? "company"
+      : "missing");
+  button.textContent = `AI 額度：${aiCredentialStatus.label || "尚未設定"}`;
+  button.title = aiCredentialStatus.maskedKey
+    ? `目前使用 ${aiCredentialStatus.maskedKey}`
+    : (aiCredentialStatus.label || "設定 AI 額度");
+}
+
+async function refreshAiCredentialStatus() {
+  const response = await secureApiRequest(
+    { action: "getAiCredentialStatus" },
+    { includeToken: true, timeoutMs: 30000 }
+  );
+  updateAiCredentialUi(response.result?.aiCredential);
+  return aiCredentialStatus;
+}
+
+async function openAiCredentialDialog() {
+  const dialog = $("aiCredentialDialog");
+  $("personalGeminiApiKey").value = "";
+  $("aiCredentialError").hidden = true;
+  dialog.showModal();
+  $("aiCredentialCurrent").textContent = "正在讀取目前狀態…";
+  try {
+    const status = await refreshAiCredentialStatus();
+    renderAiCredentialDialogStatus(status);
+  } catch (error) {
+    showAiCredentialError(error.message || "無法讀取 AI 額度狀態");
+  }
+}
+
+function closeAiCredentialDialog() {
+  const dialog = $("aiCredentialDialog");
+  if (dialog.open) dialog.close();
+  $("personalGeminiApiKey").value = "";
+  $("aiCredentialError").hidden = true;
+}
+
+function renderAiCredentialDialogStatus(status) {
+  const box = $("aiCredentialCurrent");
+  if (!status || !status.configured) {
+    box.className = "aiCredentialCurrent missing";
+    box.textContent = "目前沒有可用的 AI 額度。請設定個人 Gemini API Key。";
+    $("clearPersonalGeminiKey").disabled = true;
+    return;
+  }
+  const suffix = status.maskedKey ? `（${status.maskedKey}）` : "";
+  box.className = `aiCredentialCurrent ${status.source || "company"}`;
+  box.textContent = `目前使用：${status.label || "AI 額度"}${suffix}`;
+  $("clearPersonalGeminiKey").disabled = status.source !== "personal";
+}
+
+function setAiCredentialBusy(isBusy, text) {
+  $("savePersonalGeminiKey").disabled = isBusy;
+  $("clearPersonalGeminiKey").disabled = isBusy || aiCredentialStatus.source !== "personal";
+  $("personalGeminiApiKey").disabled = isBusy;
+  $("savePersonalGeminiKey").textContent = isBusy ? text : "驗證並使用個人額度";
+}
+
+function showAiCredentialError(message) {
+  const box = $("aiCredentialError");
+  box.textContent = message;
+  box.hidden = false;
+}
+
+async function savePersonalGeminiKey(event) {
+  event.preventDefault();
+  const geminiApiKey = $("personalGeminiApiKey").value.trim();
+  if (!geminiApiKey) {
+    showAiCredentialError("請貼上自己的 Gemini API Key。");
+    return;
+  }
+  $("aiCredentialError").hidden = true;
+  setAiCredentialBusy(true, "正在驗證…");
+  try {
+    const response = await secureApiRequest(
+      { action: "setPersonalGeminiKey", geminiApiKey },
+      { includeToken: true, timeoutMs: 60000 }
+    );
+    updateAiCredentialUi(response.result?.aiCredential);
+    renderAiCredentialDialogStatus(aiCredentialStatus);
+    $("personalGeminiApiKey").value = "";
+    showNotice("已切換為個人 Gemini API 額度。", "");
+  } catch (error) {
+    showAiCredentialError(error.message || "Gemini API Key 驗證失敗");
+  } finally {
+    setAiCredentialBusy(false, "");
+  }
+}
+
+async function clearPersonalGeminiKey() {
+  $("aiCredentialError").hidden = true;
+  setAiCredentialBusy(true, "正在切換…");
+  try {
+    const response = await secureApiRequest(
+      { action: "clearPersonalGeminiKey" },
+      { includeToken: true, timeoutMs: 30000 }
+    );
+    updateAiCredentialUi(response.result?.aiCredential);
+    renderAiCredentialDialogStatus(aiCredentialStatus);
+    showNotice(aiCredentialStatus.source === "company"
+      ? "已改用公司共用 Gemini 額度。"
+      : "已移除個人 Gemini API Key。", "");
+  } catch (error) {
+    showAiCredentialError(error.message || "無法移除個人 Gemini API Key");
+  } finally {
+    setAiCredentialBusy(false, "");
+  }
 }
 
 function setLoginBusy(isBusy, text = "登入 ERP") {

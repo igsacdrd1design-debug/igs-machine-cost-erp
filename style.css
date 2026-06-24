@@ -2042,3 +2042,86 @@ td small { color: var(--muted); }
   .priceReviewAiControls { justify-content: flex-start; }
   .priceReviewAiPreview, .priceReviewAiPanel .photoStatus { grid-column: span 1; }
 }
+
+
+/* ===== v2.5 個人 Gemini AI 額度 ===== */
+.loginAiHint {
+  display: block;
+  margin: -3px 2px 3px;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.55;
+}
+
+.topbarActions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.aiAccountButton {
+  min-height: 42px;
+  padding: 10px 13px;
+  border: 1px solid var(--line);
+  border-radius: 13px;
+  background: #fff;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+.aiAccountButton.personal { border-color: #9ec9aa; color: #235b35; background: #eaf6ed; }
+.aiAccountButton.company { border-color: #d9c18f; color: #72531b; background: #fff8e7; }
+.aiAccountButton.missing { border-color: #e2b0a7; color: #8f3829; background: #fff0ed; }
+.aiAccountButton:hover { transform: translateY(-1px); box-shadow: var(--shadow); }
+
+.aiCredentialDialog {
+  width: min(620px, calc(100vw - 28px));
+  padding: 0;
+  border: 1px solid #3f4f56;
+  border-radius: 22px;
+  background: #fbfaf6;
+  box-shadow: 0 28px 80px rgba(18, 37, 46, .34);
+}
+.aiCredentialDialog::backdrop {
+  background: rgba(15,31,39,.58);
+  backdrop-filter: blur(3px);
+}
+.aiCredentialForm { padding: 24px; }
+.aiCredentialForm .dialogHead {
+  display: flex;
+  justify-content: space-between;
+  gap: 18px;
+  margin-bottom: 18px;
+}
+.aiCredentialForm .dialogHead h2 { margin: 4px 0 7px; }
+.aiCredentialForm .dialogHead p { margin: 0; color: var(--muted); line-height: 1.55; }
+.aiCredentialCurrent {
+  margin-bottom: 16px;
+  padding: 12px 14px;
+  border-radius: 13px;
+  background: var(--blue-soft);
+  font-weight: 750;
+}
+.aiCredentialCurrent.personal { color: #235b35; background: #eaf6ed; }
+.aiCredentialCurrent.company { color: #72531b; background: #fff8e7; }
+.aiCredentialCurrent.missing { color: #8f3829; background: #fff0ed; }
+.aiCredentialField { display: grid; gap: 7px; color: var(--muted); font-size: 13px; }
+.aiCredentialField input {
+  width: 100%;
+  padding: 13px 14px;
+  border: 1px solid var(--line);
+  border-radius: 13px;
+  background: #fff;
+  outline: none;
+}
+.aiCredentialHelp { margin: 10px 0 0; color: var(--muted); font-size: 12px; line-height: 1.55; }
+.aiCredentialForm .formActions { margin-top: 18px; }
+
+@media (max-width: 900px) {
+  .topbarActions { width: 100%; flex-wrap: wrap; justify-content: stretch; }
+  .aiAccountButton { width: 100%; }
+  .topbarActions .searchBox { width: 100%; }
+  .topbarActions .searchBox input { width: 100%; }
+}

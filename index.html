@@ -8,7 +8,7 @@
   <meta name="googlebot" content="noindex, nofollow, noarchive, nosnippet">
   <meta name="referrer" content="no-referrer">
   <title>IGS 機台材料成本 ERP</title>
-  <link rel="stylesheet" href="style.css?v=20260624-igs-v2-4">
+  <link rel="stylesheet" href="style.css?v=20260624-igs-v2-5-personal-ai">
 </head>
 <body class="authLocked">
   <section id="authGate" class="authGate" aria-labelledby="loginTitle">
@@ -18,12 +18,15 @@
       <h1 id="loginTitle">機台材料成本系統</h1>
       <p class="loginDescription">此系統僅供授權人員使用。請輸入內部登入密碼後繼續。</p>
       <form id="loginForm" class="loginForm">
-        <label for="loginPassword">登入密碼</label>
+        <label for="loginPassword">ERP 登入密碼</label>
         <input id="loginPassword" type="password" autocomplete="current-password" required autofocus>
+        <label for="loginGeminiApiKey">個人 Gemini API Key（選填）</label>
+        <input id="loginGeminiApiKey" type="password" autocomplete="off" inputmode="text" placeholder="貼上自己的 API Key，即使用自己的專案額度">
+        <small class="loginAiHint">未填時才會使用公司共用額度。Key 只暫存在這次約 6 小時的後端工作階段，不寫入 GitHub、Sheet 或瀏覽器儲存空間。</small>
         <button id="loginButton" class="button primary" type="submit">登入 ERP</button>
       </form>
       <p id="loginError" class="loginError" role="alert" hidden></p>
-      <p class="loginPrivacy">資料由私人 Google Sheet 讀取；工作階段約 6 小時，失效後需重新登入。</p>
+      <p class="loginPrivacy">資料由私人 Google Sheet 讀取；工作階段約 6 小時。個人 AI 額度需使用該使用者自己 Google Cloud 專案建立的 Gemini API Key。</p>
     </div>
   </section>
   <aside class="sidebar">
@@ -62,8 +65,11 @@
         <h1 id="pageTitle">Dashboard</h1>
         <p id="pageDescription">集中查看機台、材料品項與三階段成本。</p>
       </div>
-      <div class="searchBox">
-        <input id="globalSearch" type="search" placeholder="搜尋：機台名稱、代碼、分類、材料、供應商…" autocomplete="off">
+      <div class="topbarActions">
+        <button id="aiAccountButton" class="aiAccountButton missing" type="button">AI 額度：檢查中</button>
+        <div class="searchBox">
+          <input id="globalSearch" type="search" placeholder="搜尋：機台名稱、代碼、分類、材料、供應商…" autocomplete="off">
+        </div>
       </div>
     </section>
 
@@ -1050,6 +1056,31 @@
     </section>
   </main>
 
+
+  <dialog id="aiCredentialDialog" class="aiCredentialDialog">
+    <form id="aiCredentialForm" class="aiCredentialForm">
+      <div class="dialogHead">
+        <div>
+          <span class="eyebrow">個人 AI 額度</span>
+          <h2>設定自己的 Gemini API Key</h2>
+          <p>AI 呼叫會改用這組 Key 所屬 Google Cloud 專案的配額與計費。Google 帳號登入或 Gemini 網頁版訂閱不會自動提供 API 額度。</p>
+        </div>
+        <button id="closeAiCredentialDialog" class="dialogClose" type="button" aria-label="關閉">×</button>
+      </div>
+      <div id="aiCredentialCurrent" class="aiCredentialCurrent">正在讀取目前狀態…</div>
+      <label class="aiCredentialField" for="personalGeminiApiKey">
+        <span>個人 Gemini API Key</span>
+        <input id="personalGeminiApiKey" type="password" autocomplete="off" placeholder="貼上 AI Studio 建立的 API Key">
+      </label>
+      <p class="aiCredentialHelp">儲存後會先向 Google 驗證 Key。原始 Key 不會回傳到前端，也不會寫入 Google Sheet；登出或工作階段失效後即移除。</p>
+      <div id="aiCredentialError" class="loginError" role="alert" hidden></div>
+      <div class="formActions">
+        <button id="savePersonalGeminiKey" class="button primary" type="submit">驗證並使用個人額度</button>
+        <button id="clearPersonalGeminiKey" class="button ghost" type="button">改用公司額度</button>
+      </div>
+    </form>
+  </dialog>
+
   <dialog id="machineDialog" class="machineDialog">
     <button id="closeMachineDialog" class="dialogClose" type="button" aria-label="關閉">×</button>
     <div id="machineDialogContent"></div>
@@ -1058,6 +1089,6 @@
   <datalist id="supplierOptions"></datalist>
   <datalist id="machineAreaOptions"></datalist>
   <script src="data.js?v=20260624-igs-v2-4"></script>
-  <script src="app.js?v=20260624-igs-v2-4"></script>
+  <script src="app.js?v=20260624-igs-v2-5-personal-ai"></script>
 </body>
 </html>
