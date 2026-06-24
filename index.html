@@ -717,7 +717,7 @@
           </div>
           <p id="processPriceRuleCount" class="muted">共 0 筆</p>
         </div>
-        <div class="tableWrap"><table class="v20Table"><thead><tr><th>製程</th><th>尺寸級距</th><th>計價方式</th><th>原材 TWD</th><th>打樣 TWD</th><th>日期</th><th>來源</th><th>認證</th></tr></thead><tbody id="processPriceRuleRows"></tbody></table></div>
+        <div class="tableWrap"><table class="v20Table"><thead><tr><th>製程／包價</th><th>尺寸級距</th><th>計價方式</th><th>原材 TWD</th><th>打樣 TWD</th><th>打樣 RMB</th><th>量產 RMB</th><th>日期</th><th>來源</th><th>認證</th></tr></thead><tbody id="processPriceRuleRows"></tbody></table></div>
       </div>
 
       <div class="panel priceReviewPanel">
@@ -822,7 +822,7 @@
     <section id="smartEstimate" class="view">
       <div class="quickIntro estimateIntro">
         <div>
-          <span class="eyebrow">v2.6 · 嚴格材料配對＋製程成本拆分</span>
+          <span class="eyebrow">v2.7 · 台灣打樣／中國量產場景＋歷史組合包價</span>
           <h2>貼上品項明細或上傳文件，自動拆尺寸、製程並產生低中高估價</h2>
           <p>AI 額度不足時仍可使用文字解析與內部價格規則；缺少的加工價格會清楚標示，不會當成免費。</p>
         </div>
@@ -868,9 +868,12 @@
             <label>
               <span>內部估價基準</span>
               <select id="estimatePriceBasis">
-                <option value="sampleTwd">打樣 TWD（預設）</option>
-                <option value="rawTwd">原材料 TWD</option>
+                <option value="productionRmb">中國量產 RMB → TWD（預設，接近先前 AI 表）</option>
+                <option value="sampleTwd">台灣打樣 TWD（歷史組合價優先）</option>
+                <option value="sampleRmb">中國打樣 RMB → TWD</option>
+                <option value="rawTwd">原材料 TWD（不含完整加工）</option>
               </select>
+              <small>RMB 場景使用下方「人民幣匯率」，預設 1 CNY = 4.61 TWD。</small>
             </label>
 
             <div class="estimateProjectActions">
