@@ -8,7 +8,7 @@
   <meta name="googlebot" content="noindex, nofollow, noarchive, nosnippet">
   <meta name="referrer" content="no-referrer">
   <title>IGS 機台材料成本 ERP</title>
-  <link rel="stylesheet" href="style.css?v=20260624-igs-v2-1-1">
+  <link rel="stylesheet" href="style.css?v=20260624-igs-v2-2">
 </head>
 <body class="authLocked">
   <section id="authGate" class="authGate" aria-labelledby="loginTitle">
@@ -711,9 +711,9 @@
     <section id="smartEstimate" class="view">
       <div class="quickIntro estimateIntro">
         <div>
-          <span class="eyebrow">v2.1.1 · 內部規則＋尺寸標準化智能估價</span>
-          <h2>AI 轉繁中、拆長寬、換算 mm 與才數後立即試算</h2>
-          <p>保留來源原文，同時建立繁中標準品名、寬高尺寸、價格級距與精確才數。</p>
+          <span class="eyebrow">v2.2 · 貼文字快速估價＋分項價格指紋</span>
+          <h2>貼上品項明細或上傳文件，自動拆尺寸、製程並產生低中高估價</h2>
+          <p>AI 額度不足時仍可使用文字解析與內部價格規則；缺少的加工價格會清楚標示，不會當成免費。</p>
         </div>
         <div id="estimateStatusBadge" class="apiBadge">尚未建立估價</div>
       </div>
@@ -825,12 +825,49 @@
             <textarea id="estimateAiRawText" rows="5" readonly placeholder="AI 辨識後會顯示原文與提醒"></textarea>
           </details>
         </div>
+
+        <div class="panel estimateTextPanel">
+          <div class="panelHead">
+            <div>
+              <h2>3. 貼上文字快速估價</h2>
+              <p class="muted">直接貼入「編號＋材質／尺寸／厚度／製程」，不需呼叫 AI 也能解析並套用內部價格。</p>
+            </div>
+            <span id="estimateTextBadge" class="apiBadge">尚未解析</span>
+          </div>
+
+          <textarea id="estimateTextInput" class="estimateTextInput" rows="7" placeholder="例如：&#10;B01_立體字（發光字），674.1mm × 207.3mm，需裁切，不透光銀底印刷，四色直噴&#10;B02_透明壓克力，719.7mm × 307.3mm，厚度5mm，需裁切，四色直噴，白色直噴"></textarea>
+
+          <div class="estimateTextOptions">
+            <label>
+              <span>匯入方式</span>
+              <select id="estimateTextImportMode">
+                <option value="replace">取代目前明細</option>
+                <option value="append">附加到目前明細</option>
+              </select>
+            </label>
+            <label>
+              <span>人民幣匯率（1 CNY = TWD）</span>
+              <input id="estimateCnyRate" type="number" min="0.01" step="0.01" value="4.61">
+            </label>
+            <label class="checkboxField">
+              <input id="estimateTextAutoTraditional" type="checkbox" checked>
+              <span>自動轉繁體並套用公司標準用語</span>
+            </label>
+          </div>
+
+          <div class="formActions estimateTextActions">
+            <button id="parseEstimateText" class="button primary" type="button">解析文字並估價</button>
+            <button id="loadEstimateTextExample" class="button secondary" type="button">載入 B01～B04 範例</button>
+            <button id="clearEstimateText" class="button ghost" type="button">清除文字</button>
+          </div>
+          <p id="estimateTextStatus" class="photoStatus muted">可一次貼入多筆，每筆以編號開頭；換行內容會自動接到上一筆。</p>
+        </div>
       </div>
 
       <div class="panel estimateWorkspacePanel">
         <div class="panelHead estimateWorkspaceHead">
           <div>
-            <h2>3. 快速試算明細</h2>
+            <h2>4. 快速試算明細</h2>
             <p class="muted">先確認繁中品名、材質、尺寸、數量與單價；系統自動顯示尺寸級距及才數。</p>
           </div>
           <div class="panelActions">
@@ -844,15 +881,16 @@
           <div><span>品項</span><strong id="estimateItemCount">0</strong></div>
           <div><span>已取得價格</span><strong id="estimateMatchedCount">0</strong></div>
           <div class="warning"><span>待補價格</span><strong id="estimateMissingCount">0</strong></div>
+          <div class="warning"><span>待補製程</span><strong id="estimateMissingProcessCount">0</strong></div>
         </div>
 
         <div id="estimateItemRows" class="estimateQuickList"></div>
 
         <div class="estimateActionBar">
           <div class="estimateTotals">
-            <div><span>樂觀估價</span><strong id="estimateOptimistic">$0</strong></div>
-            <div class="highlight"><span>基準估價</span><strong id="estimateBaseline">$0</strong></div>
-            <div><span>保守估價</span><strong id="estimateConservative">$0</strong></div>
+            <div><span>樂觀估價</span><strong id="estimateOptimistic">$0</strong><small id="estimateOptimisticCny">¥0</small></div>
+            <div class="highlight"><span>基準估價</span><strong id="estimateBaseline">$0</strong><small id="estimateBaselineCny">¥0</small></div>
+            <div><span>保守估價</span><strong id="estimateConservative">$0</strong><small id="estimateConservativeCny">¥0</small></div>
             <div><span>整體信心度</span><strong id="estimateConfidence">0%</strong></div>
           </div>
           <div class="estimateSaveActions">
@@ -925,7 +963,7 @@
 
   <datalist id="supplierOptions"></datalist>
   <datalist id="machineAreaOptions"></datalist>
-  <script src="data.js?v=20260624-igs-v2-1-1"></script>
-  <script src="app.js?v=20260624-igs-v2-1-1"></script>
+  <script src="data.js?v=20260624-igs-v2-2"></script>
+  <script src="app.js?v=20260624-igs-v2-2"></script>
 </body>
 </html>

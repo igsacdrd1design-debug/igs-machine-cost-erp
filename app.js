@@ -1,5 +1,5 @@
 // =====================================================
-// IGS 機台材料成本 ERP — 前端 v2.1.1
+// IGS 機台材料成本 ERP — 前端 v2.2
 // 1. ERP 密碼登入
 // 2. 工作階段驗證
 // 3. 私人 Google Sheet 安全讀取
@@ -3256,6 +3256,10 @@ function setupV20() {
   $('estimateTargetType').addEventListener('change', updateEstimateTargetMode);
   $('estimatePriceBasis')?.addEventListener('change', () => { recalculateAllEstimateItems(); renderEstimateDraft(); });
   $('estimateMachine').addEventListener('change', () => { if ($('estimateTargetType').value === 'existing' && !$('estimateName').value) { const m = machineById($('estimateMachine').value); if (m) $('estimateName').value = `${m.name} 美術材料估價`; } });
+  $('parseEstimateText')?.addEventListener('click', parseEstimateTextIntoDraft);
+  $('loadEstimateTextExample')?.addEventListener('click', loadEstimateTextExample);
+  $('clearEstimateText')?.addEventListener('click', clearEstimateTextInput);
+  $('estimateCnyRate')?.addEventListener('input', updateEstimateTotals);
 
   $('optimizationSource').addEventListener('change', updateOptimizationSourceMode);
   $('optimizationMachine').addEventListener('change', renderSimulationViewOptions);
@@ -3495,6 +3499,151 @@ async function handleMarketIndexClick(event){const btn=event.target.closest('[da
 async function enableWeeklyMarketUpdate(){const button=$('enableMarketAutoUpdate');button.disabled=true;button.textContent='設定中…';try{await secureApiRequest({action:'setupWeeklyMarketTrigger'},{timeoutMs:60000});showNotice('已啟用每週一早上 8 點的市場指數更新排程。只有「自動更新＝是」的指數會更新。','success');}catch(error){showNotice(`排程設定失敗：${error.message}`,'error');}finally{button.disabled=false;button.textContent='啟用每週更新排程';}}
 
 
+
+function estimateTextExampleValue(){
+  return [
+    'B01_立體字（發光字），674.1mm × 207.3mm，需裁切，不透光銀底印刷，四色直噴',
+    'B02_透明壓克力，719.7mm × 307.3mm，厚度5mm，需裁切，四色直噴，白色直噴',
+    'B03_安迪板，1081mm × 708.2mm，厚度5mm，需裁切，四色直噴，裱亮膜',
+    'B04_PVC，892.1mm × 671.2mm，厚度1mm，需裁切，四色直噴，白色直噴'
+  ].join('\n');
+}
+
+function loadEstimateTextExample(){
+  if($('estimateTextInput'))$('estimateTextInput').value=estimateTextExampleValue();
+  if($('estimateTextBadge'))$('estimateTextBadge').textContent='已載入範例';
+  if($('estimateTextStatus'))$('estimateTextStatus').textContent='已載入 B01～B04，可直接按「解析文字並估價」。';
+}
+
+function clearEstimateTextInput(){
+  if($('estimateTextInput'))$('estimateTextInput').value='';
+  if($('estimateTextBadge'))$('estimateTextBadge').textContent='尚未解析';
+  if($('estimateTextStatus'))$('estimateTextStatus').textContent='可一次貼入多筆，每筆以編號開頭；換行內容會自動接到上一筆。';
+}
+
+function splitEstimateTextRecords(text){
+  const normalized=String(text||'').replace(/\r/g,'\n').replace(/\n+/g,'\n').trim();
+  if(!normalized)return[];
+  const records=[];
+  let current='';
+  normalized.split('\n').forEach((raw)=>{
+    const line=raw.trim();
+    if(!line)return;
+    const starts=/^[A-Za-z]{1,4}\d+(?:[-.]\d+)?\s*[_、:：\-]?/.test(line);
+    if(starts){if(current)records.push(current);current=line;}
+    else current=current?`${current}，${line}`:line;
+  });
+  if(current)records.push(current);
+  if(records.length===1&&/[；;]/.test(records[0]))return records[0].split(/[；;]/).map((x)=>x.trim()).filter(Boolean);
+  return records;
+}
+
+function estimateMaterialFromText(text){
+  const t=standardizeErpText(text);
+  if(/立體.*(?:發光)?字|發光字/.test(t))return'立體發光字';
+  if(/安迪板/.test(t))return'安迪板';
+  if(/鏡面.*貼紙/.test(t))return'鏡面貼紙';
+  if(/透明.*貼紙/.test(t))return'透明貼紙';
+  if(/亞光.*貼紙|霧面.*貼紙/.test(t))return'亞光貼紙';
+  if(/PVC/i.test(t))return'PVC';
+  if(/PMMA|壓克力/i.test(t))return'透明壓克力';
+  if(/\bPC\b/i.test(t))return'PC';
+  if(/PET/i.test(t))return'PET';
+  return t.split(/[，,]/)[0].replace(/^[A-Za-z]{1,4}\d+(?:[-.]\d+)?\s*[_、:：\-]?/,'').trim();
+}
+
+function estimateProcessDetailsFromText(text){
+  const t=standardizeErpText(text);
+  const print=[];const effects=[];const processes=[];
+  if(/四色(?:直噴|印刷)?|CMYK/i.test(t))print.push('四色直噴');
+  if(/白色直噴|白墨|印白|白底/.test(t))print.push('白色直噴');
+  if(/銀底|銀色底/.test(t))effects.push('銀底');
+  if(/3D\s*膜|滿天星/.test(t))effects.push('3D膜');
+  if(/亮膜/.test(t))effects.push('亮膜');
+  if(/霧膜/.test(t))effects.push('霧膜');
+  if(/鏡面貼紙|鏡面貼合/.test(t))effects.push('鏡面貼紙');
+  if(/需?裁切|切割外型|外型切割/.test(t))processes.push('切割外型');
+  if(/折彎|熱摺彎/.test(t))processes.push('壓克力折彎');
+  if(/雕刻/.test(t))processes.push('雕刻');
+  if(/鑽孔/.test(t))processes.push('鑽孔');
+  if(/導\s*C\s*角/i.test(t))processes.push('導C角');
+  if(/燒光|拋光/.test(t))processes.push('燒光');
+  if(/銑槽|銑溝/.test(t))processes.push('銑槽');
+  if(/不透光/.test(t))effects.push('不透光');
+  return{print:[...new Set(print)],effects:[...new Set(effects)],processes:[...new Set(processes)]};
+}
+
+function parseEstimateTextRecord(record,index){
+  const original=String(record||'').trim();
+  const converted=$('estimateTextAutoTraditional')?.checked===false?original:standardizeErpText(original);
+  const codeMatch=converted.match(/^([A-Za-z]{1,4}\d+(?:[-.]\d+)?)\s*[_、:：\-]?\s*/);
+  const code=codeMatch?.[1]||`TXT${String(index+1).padStart(2,'0')}`;
+  const withoutCode=converted.replace(/^([A-Za-z]{1,4}\d+(?:[-.]\d+)?)\s*[_、:：\-]?\s*/,'');
+  const firstSegment=withoutCode.split(/[，,]/)[0].trim();
+  const dimensions=parseDimensionDetails(converted,'mm');
+  const dimensionText=dimensions[0]?.sourceText||'';
+  let displayName=firstSegment.replace(dimensionText,'').replace(/[，,]+$/,'').trim();
+  if(!displayName)displayName=estimateMaterialFromText(converted)||code;
+  const material=estimateMaterialFromText(converted);
+  const thicknessMatch=converted.match(/厚度\s*[:：]?\s*(\d+(?:\.\d+)?)\s*mm/i)
+    || converted.match(/(?:^|[，,])\s*(\d+(?:\.\d+)?)\s*mm\s*(?:[，,]|$)/i);
+  const qtyMatch=converted.match(/(?:數量\s*[:：]?\s*)?(\d+(?:\.\d+)?)\s*(片|張|件|組|個|P|H)/i);
+  const details=estimateProcessDetailsFromText(converted);
+  const item={
+    ...emptyEstimateItem(),
+    code,
+    originalName:firstSegment||displayName,
+    normalizedName:displayName,
+    name:displayName,
+    originalMaterial:material,
+    normalizedMaterial:material,
+    material,
+    originalSpec:original,
+    spec:dimensionText||converted,
+    thickness:thicknessMatch?`${thicknessMatch[1]}mm`:'',
+    qty:qtyMatch?Math.max(1,toNumber(qtyMatch[1])):1,
+    unit:qtyMatch?.[2]||'件',
+    dimensions,
+    printMethod:details.print.join('＋'),
+    whiteInk:details.print.includes('白色直噴')?'白色直噴':'',
+    specialEffect:details.effects.join('＋'),
+    constraints:details.processes.join('＋'),
+    wasteRate:0,
+    marketAdjustment:0,
+    marketManuallySet:true,
+  };
+  applyEstimateDimensionNormalization(item);
+  item.priceFingerprint=[item.material,item.thickness,item.sizeTier,...details.print,...details.effects,...details.processes].filter(Boolean).join('｜');
+  recalculateEstimateItem(item);
+  return item;
+}
+
+function parseEstimateTextIntoDraft(){
+  const text=$('estimateTextInput')?.value||'';
+  const records=splitEstimateTextRecords(text);
+  if(!records.length){showNotice('請先貼入至少一筆品項明細。','warn');return;}
+  const parsed=records.map(parseEstimateTextRecord).filter((item)=>item.name||item.material);
+  const mode=$('estimateTextImportMode')?.value||'replace';
+  state.estimateDraftItems=mode==='append'?[...state.estimateDraftItems,...parsed]:parsed;
+  recalculateAllEstimateItems();
+  renderEstimateDraft();
+  const fully=parsed.filter((item)=>toNumber(item.baseUnitPrice)>0&&!item.missingProcessTags?.length).length;
+  const partial=parsed.filter((item)=>toNumber(item.baseUnitPrice)>0&&item.missingProcessTags?.length).length;
+  const missing=parsed.filter((item)=>toNumber(item.baseUnitPrice)<=0).length;
+  if($('estimateTextBadge'))$('estimateTextBadge').textContent=`已解析 ${parsed.length} 筆`;
+  if($('estimateTextStatus'))$('estimateTextStatus').textContent=`已解析 ${parsed.length} 筆：完整估價 ${fully}、部分估價 ${partial}、待補價格 ${missing}。缺少製程單價時會列出待補項目。`;
+  if(!$('estimateName')?.value.trim())$('estimateName').value=`文字匯入美術件估價 ${todayValue()}`;
+  showNotice(`已解析並估價 ${parsed.length} 筆品項。`,'success');
+}
+
+function currentEstimateCnyRate(){
+  return Math.max(0.01,toNumber($('estimateCnyRate')?.value)||4.61);
+}
+
+function formatCnyFromTwd(twd){
+  return `¥${(toNumber(twd)/currentEstimateCnyRate()).toLocaleString('zh-TW',{maximumFractionDigits:2})}`;
+}
+
 function setEstimateAiStatus(message, type = '') {
   const el = $('estimateAiStatus');
   if (!el) return;
@@ -3634,8 +3783,8 @@ function applyEstimateDimensionNormalization(item){
   item.singleExactTsai=summary.singleTsai;
   item.totalExactTsai=summary.totalTsai;
   if(!item.billingTsaiManuallySet)item.billingTsai=summary.billingTsai;
-  item.sizeTier=item.sizeTier||summary.tier;
-  item.dimensionStatus=item.dimensionStatus||summary.status;
+  if(!item.sizeTier||item.sizeTier==='待確認')item.sizeTier=summary.tier;
+  if(!item.dimensionStatus||item.dimensionStatus==='待確認')item.dimensionStatus=summary.status;
   item.dimensionConfidence=toNumber(item.dimensionConfidence)||summary.confidence;
   item.longStripWarning=item.longStripWarning||summary.longStrip;
   return item;
@@ -3894,7 +4043,7 @@ async function estimateMissingPricesWithAi(options = {}){
   }
 }
 
-function emptyEstimateItem(){return{code:'',name:'',originalName:'',normalizedName:'',material:'',originalMaterial:'',normalizedMaterial:'',spec:'',originalSpec:'',originalUnit:'mm',dimensions:[],dimensionDetailsJson:'',thickness:'',qty:1,unit:'',widthMm:0,heightMm:0,exactAreaMm2:0,singleExactTsai:0,totalExactTsai:0,billingTsai:0,billingTsaiManuallySet:false,sizeTier:'待確認',dimensionStatus:'待確認',dimensionConfidence:0,longStripWarning:'',usage:1,wasteRate:10,priceId:'',baseUnitPrice:0,manualPrice:false,manualPriceConfidence:75,marketAdjustment:0,marketManuallySet:false,processingFee:0,otherFee:0,optimisticCost:0,baselineCost:0,conservativeCost:0,priceSource:'',confidenceScore:50,printMethod:'',printSide:'',whiteInk:'',specialEffect:'',isArtItem:'是',allowMaterialOptimization:'是',allowPrintOptimization:'是',constraints:'',internalRuleApplied:false,internalRuleDetails:''};}
+function emptyEstimateItem(){return{code:'',name:'',originalName:'',normalizedName:'',material:'',originalMaterial:'',normalizedMaterial:'',spec:'',originalSpec:'',originalUnit:'mm',dimensions:[],dimensionDetailsJson:'',thickness:'',qty:1,unit:'',widthMm:0,heightMm:0,exactAreaMm2:0,singleExactTsai:0,totalExactTsai:0,billingTsai:0,billingTsaiManuallySet:false,sizeTier:'待確認',dimensionStatus:'待確認',dimensionConfidence:0,longStripWarning:'',usage:1,wasteRate:10,priceId:'',baseUnitPrice:0,manualPrice:false,manualPriceConfidence:75,marketAdjustment:0,marketManuallySet:false,processingFee:0,otherFee:0,optimisticCost:0,baselineCost:0,conservativeCost:0,priceSource:'',confidenceScore:50,printMethod:'',printSide:'',whiteInk:'',specialEffect:'',isArtItem:'是',allowMaterialOptimization:'是',allowPrintOptimization:'是',constraints:'',internalRuleApplied:false,internalRuleDetails:'',costBreakdown:[],missingProcessTags:[],priceFingerprint:'',partialEstimate:false};}
 
 
 function internalPriceBasisKey(){
@@ -3918,9 +4067,15 @@ function canonicalInternalMaterial(value){
 }
 
 function effectiveInternalTier(item){
+  applyEstimateDimensionNormalization(item);
   const tier=String(item.sizeTier||'');
   if(tier==='100×100最低價'||tier==='300×300最低價'||tier==='面積才數')return tier;
-  if(toNumber(item.singleExactTsai)>0)return '面積才數';
+  const w=toNumber(item.widthMm),h=toNumber(item.heightMm);
+  if(w>0&&h>0){
+    if(w<=100&&h<=100)return'100×100最低價';
+    if(w<=300&&h<=300)return'300×300最低價';
+    return'面積才數';
+  }
   return '';
 }
 
@@ -3963,45 +4118,87 @@ function needsCmykWhitePrice(item){
   return /四色|CMYK/i.test(text) && /白墨|白色|白底|印白|背白/.test(text);
 }
 
+
+function extractEstimateProcessTags(item){
+  const text=standardizeErpText([item.printMethod,item.printSide,item.whiteInk,item.specialEffect,item.constraints,item.spec,item.originalSpec,item.name].filter(Boolean).join(' '));
+  const tags=[];
+  if(/四色|CMYK/i.test(text))tags.push('四色直噴');
+  if(/白墨|白色直噴|印白|白底/.test(text))tags.push('白色直噴');
+  if(/銀底/.test(text))tags.push('銀底');
+  if(/鏡面貼紙|鏡面貼合/.test(text))tags.push('鏡面貼紙');
+  if(/3D\s*膜|滿天星/.test(text))tags.push('3D膜');
+  if(/亮膜/.test(text))tags.push('亮膜');
+  if(/霧膜/.test(text))tags.push('霧膜');
+  if(/切割外型|需?裁切|外型切割/.test(text))tags.push('切割外型');
+  if(/折彎|熱摺彎/.test(text))tags.push('壓克力折彎');
+  if(/雕刻/.test(text))tags.push('雕刻');
+  if(/鑽孔/.test(text))tags.push('鑽孔');
+  if(/導\s*C\s*角/i.test(text))tags.push('導C角');
+  if(/燒光|拋光/.test(text))tags.push('燒光');
+  if(/銑槽|銑溝/.test(text))tags.push('銑槽');
+  return[...new Set(tags)];
+}
+
 function estimateByInternalRules(item){
   applyEstimateDimensionNormalization(item);
   const tier=effectiveInternalTier(item);
   if(!tier)return null;
+  item.sizeTier=tier;
   const basisKey=internalPriceBasisKey();
   const thickness=numericThickness(item.thickness);
   const materialName=canonicalInternalMaterial(item.material||item.name);
   const materialRule=findInternalRule('材料',materialName,thickness,tier,basisKey);
-  if(!materialRule)return null;
+  const processTags=extractEstimateProcessTags(item);
+  if(!materialRule){
+    item.costBreakdown=[];
+    item.missingProcessTags=[materialName||'材料價格',...processTags];
+    item.partialEstimate=false;
+    return null;
+  }
 
-  const perItemTsai=Math.max(1,Math.ceil(toNumber(item.singleExactTsai)||0));
+  const exactTsai=Math.max(0,toNumber(item.singleExactTsai)||0);
+  const areaUsage=tier==='面積才數'?Math.max(0.01,exactTsai):1;
   const ruleCost=(rule)=>{
     const price=internalRulePrice(rule,basisKey);
-    return rule?.pricingMethod==='每才' ? price*perItemTsai : price;
+    return rule?.pricingMethod==='每才'?price*areaUsage:price;
   };
 
   const materialCost=ruleCost(materialRule);
+  const breakdown=[{label:`${materialRule.name}${materialRule.thicknessMm?` ${materialRule.thicknessMm}mm`:''}`,amount:materialCost,type:'材料'}];
+  const covered=new Set();
   let printRule=null;
   let printCost=0;
   if(needsCmykWhitePrice(item)){
     printRule=findInternalRule('印刷加工','四色印刷＋白',0,tier,basisKey);
-    if(printRule)printCost=ruleCost(printRule);
+    if(printRule){
+      printCost=ruleCost(printRule);
+      breakdown.push({label:'四色印刷＋白',amount:printCost,type:'印刷'});
+      covered.add('四色直噴');covered.add('白色直噴');
+    }
   }
 
+  const missing=processTags.filter((tag)=>!covered.has(tag));
   const unitPrice=materialCost+printCost;
   if(unitPrice<=0)return null;
 
   const details=[
     `${materialRule.name}${materialRule.thicknessMm?` ${materialRule.thicknessMm}mm`:''} ${tier}`,
     printRule?`${printRule.name} ${tier}`:'',
-    materialRule.pricingMethod==='每才'?`每件計價才數 ${perItemTsai}`:''
+    tier==='面積才數'?`精確才數 ${Math.round(exactTsai*10000)/10000}`:''
   ].filter(Boolean);
 
-  const confidence=(item.dimensionStatus==='已解析'?82:68)+(printRule?5:0);
+  item.costBreakdown=breakdown;
+  item.missingProcessTags=missing;
+  item.partialEstimate=missing.length>0;
+  item.priceFingerprint=[materialName,item.thickness,tier,...processTags].filter(Boolean).join('｜');
+  const confidence=(item.dimensionStatus==='已解析'?82:68)+(printRule?5:0)-Math.min(30,missing.length*7);
   return {
     unitPrice,
-    source:`內部價格規則｜${details.join('＋')}｜${basisKey==='rawTwd'?'原材TWD':'打樣TWD'}`,
-    confidence:Math.max(45,Math.min(92,confidence)),
+    source:`內部價格規則｜${details.join('＋')}｜${basisKey==='rawTwd'?'原材TWD':'打樣TWD'}${missing.length?`｜待補：${missing.join('、')}`:''}`,
+    confidence:Math.max(35,Math.min(92,confidence)),
     details:details.join('＋'),
+    breakdown,
+    missing,
   };
 }
 
@@ -4037,6 +4234,9 @@ function recalculateEstimateItem(item){
   const useManualPrice=Boolean(item.manualPrice&&toNumber(item.baseUnitPrice)>0);
   if(!useManualPrice&&item.internalRuleApplied){
     item.baseUnitPrice=0;
+    item.costBreakdown=[];
+    item.missingProcessTags=[];
+    item.partialEstimate=false;
     item.priceSource='';
     item.internalRuleApplied=false;
     item.internalRuleDetails='';
@@ -4061,6 +4261,9 @@ function recalculateEstimateItem(item){
       item.priceId='';
       item.internalRuleApplied=true;
       item.internalRuleDetails=internalEstimate.details;
+      item.costBreakdown=internalEstimate.breakdown||[];
+      item.missingProcessTags=internalEstimate.missing||[];
+      item.partialEstimate=Boolean(item.missingProcessTags.length);
       item.baseUnitPrice=internalEstimate.unitPrice;
       item.priceSource=internalEstimate.source;
       item.unit=item.unit||'件';
@@ -4075,6 +4278,9 @@ function recalculateEstimateItem(item){
   if(useManualPrice){
     item.priceId='';
     item.internalRuleApplied=false;
+    item.costBreakdown=[{label:'文件／人工單價',amount:toNumber(item.baseUnitPrice),type:'人工'}];
+    item.missingProcessTags=[];
+    item.partialEstimate=false;
     if(!item.priceSource)item.priceSource='人工輸入單價';
     item.marketAdjustment=item.marketManuallySet?toNumber(item.marketAdjustment):0;
   }else if(!internalEstimate&&!item.marketManuallySet){
@@ -4130,7 +4336,7 @@ function renderEstimateDraft(){
     const hasPrice=Boolean(item.priceId || item.manualPrice || toNumber(item.baseUnitPrice)>0);
     const aiReferencePrice=/AI市場參考價/.test(item.priceSource||'');
     const internalRulePrice=/內部價格規則/.test(item.priceSource||'');
-    const priceState=hasPrice ? (item.priceId ? '公司價格' : (internalRulePrice ? '內部規則' : (aiReferencePrice ? 'AI參考價' : '文件／人工價格'))) : '待補價格';
+    const priceState=hasPrice ? (item.partialEstimate ? '部分估價' : (item.priceId ? '公司價格' : (internalRulePrice ? '內部規則' : (aiReferencePrice ? 'AI參考價' : '文件／人工價格')))) : '待補價格';
     const priceClass=hasPrice ? (aiReferencePrice ? 'ai' : 'ready') : 'missing';
     return `<article class="estimateQuickCard" data-estimate-index="${index}">
       <header class="estimateQuickCardHead">
@@ -4157,6 +4363,10 @@ function renderEstimateDraft(){
         <label><span>單價</span><input class="tableInput numberInput manualPriceInput" data-estimate-field="baseUnitPrice" type="number" min="0" step="0.01" value="${roundDisplay(item.baseUnitPrice)}" placeholder="待配對"></label>
       </div>
 
+      <div class="estimateCostBreakdown ${item.missingProcessTags?.length?'hasMissing':''}">
+        ${(item.costBreakdown||[]).length?item.costBreakdown.map((part)=>`<span class="breakdownChip"><b>${escapeHTML(part.label)}</b> ${money(part.amount)}</span>`).join(''):'<span class="breakdownMuted">尚無可用分項價格</span>'}
+        ${item.missingProcessTags?.length?`<span class="breakdownMissing">待補：${escapeHTML(item.missingProcessTags.join('、'))}</span>`:''}
+      </div>
       <div class="estimateDimensionSummary ${item.dimensionStatus==='待確認'?'warning':''}">
         <span><strong>繁中：</strong>${escapeHTML(item.normalizedName||item.name||'—')}</span>
         <span><strong>尺寸：</strong>${item.widthMm&&item.heightMm?`${roundDisplay(item.widthMm)} × ${roundDisplay(item.heightMm)} mm`:'待確認'}</span>
@@ -4235,9 +4445,11 @@ function updateEstimateQuickMetrics(){
   const items=state.estimateDraftItems||[];
   const matched=items.filter((item)=>item.priceId || item.manualPrice || toNumber(item.baseUnitPrice)>0).length;
   const missing=Math.max(0,items.length-matched);
+  const missingProcess=items.filter((item)=>Array.isArray(item.missingProcessTags)&&item.missingProcessTags.length).length;
   if($('estimateItemCount'))$('estimateItemCount').textContent=String(items.length);
   if($('estimateMatchedCount'))$('estimateMatchedCount').textContent=String(matched);
   if($('estimateMissingCount'))$('estimateMissingCount').textContent=String(missing);
+  if($('estimateMissingProcessCount'))$('estimateMissingProcessCount').textContent=String(missingProcess);
   if($('estimateMissingPrices'))$('estimateMissingPrices').disabled=missing===0;
 }
 
@@ -4306,6 +4518,9 @@ function updateEstimateTotals(){
   $('estimateOptimistic').textContent=money(totals.optimistic);
   $('estimateBaseline').textContent=money(totals.baseline);
   $('estimateConservative').textContent=money(totals.conservative);
+  if($('estimateOptimisticCny'))$('estimateOptimisticCny').textContent=formatCnyFromTwd(totals.optimistic);
+  if($('estimateBaselineCny'))$('estimateBaselineCny').textContent=formatCnyFromTwd(totals.baseline);
+  if($('estimateConservativeCny'))$('estimateConservativeCny').textContent=formatCnyFromTwd(totals.conservative);
   $('estimateConfidence').textContent=`${Math.round(totals.confidence)}%`;
   $('estimateStatusBadge').textContent=state.currentEstimateId?`編輯 ${state.currentEstimateId}`:`草稿 ${state.estimateDraftItems.length} 筆`;
   updateEstimateQuickMetrics();
@@ -4329,7 +4544,7 @@ function updateEstimateTargetMode(){
 function parseDimensions(text){const groups=parseDimensionDetails(text,'mm');return groups.length?{widthMm:groups[0].widthMm,heightMm:groups[0].heightMm}:{widthMm:0,heightMm:0};}
 function loadActualItemsIntoEstimate(){const machineId=$('estimateMachine').value;if(!machineId){showNotice('請先選擇機台。','warn');return;}const orderIds=state.costOrders.filter((o)=>o.machineId===machineId&&o.type==='實際費用').map((o)=>o.id);const items=state.costItems.filter((i)=>orderIds.includes(i.costOrderId)&&i.itemType!=='附加費用');if(!items.length){showNotice('這台機台尚無實際費用品項。','warn');return;}state.estimateDraftItems=items.map((i)=>{const d=parseDimensions(i.spec);return applyEstimateDimensionNormalization({...emptyEstimateItem(),code:i.fileName||'',originalName:i.name,normalizedName:standardizeErpText(i.name),name:standardizeErpText(i.name),originalMaterial:i.material,normalizedMaterial:standardizeErpText(i.material),material:standardizeErpText(i.material),originalSpec:i.spec,spec:standardizeErpText(i.spec),thickness:i.thickness,qty:i.qty||1,unit:i.unit||'件',widthMm:d.widthMm,heightMm:d.heightMm,baseUnitPrice:i.price,manualPrice:true,manualPriceConfidence:85,wasteRate:0,marketAdjustment:0,marketManuallySet:true,priceSource:'機台實際成本',confidenceScore:85});});const m=machineById(machineId);if(!$('estimateName').value)$('estimateName').value=`${m?.name||machineId} 美術材料估價`;renderEstimateDraft();showNotice(`已載入 ${items.length} 筆實際費用品項。`,'success');}
 
-function resetEstimateEditor(){state.currentEstimateId='';state.estimateDraftItems=[];$('estimateProjectForm').reset();$('estimateId').value='';$('estimateTargetType').value='new';$('estimateVersion').value='V1';$('estimateDate').value=todayValue();$('estimateStatus').value='草稿';clearEstimateSourceDocument();updateEstimateTargetMode();renderEstimateDraft();}
+function resetEstimateEditor(){state.currentEstimateId='';state.estimateDraftItems=[];clearEstimateTextInput();$('estimateProjectForm').reset();$('estimateId').value='';$('estimateTargetType').value='new';$('estimateVersion').value='V1';$('estimateDate').value=todayValue();$('estimateStatus').value='草稿';clearEstimateSourceDocument();updateEstimateTargetMode();renderEstimateDraft();}
 function loadEstimateProject(id){const project=state.estimateProjects.find((p)=>p.id===id);if(!project)return;state.currentEstimateId=id;$('estimateId').value=id;$('estimateTargetType').value=project.machineId?'existing':'new';$('estimateMachine').value=project.machineId;$('estimateName').value=project.name;$('estimateVersion').value=project.version;$('estimateDate').value=project.date;$('estimateStatus').value=project.status;$('estimateNote').value=project.note;state.estimateDraftItems=state.estimateItems.filter((i)=>i.estimateId===id).map((i)=>({...i,usageManuallySet:true,marketManuallySet:true}));updateEstimateTargetMode();renderEstimateDraft();document.querySelector('[data-view="smartEstimate"]')?.click();}
 
 async function saveCurrentEstimate(){
