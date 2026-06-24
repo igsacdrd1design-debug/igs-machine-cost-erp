@@ -2008,3 +2008,37 @@ td small { color: var(--muted); }
     grid-column: 1;
   }
 }
+
+/* v2.4 製程多選、材質下拉與 AI 發包圖辨識 */
+.draftItemsTable { min-width: 2580px; }
+.processTagField { align-content: start; }
+.processTagButtons { display: grid; gap: 10px; padding: 10px; border: 1px solid var(--line); border-radius: 13px; background: #f7faf9; }
+.processTagGroup { display: grid; grid-template-columns: 86px minmax(0, 1fr); gap: 8px; align-items: start; }
+.processTagGroup > span { padding-top: 7px; color: var(--muted); font-size: 12px; font-weight: 800; }
+.processTagGroup > div { display: flex; flex-wrap: wrap; gap: 7px; }
+.processTagButton { min-height: 32px; padding: 6px 10px; border: 1px solid #c9d5d4; border-radius: 999px; color: #35545e; background: #fff; cursor: pointer; font-size: 12px; font-weight: 700; }
+.processTagButton:hover { border-color: var(--blue); background: var(--blue-soft); }
+.processTagButton.selected { border-color: #2f7d73; color: #fff; background: #2f7d73; box-shadow: 0 2px 8px rgba(47,125,115,.2); }
+.processTagSummary { display: block; margin-top: 6px; color: #6d766f; line-height: 1.45; }
+.compactTags { width: 580px; max-width: 64vw; padding: 8px; }
+.compactTags .processTagGroup { grid-template-columns: 70px minmax(0, 1fr); }
+.tableProcessPicker { min-width: 210px; }
+.tableProcessPicker summary { cursor: pointer; color: var(--blue); font-size: 12px; font-weight: 800; }
+.tableProcessPicker[open] { position: relative; z-index: 5; }
+.tableProcessPicker[open] .compactTags { position: absolute; left: 0; top: 28px; z-index: 20; box-shadow: 0 18px 45px rgba(18,37,46,.18); }
+.itemImageActions { display: flex; justify-content: center; gap: 5px; }
+.miniAi { border: 0; border-radius: 7px; padding: 3px 6px; color: #fff; background: var(--blue); cursor: pointer; font-size: 11px; font-weight: 700; }
+.priceReviewAiPanel { display: grid; grid-template-columns: minmax(220px, 1fr) auto; gap: 10px 16px; align-items: center; padding: 14px; border: 1px dashed #b7c9cd; border-radius: 14px; background: #f4f8f8; }
+.priceReviewAiPanel strong { color: var(--deep); }
+.priceReviewAiPanel p { margin: 4px 0 0; color: var(--muted); font-size: 12px; }
+.priceReviewAiControls { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 7px; }
+.priceReviewAiPreview { grid-column: span 2; display: flex; align-items: center; gap: 12px; padding: 9px; border-radius: 12px; background: #fff; }
+.priceReviewAiPreview[hidden] { display: none; }
+.priceReviewAiPreview img { width: 150px; height: 100px; object-fit: contain; border: 1px solid var(--line); border-radius: 10px; background: #fff; }
+.priceReviewAiPanel .photoStatus { grid-column: span 2; margin: 0; }
+@media (max-width: 760px) {
+  .processTagGroup { grid-template-columns: 1fr; }
+  .priceReviewAiPanel { grid-template-columns: 1fr; }
+  .priceReviewAiControls { justify-content: flex-start; }
+  .priceReviewAiPreview, .priceReviewAiPanel .photoStatus { grid-column: span 1; }
+}

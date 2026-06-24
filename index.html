@@ -8,7 +8,7 @@
   <meta name="googlebot" content="noindex, nofollow, noarchive, nosnippet">
   <meta name="referrer" content="no-referrer">
   <title>IGS 機台材料成本 ERP</title>
-  <link rel="stylesheet" href="style.css?v=20260624-igs-v2-3">
+  <link rel="stylesheet" href="style.css?v=20260624-igs-v2-4">
 </head>
 <body class="authLocked">
   <section id="authGate" class="authGate" aria-labelledby="loginTitle">
@@ -318,6 +318,7 @@
                 <th>單價</th>
                 <th>材質</th>
                 <th>厚度</th>
+                <th>製程標籤</th>
                 <th>檔案名稱</th>
                 <th>安裝區域</th>
                 <th>區域狀態</th>
@@ -642,7 +643,7 @@
     <section id="priceCenter" class="view">
       <div class="quickIntro priceIntro">
         <div>
-          <span class="eyebrow">v2.3 · 公司價格＋待認證歷史價＋市場趨勢</span>
+          <span class="eyebrow">v2.3.1 · CSV自動辨識＋價格認證＋市場趨勢</span>
           <h2>建立正式價格主檔，認證近期歷史報價並監看市場浮動</h2>
           <p>新報價先進入待認證區；補齊供應商、正式日期與稅別並人工認證後，才會影響智能估價基準。</p>
         </div>
@@ -652,10 +653,10 @@
       <div class="v20Grid twoCol">
         <div class="panel">
           <div class="panelHead">
-            <div><h2>1. 材料價格主檔</h2><p class="muted">新增、修改、刪除或匯入公司既有價格。</p></div>
+            <div><h2>1. 材料價格主檔</h2><p class="muted">新增、修改、刪除或匯入公司材料主檔。近期歷史報價請使用下方「待認證歷史價格」。</p></div>
             <div class="panelActions">
-              <label class="button secondary fileButton">匯入 CSV<input id="materialPriceCsv" type="file" accept=".csv,text/csv" hidden></label>
-              <button id="exportMaterialPrices" class="button ghost" type="button">匯出 CSV</button>
+              <label class="button secondary fileButton">匯入材料主檔 CSV<input id="materialPriceCsv" type="file" accept=".csv,text/csv" hidden></label>
+              <button id="exportMaterialPrices" class="button ghost" type="button">匯出材料主檔 CSV</button>
             </div>
           </div>
           <form id="materialPriceForm" class="entryForm compactForm">
@@ -706,11 +707,11 @@
         <div class="panelHead">
           <div>
             <h2>3. 待認證歷史價格</h2>
-            <p class="muted">新取得的估價先匯入這裡；只有「已認證＋納入基準」才會參與智能估價。</p>
+            <p class="muted">新取得的估價先匯入這裡；可直接使用「IGS_近期價格待認證匯入.csv」。只有「已認證＋納入基準」才會參與智能估價。</p>
           </div>
           <div class="panelActions">
-            <label class="button secondary fileButton">匯入待認證 CSV<input id="priceReviewCsv" type="file" accept=".csv,text/csv" hidden></label>
-            <button id="exportPriceReviews" class="button ghost" type="button">匯出 CSV</button>
+            <label class="button secondary fileButton">匯入近期價格待認證 CSV<input id="priceReviewCsv" type="file" accept=".csv,text/csv" hidden></label>
+            <button id="exportPriceReviews" class="button ghost" type="button">匯出待認證 CSV</button>
           </div>
         </div>
 
@@ -757,7 +758,7 @@
           <label class="wide"><span>品項名稱 *</span><input id="priceReviewItemName" type="text" required></label>
           <label><span>品項代碼</span><input id="priceReviewItemCode" type="text"></label>
           <label><span>專案／機台</span><input id="priceReviewProject" type="text"></label>
-          <label><span>標準材質</span><input id="priceReviewMaterial" type="text"></label>
+          <label><span>標準材質</span><select id="priceReviewMaterial"></select></label>
           <label><span>厚度 mm</span><input id="priceReviewThickness" type="number" min="0" step="0.1"></label>
           <label><span>寬 mm</span><input id="priceReviewWidth" type="number" min="0" step="0.1"></label>
           <label><span>高 mm</span><input id="priceReviewHeight" type="number" min="0" step="0.1"></label>
@@ -768,14 +769,34 @@
           <label><span>供應商</span><input id="priceReviewSupplier" type="text" list="supplierOptions"></label>
           <label><span>稅別</span><select id="priceReviewTaxType"><option value="">待補</option><option>未稅</option><option>含稅</option><option>免稅</option><option>不確定</option></select></label>
           <label><span>認證狀態</span><select id="priceReviewStatus"><option>待認證</option><option>已認證</option><option>待補價格</option><option>僅保存</option><option>異常價格</option><option>規格配對錯誤</option></select></label>
-          <label class="wide"><span>製程標籤</span><input id="priceReviewProcessTags" type="text" placeholder="例如：四色、白墨、裁切外型、導光"></label>
+          <label class="wide processTagField"><span>製程標籤（可複選）</span>
+            <input id="priceReviewProcessTags" type="hidden">
+            <div id="priceReviewProcessTagButtons" class="processTagButtons" role="group" aria-label="製程標籤"></div>
+            <small id="priceReviewProcessTagSummary" class="processTagSummary">尚未選擇製程</small>
+          </label>
+          <div class="wide priceReviewAiPanel">
+            <div>
+              <strong>AI 看圖辨識材質與製程</strong>
+              <p>支援 JPG、PNG、WebP；辨識結果只會帶入表單，仍需人工確認。</p>
+            </div>
+            <div class="priceReviewAiControls">
+              <label class="button ghost compact">選擇發包圖<input id="priceReviewProcessImage" type="file" accept="image/jpeg,image/png,image/webp" hidden></label>
+              <button id="analyzePriceReviewProcessImage" class="button secondary compact" type="button" disabled>AI 看圖選擇</button>
+              <button id="clearPriceReviewProcessImage" class="button ghost compact" type="button" disabled>清除圖片</button>
+            </div>
+            <div id="priceReviewProcessImagePreviewWrap" class="priceReviewAiPreview" hidden>
+              <img id="priceReviewProcessImagePreview" alt="發包圖預覽">
+              <span id="priceReviewProcessImageName"></span>
+            </div>
+            <p id="priceReviewProcessAiStatus" class="photoStatus muted">尚未選擇發包圖</p>
+          </div>
           <label class="wide"><span>來源文件</span><input id="priceReviewSourceFile" type="text"></label>
           <label class="wide"><span>來源備註</span><textarea id="priceReviewNote" rows="3"></textarea></label>
           <label class="checkboxField wide"><input id="priceReviewIncludeBaseline" type="checkbox"><span>納入智能估價與歷史價格基準</span></label>
         </div>
         <div class="formActions">
           <button id="savePriceReviewDialog" class="button primary" type="submit">儲存認證資料</button>
-          <button class="button ghost" type="button" onclick="document.getElementById('priceReviewDialog').close()">取消</button>
+          <button class="button ghost" type="button" onclick="closePriceReviewDialog()">取消</button>
         </div>
       </form>
     </dialog>
@@ -1036,7 +1057,7 @@
 
   <datalist id="supplierOptions"></datalist>
   <datalist id="machineAreaOptions"></datalist>
-  <script src="data.js?v=20260624-igs-v2-3"></script>
-  <script src="app.js?v=20260624-igs-v2-3"></script>
+  <script src="data.js?v=20260624-igs-v2-4"></script>
+  <script src="app.js?v=20260624-igs-v2-4"></script>
 </body>
 </html>
