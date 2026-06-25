@@ -8,7 +8,7 @@
   <meta name="googlebot" content="noindex, nofollow, noarchive, nosnippet">
   <meta name="referrer" content="no-referrer">
   <title>IGS 機台材料成本 ERP｜快速估價</title>
-  <link rel="stylesheet" href="style.css?v=20260625-igs-v3-17-four-stage-unit-auto">
+  <link rel="stylesheet" href="style.css?v=20260625-igs-v3-19-process-toggle-stable">
 </head>
 <body class="authLocked">
   <section id="authGate" class="authGate" aria-labelledby="loginTitle">
@@ -95,6 +95,9 @@
             <strong>💰 估價</strong>
             <span>輸入規格算價</span>
           </button>
+          <p class="homeImportHint">
+            <a href="#" data-open-view="dataImport" data-open-title="資料匯入">📂 首次使用？點此匯入基礎資料</a>
+          </p>
         </div>
       </div>
       <div class="panel homePricePanel">
@@ -159,11 +162,12 @@
           <h2>機台總覽與搜尋</h2>
           <p class="muted">未輸入關鍵字時會顯示全部機台；也可用機台名稱、代碼、分類或材料品項篩選。</p>
         </div>
-        <div class="filterControls">
+        <div class="filterControls machineOverviewControls">
           <label for="categoryFilter">機台分類</label>
           <select id="categoryFilter">
             <option value="">全部分類</option>
           </select>
+          <button class="button secondary" type="button" data-view="quickMachine" data-title="快速建立機台">＋ 新增機台</button>
         </div>
       </div>
       <div id="machineCards" class="machineGrid"></div>
@@ -275,9 +279,12 @@
             <span id="quotationAiBadge" class="analysisBadge">尚未辨識</span>
           </div>
           <form id="quotationForm" class="entryForm costAttributionForm">
-            <label>
+            <label class="quotationMachineField">
               <span>歸屬機台 *</span>
-              <select id="quotationMachine" required></select>
+              <div class="quotationMachineControl">
+                <select id="quotationMachine" required></select>
+                <button type="button" id="quotationQuickCreateMachine" class="button small" title="快速建立機台" aria-label="快速建立機台">＋</button>
+              </div>
             </label>
             <label>
               <span>費用類型 *</span>
@@ -1244,6 +1251,37 @@
     </form>
   </dialog>
 
+  <dialog id="quotationQuickCreateMachineDialog" class="quickMachineDialog">
+    <form id="quotationQuickCreateMachineForm" class="quickMachineDialogForm">
+      <div class="dialogHead">
+        <div>
+          <span class="eyebrow">估價單建檔｜快速建立</span>
+          <h2>新增歸屬機台</h2>
+          <p>只填必要資料。建立成功後會自動加入「歸屬機台」下拉並選取。</p>
+        </div>
+        <button id="closeQuotationQuickCreateMachine" class="dialogClose" type="button" aria-label="關閉">×</button>
+      </div>
+      <div class="quickMachineDialogGrid">
+        <label>
+          <span>機台代碼 *</span>
+          <input id="quotationQuickMachineCode" type="text" required maxlength="60" autocomplete="off" placeholder="例如：SF6">
+        </label>
+        <label>
+          <span>機台名稱 *</span>
+          <input id="quotationQuickMachineName" type="text" required maxlength="120" autocomplete="off" placeholder="例如：街霸6">
+        </label>
+        <label class="wide">
+          <span>機台分類 *</span>
+          <select id="quotationQuickMachineCategory" required></select>
+        </label>
+      </div>
+      <div class="formActions">
+        <button id="saveQuotationQuickMachine" class="button primary" type="submit">建立並選取</button>
+        <button id="cancelQuotationQuickCreateMachine" class="button ghost" type="button">取消</button>
+      </div>
+    </form>
+  </dialog>
+
   <dialog id="machineDialog" class="machineDialog">
     <button id="closeMachineDialog" class="dialogClose" type="button" aria-label="關閉">×</button>
     <div id="machineDialogContent"></div>
@@ -1256,6 +1294,6 @@
   <datalist id="estimateWhiteInkOptions"></datalist>
   <datalist id="estimateSpecialEffectOptions"></datalist>
   <script src="data.js?v=20260624-igs-v2-4"></script>
-  <script src="app.js?v=20260625-igs-v3-18-three-layer-process-toggle"></script>
+  <script src="app.js?v=20260625-igs-v3-20-machine-entry-links"></script>
 </body>
 </html>

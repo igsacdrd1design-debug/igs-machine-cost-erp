@@ -2520,3 +2520,99 @@ body.estimate-developer-mode .estimateDeveloperLayer{display:grid;gap:11px}
   .processTagGroup{grid-template-columns:1fr}
   .processTagButton{flex:1 1 calc(50% - 7px)}
 }
+
+/* v3.19 製程標籤原地切換：避免重繪造成畫面跳動 */
+.processTagButton{
+  touch-action:manipulation;
+  user-select:none;
+  -webkit-tap-highlight-color:transparent;
+  transition:background-color .14s ease,border-color .14s ease,color .14s ease,box-shadow .14s ease,transform .08s ease;
+}
+.processTagButton:active{transform:scale(.97)}
+@media (prefers-reduced-motion:reduce){.processTagButton{transition:none}}
+
+
+/* v3.20 機台入口、估價單快速建機與首頁匯入提示 */
+.button.small {
+  min-width: 44px;
+  min-height: 44px;
+  padding: 8px 12px;
+  font-size: 20px;
+  line-height: 1;
+}
+.machineOverviewControls { flex-wrap: wrap; justify-content: flex-end; }
+.machineOverviewControls .button { white-space: nowrap; }
+.quotationMachineControl {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 44px;
+  align-items: stretch;
+  gap: 8px;
+}
+.quotationMachineControl select { min-width: 0; }
+.homeImportHint {
+  grid-column: 1 / -1;
+  margin: 2px 0 0;
+  text-align: center;
+  font-size: 12px;
+  line-height: 1.45;
+}
+.homeImportHint a {
+  color: rgba(255,255,255,.68);
+  text-decoration: none;
+}
+.homeImportHint a:hover,
+.homeImportHint a:focus-visible {
+  color: #fff;
+  text-decoration: underline;
+}
+.quickMachineDialog {
+  width: min(560px, calc(100vw - 28px));
+  padding: 0;
+  border: 1px solid #3f4f56;
+  border-radius: 22px;
+  background: #fbfaf6;
+  box-shadow: 0 28px 80px rgba(18,37,46,.34);
+}
+.quickMachineDialog::backdrop {
+  background: rgba(15,31,39,.58);
+  backdrop-filter: blur(3px);
+}
+.quickMachineDialogForm { padding: 24px; }
+.quickMachineDialogForm .dialogHead {
+  display: flex;
+  justify-content: space-between;
+  gap: 18px;
+  margin-bottom: 18px;
+}
+.quickMachineDialogForm .dialogHead h2 { margin: 4px 0 7px; }
+.quickMachineDialogForm .dialogHead p { margin: 0; color: var(--muted); line-height: 1.55; }
+.quickMachineDialogGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+.quickMachineDialogGrid label { display: grid; gap: 6px; }
+.quickMachineDialogGrid label span { color: var(--muted); font-size: 13px; }
+.quickMachineDialogGrid label.wide { grid-column: 1 / -1; }
+.quickMachineDialogGrid input,
+.quickMachineDialogGrid select {
+  width: 100%;
+  padding: 12px 13px;
+  border: 1px solid var(--line);
+  border-radius: 13px;
+  color: var(--deep);
+  background: #fff;
+  outline: none;
+}
+.quickMachineDialogForm .formActions { margin-top: 18px; }
+
+@media (max-width: 680px) {
+  .machineOverviewControls { width: 100%; align-items: stretch; }
+  .machineOverviewControls label { align-self: flex-start; }
+  .machineOverviewControls select,
+  .machineOverviewControls .button { width: 100%; }
+  .quickMachineDialogForm { padding: 18px; }
+  .quickMachineDialogGrid { grid-template-columns: 1fr; }
+  .quickMachineDialogGrid label.wide { grid-column: auto; }
+  .homeImportHint { width: 100%; }
+}

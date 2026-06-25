@@ -1,6 +1,6 @@
-/* IGS ERP app.js — v3.18 三層卡片 UX 與製程按鈕化 */
+/* IGS ERP app.js — v3.20 機台入口與快速建立補強 */
 // =====================================================
-// IGS 機台材料成本 ERP — 前端 v3.18 三層卡片 UX 與製程按鈕化
+// IGS 機台材料成本 ERP — 前端 v3.20 機台入口與快速建立補強
 // 1. ERP 密碼登入
 // 2. 工作階段驗證
 // 3. 私人 Google Sheet 安全讀取
@@ -1275,6 +1275,9 @@ function setupNavigation() {
   document.querySelectorAll(".nav").forEach((button) => {
     button.addEventListener("click", () => activateView(button.dataset.view, button.dataset.title || button.textContent.trim()));
   });
+  document.querySelectorAll('[data-view]:not(.nav)').forEach((button) => {
+    button.addEventListener("click", () => activateView(button.dataset.view, button.dataset.title || button.textContent.trim()));
+  });
   document.querySelectorAll('[data-home-view]').forEach((button)=>{
     button.addEventListener('click',()=>activateView(button.dataset.homeView));
   });
@@ -1333,6 +1336,86 @@ function setupForms() {
   $("quotationTaxRate").addEventListener("input", renderDraftSubtotal);
   $("quotationMachine").addEventListener("change", populateMachineAreaOptions);
   $("analyzeQuotation").addEventListener("click", analyzeQuotationDocument);
+  $("quotationQuickCreateMachine").addEventListener("click", openQuotationQuickCreateMachineDialog);
+  $("quotationQuickCreateMachineForm").addEventListener("submit", handleQuotationQuickCreateMachine);
+  $("closeQuotationQuickCreateMachine").addEventListener("click", closeQuotationQuickCreateMachineDialog);
+  $("cancelQuotationQuickCreateMachine").addEventListener("click", closeQuotationQuickCreateMachineDialog);
+  $("quotationQuickCreateMachineDialog").addEventListener("click", (event) => {
+    if (event.target === $("quotationQuickCreateMachineDialog")) closeQuotationQuickCreateMachineDialog();
+  });
+}
+
+function openQuotationQuickCreateMachineDialog() {
+  const dialog = $("quotationQuickCreateMachineDialog");
+  const categorySelect = $("quotationQuickMachineCategory");
+  if (!dialog || !categorySelect) return;
+
+  $("quotationQuickCreateMachineForm").reset();
+  // 使用與完整「快速建立機台」頁面相同的分類選項，避免兩處資料不一致。
+  categorySelect.innerHTML = $("machineCategory")?.innerHTML || FALLBACK_CATEGORIES
+    .map((category) => `<option value="${escapeHTML(category)}">${escapeHTML(category)}</option>`)
+    .join("");
+  dialog.showModal();
+  setTimeout(() => $("quotationQuickMachineCode")?.focus(), 50);
+}
+
+function closeQuotationQuickCreateMachineDialog() {
+  const dialog = $("quotationQuickCreateMachineDialog");
+  if (dialog?.open) dialog.close();
+}
+
+async function handleQuotationQuickCreateMachine(event) {
+  event.preventDefault();
+  const code = $("quotationQuickMachineCode").value.trim().toUpperCase();
+  const name = $("quotationQuickMachineName").value.trim();
+  const category = $("quotationQuickMachineCategory").value.trim();
+
+  if (!code || !name || !category) {
+    showNotice("請填寫機台代碼、機台名稱與機台分類。", "warn");
+    return;
+  }
+
+  const duplicate = state.machines.find((machine) => norm(machine.code) === norm(code));
+  if (duplicate) {
+    $("quotationMachine").value = duplicate.id;
+    populateMachineAreaOptions();
+    closeQuotationQuickCreateMachineDialog();
+    showNotice(`機台代碼「${code}」已存在，已直接選取「${duplicate.name}」。`, "warn");
+    return;
+  }
+
+  const button = $("saveQuotationQuickMachine");
+  const originalText = button.textContent;
+  button.disabled = true;
+  button.textContent = "建立中…";
+
+  try {
+    const response = await secureApiRequest(
+      {
+        action: "createMachine",
+        machine: { code, name, category, image: null, note: "由估價單建檔快速建立" },
+      },
+      { includeToken: true, timeoutMs: 60000 }
+    );
+
+    const createdRaw = response.result?.machine || {};
+    const createdId = String(firstValue(createdRaw, ["機台ID", "machineId", "id"]));
+    await loadData();
+
+    const created = state.machines.find((machine) => machine.id === createdId)
+      || state.machines.find((machine) => norm(machine.code) === norm(code));
+    if (!created) throw new Error("機台已建立，但重新讀取後找不到該機台，請重新整理頁面。");
+
+    $("quotationMachine").value = created.id;
+    populateMachineAreaOptions();
+    closeQuotationQuickCreateMachineDialog();
+    showNotice(`已建立並選取機台「${created.name}（${created.code}）」。`);
+  } catch (error) {
+    showNotice(`快速建立機台失敗：${error.message}`, "error");
+  } finally {
+    button.disabled = false;
+    button.textContent = originalText;
+  }
 }
 
 function handleQuotationModeChange() {
@@ -1774,14 +1857,28 @@ function setupDraftItems() {
   $("draftItemRows").addEventListener("click", (event) => {
     const processToggle = event.target.closest("[data-toggle-draft-process]");
     if (processToggle) {
+      event.preventDefault();
       const index = Number(processToggle.dataset.toggleDraftProcess);
       const item = state.draftItems[index];
-      if (item) {
+      const row = processToggle.closest("[data-index]");
+      if (item && row) {
         const tags = new Set(normalizeProcessTags(item.processTags));
         const tag = canonicalProcessTag(processToggle.dataset.processTag);
         if (tags.has(tag)) tags.delete(tag); else tags.add(tag);
         item.processTags = [...tags].join("、");
-        renderDraftItems();
+
+        const selected = tags.has(tag);
+        processToggle.classList.toggle("selected", selected);
+        processToggle.setAttribute("aria-pressed", selected ? "true" : "false");
+
+        const picker = processToggle.closest(".tableProcessPicker");
+        const summary = picker?.querySelector("summary");
+        if (summary) summary.textContent = tags.size ? `${tags.size}項製程` : "選擇製程";
+        const summaryText = row.querySelector(".processTagSummary");
+        if (summaryText) summaryText.textContent = [...tags].join("、") || "尚未選擇";
+
+        // 不重繪整張表，避免點一次製程就跳回頂部或收合選單。
+        requestAnimationFrame(() => processToggle.focus({ preventScroll: true }));
       }
       return;
     }
@@ -3047,6 +3144,7 @@ function populateControls() {
 
   fillSelect("categoryFilter", categoryList, true, "全部分類");
   fillSelect("machineCategory", categoryList, false);
+  if ($("quotationQuickMachineCategory")) fillSelect("quotationQuickMachineCategory", categoryList, false);
 
   const machineOptions = state.machines.map((machine) => ({ value: machine.id, label: `${machine.name}${machine.code ? `（${machine.code}）` : ""}` }));
   const quotationMachine = $("quotationMachine");
@@ -7643,22 +7741,75 @@ function updateEstimateTotals(){
   $('estimateStatusBadge').textContent=state.currentEstimateId?`編輯 ${state.currentEstimateId}`:`草稿 ${state.estimateDraftItems.length} 筆`;
   updateEstimateQuickMetrics();
 }
+function updateEstimateWarningBanner(card,item,index){
+  if(!card||!item)return;
+  const aiMissing=new Set(item.aiMissingFields||[]);
+  const warning=estimateWarningMeta(item,aiMissing);
+  let banner=card.querySelector('.estimateWarningBanner');
+  if(!warning){
+    banner?.remove();
+    return;
+  }
+  const html=`<span>${escapeHTML(warning.message)}</span>${warning.showProcessButton?`<button type="button" data-estimate-open-process="${index}">＋ 補充製程</button>`:''}`;
+  if(!banner){
+    card.insertAdjacentHTML('afterbegin',`<div class="estimateWarningBanner ${escapeHTML(warning.kind)}">${html}</div>`);
+    banner=card.querySelector('.estimateWarningBanner');
+  }else{
+    banner.className=`estimateWarningBanner ${warning.kind}`;
+    banner.innerHTML=html;
+  }
+}
+
+function updateEstimateProcessToggleUi(card,item,index,focusButton){
+  if(!card||!item)return;
+  const tags=normalizeProcessTags(item.processSummary||estimateProcessSummaryText(item));
+  const selected=new Set(tags);
+
+  card.querySelectorAll('[data-toggle-estimate-process]').forEach((button)=>{
+    const tag=canonicalProcessTag(button.dataset.processTag);
+    const isSelected=selected.has(tag);
+    button.classList.toggle('selected',isSelected);
+    button.setAttribute('aria-pressed',isSelected?'true':'false');
+  });
+
+  card.querySelectorAll('input[data-estimate-field="processSummary"]').forEach((input)=>{
+    input.value=tags.join('、');
+  });
+
+  const panel=card.querySelector('[data-estimate-process-panel]');
+  panel?.classList.toggle('aiMissingField',new Set(item.aiMissingFields||[]).has('processSummary'));
+
+  updateEstimateAiReviewState(card,item);
+  updateEstimateRowSummary(card,item);
+  updateEstimateWarningBanner(card,item,index);
+  updateEstimateTotals();
+  updateEstimateQuickMetrics();
+
+  if(focusButton){
+    requestAnimationFrame(()=>focusButton.focus({preventScroll:true}));
+  }
+}
+
 function handleEstimateItemClick(event){
   const emptyAdd=event.target.closest('[data-empty-add-estimate]');
   if(emptyAdd){state.estimateDraftItems.push(emptyEstimateItem());renderEstimateDraft();return;}
 
   const processToggle=event.target.closest('[data-toggle-estimate-process]');
   if(processToggle){
+    event.preventDefault();
     const index=Number(processToggle.dataset.toggleEstimateProcess);
     const item=state.estimateDraftItems[index];
-    if(item){
+    const card=processToggle.closest('[data-estimate-index]');
+    if(item&&card){
       const tags=new Set(normalizeProcessTags(item.processSummary||estimateProcessSummaryText(item)));
       const tag=canonicalProcessTag(processToggle.dataset.processTag);
       if(tags.has(tag))tags.delete(tag);else tags.add(tag);
       applyEstimateProcessSummary(item,[...tags]);
       recalculateEstimateItem(item);
       refreshEstimateAiMissingFields(item);
-      renderEstimateDraft();
+
+      // 僅更新目前卡片，不重繪整份估價表，避免 details 收合、畫面捲動跳位。
+      updateEstimateProcessToggleUi(card,item,index,processToggle);
     }
     return;
   }
