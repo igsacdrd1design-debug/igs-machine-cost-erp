@@ -2897,3 +2897,10 @@ body.estimate-developer-mode .estimateDeveloperLayer{display:grid;gap:11px}
   white-space: nowrap;
   border: 0;
 }
+
+
+/* v3.24 三處製程按鈕群組統一 */
+.tableProcessField { min-width: 300px; }
+.tableProcessField .processTagButtons { margin: 0; }
+.tableProcessField .processTagSummary { margin-top: 7px; }
+.tableProcessField .processMoreGroup > summary { cursor: pointer; font-weight: 800; color: var(--blue); }

@@ -1,6 +1,6 @@
-/* IGS ERP app.js — v3.23 v3.18+ 四階段完整整合版 */
+/* IGS ERP app.js — v3.24 製程標籤按鈕群組統一版 */
 // =====================================================
-// IGS 機台材料成本 ERP — 前端 v3.23 v3.18+ 四階段完整整合版
+// IGS 機台材料成本 ERP — 前端 v3.24 製程標籤按鈕群組統一版
 // 1. ERP 密碼登入
 // 2. 工作階段驗證
 // 3. 私人 Google Sheet 安全讀取
@@ -51,8 +51,9 @@ const STANDARD_PROCESS_TAGS = Object.freeze(
 );
 
 const PROCESS_TAG_DISPLAY_LABELS = Object.freeze({
-  "四色直噴": "四色",
-  "白色直噴": "白墨",
+  // UI 統一使用使用者熟悉的顯示名稱；資料仍保存既有 canonical value，避免影響價格規則。
+  "四色直噴": "四色直噴",
+  "白色直噴": "白色直噴",
   "裁切外型": "切割外型",
   "異型切割": "異形裁切",
   "壓克力折彎": "折彎",
@@ -637,6 +638,32 @@ function syncStateAliases() {
 
 function processTagsText(value) {
   return normalizeProcessTags(value).join("、");
+}
+
+function processTagsDisplayText(value) {
+  return normalizeProcessTags(value).map(processTagDisplayLabel).join("、");
+}
+
+function toggleProcessTagSelection(value, clickedTag) {
+  const tags = new Set(normalizeProcessTags(value));
+  const tag = canonicalProcessTag(clickedTag);
+  if (!tag) return { tags: [...tags], text: [...tags].join("、"), selected: false };
+  if (tags.has(tag)) tags.delete(tag); else tags.add(tag);
+  return { tags: [...tags], text: [...tags].join("、"), selected: tags.has(tag) };
+}
+
+function syncProcessTagButtonGroup(root, value) {
+  if (!root) return;
+  const selected = new Set(normalizeProcessTags(value));
+  root.querySelectorAll(".processTagButton[data-process-tag]").forEach((button) => {
+    const isSelected = selected.has(canonicalProcessTag(button.dataset.processTag));
+    button.classList.toggle("selected", isSelected);
+    button.setAttribute("aria-pressed", isSelected ? "true" : "false");
+  });
+  const more = root.querySelector(".processMoreGroup");
+  if (more && PROCESS_TAG_GROUPS.find((group) => group.key === "more")?.tags.some((tag) => selected.has(tag))) {
+    more.open = true;
+  }
 }
 
 function processTagButtonsHtml(value, attributeName, attributeValue) {
@@ -1905,20 +1932,12 @@ function setupDraftItems() {
       const item = state.draftItems[index];
       const row = processToggle.closest("[data-index]");
       if (item && row) {
-        const tags = new Set(normalizeProcessTags(item.processTags));
-        const tag = canonicalProcessTag(processToggle.dataset.processTag);
-        if (tags.has(tag)) tags.delete(tag); else tags.add(tag);
-        item.processTags = [...tags].join("、");
+        const result = toggleProcessTagSelection(item.processTags, processToggle.dataset.processTag);
+        item.processTags = result.text;
+        syncProcessTagButtonGroup(row, result.tags);
 
-        const selected = tags.has(tag);
-        processToggle.classList.toggle("selected", selected);
-        processToggle.setAttribute("aria-pressed", selected ? "true" : "false");
-
-        const picker = processToggle.closest(".tableProcessPicker");
-        const summary = picker?.querySelector("summary");
-        if (summary) summary.textContent = tags.size ? `${tags.size}項製程` : "選擇製程";
         const summaryText = row.querySelector(".processTagSummary");
-        if (summaryText) summaryText.textContent = [...tags].join("、") || "尚未選擇";
+        if (summaryText) summaryText.textContent = processTagsDisplayText(result.tags) || "尚未選擇";
 
         // 不重繪整張表，避免點一次製程就跳回頂部或收合選單。
         requestAnimationFrame(() => processToggle.focus({ preventScroll: true }));
@@ -3864,7 +3883,7 @@ function renderDraftItems() {
       <td><input class="tableInput numberInput" data-field="price" type="number" min="0" step="0.01" value="${item.price || ""}" placeholder="${isFee ? "費用金額" : "單價"}"></td>
       <td data-ai-material-cell class="${aiMissing.has('material') ? 'ai-review-field' : ''}"><select class="tableInput materialInput" data-field="material" ${isFee ? "disabled" : ""}>${standardMaterialOptionsHtml(item.material)}</select></td>
       <td><input class="tableInput thicknessInput" data-field="thickness" value="${escapeHTML(item.thickness || "")}" placeholder="厚度" ${isFee ? "disabled" : ""}></td>
-      <td><details class="tableProcessPicker processTogglePicker" ${tags.length ? "open" : ""}><summary>${tags.length ? `${tags.length}項製程` : "選擇製程"}</summary><div class="processTagButtons compactTags">${isFee ? '<span class="muted">附加費用不需製程</span>' : processTagButtonsHtml(tags, "data-toggle-draft-process", index)}</div></details><small class="processTagSummary">${escapeHTML(tags.join("、") || "尚未選擇")}</small></td>
+      <td><div class="tableProcessField"><div class="processTagButtons compactTags">${isFee ? '<span class="muted">附加費用不需製程</span>' : processTagButtonsHtml(tags, "data-toggle-draft-process", index)}</div><small class="processTagSummary">${escapeHTML(processTagsDisplayText(tags) || "尚未選擇")}</small></div></td>
       <td><input class="tableInput fileNameInput" data-field="fileName" value="${escapeHTML(item.fileName || "")}" placeholder="檔案名稱" ${isFee ? "disabled" : ""}></td>
       <td><input class="tableInput areaInput" data-field="areaName" list="machineAreaOptions" value="${escapeHTML(item.areaName || "未指定")}" placeholder="未指定" ${isFee ? "disabled" : ""}></td>
       <td><select class="tableInput areaStatusInput" data-field="areaStatus" ${isFee ? "disabled" : ""}><option value="未指定" ${item.areaStatus === "未指定" ? "selected" : ""}>未指定</option><option value="AI建議" ${item.areaStatus === "AI建議" ? "selected" : ""}>AI建議</option><option value="已確認" ${item.areaStatus === "已確認" ? "selected" : ""}>已確認</option></select></td>
@@ -4774,22 +4793,19 @@ function renderPriceReviewProcessTags() {
   const tags = normalizeProcessTags(input.value);
   input.value = tags.join('、');
   container.innerHTML = processTagButtonsHtml(tags, 'data-toggle-review-process', '1');
+  syncProcessTagButtonGroup(container, tags);
   const summary = $('priceReviewProcessTagSummary');
-  if (summary) summary.textContent = tags.length ? `已選擇：${tags.join('、')}` : '尚未選擇製程';
+  if (summary) summary.textContent = tags.length ? `已選擇：${processTagsDisplayText(tags)}` : '尚未選擇製程';
 }
 
 function handlePriceReviewProcessTagClick(event) {
   const button = event.target.closest('[data-toggle-review-process]');
   if (!button) return;
-  const tags = new Set(normalizeProcessTags($('priceReviewProcessTags').value));
-  const tag = canonicalProcessTag(button.dataset.processTag);
-  if (tags.has(tag)) tags.delete(tag); else tags.add(tag);
-  $('priceReviewProcessTags').value = [...tags].join('、');
-  const selected=tags.has(tag);
-  button.classList.toggle('selected',selected);
-  button.setAttribute('aria-pressed',selected?'true':'false');
+  const result = toggleProcessTagSelection($('priceReviewProcessTags').value, button.dataset.processTag);
+  $('priceReviewProcessTags').value = result.text;
+  syncProcessTagButtonGroup($('priceReviewProcessTagButtons'), result.tags);
   const summary=$('priceReviewProcessTagSummary');
-  if(summary)summary.textContent=tags.size?`已選擇：${[...tags].join('、')}`:'尚未選擇製程';
+  if(summary)summary.textContent=result.tags.length?`已選擇：${processTagsDisplayText(result.tags)}`:'尚未選擇製程';
 }
 
 async function handlePriceReviewProcessImageChange(event) {
@@ -8428,14 +8444,7 @@ function updateEstimateWarningBanner(card,item,index){
 function updateEstimateProcessToggleUi(card,item,index,focusButton){
   if(!card||!item)return;
   const tags=normalizeProcessTags(item.processSummary||estimateProcessSummaryText(item));
-  const selected=new Set(tags);
-
-  card.querySelectorAll('[data-toggle-estimate-process]').forEach((button)=>{
-    const tag=canonicalProcessTag(button.dataset.processTag);
-    const isSelected=selected.has(tag);
-    button.classList.toggle('selected',isSelected);
-    button.setAttribute('aria-pressed',isSelected?'true':'false');
-  });
+  syncProcessTagButtonGroup(card, tags);
 
   card.querySelectorAll('input[data-estimate-field="processSummary"]').forEach((input)=>{
     input.value=tags.join('、');
@@ -8466,10 +8475,8 @@ function handleEstimateItemClick(event){
     const item=state.estimateDraftItems[index];
     const card=processToggle.closest('[data-estimate-index]');
     if(item&&card){
-      const tags=new Set(normalizeProcessTags(item.processSummary||estimateProcessSummaryText(item)));
-      const tag=canonicalProcessTag(processToggle.dataset.processTag);
-      if(tags.has(tag))tags.delete(tag);else tags.add(tag);
-      applyEstimateProcessSummary(item,[...tags]);
+      const result=toggleProcessTagSelection(item.processSummary||estimateProcessSummaryText(item),processToggle.dataset.processTag);
+      applyEstimateProcessSummary(item,result.tags);
       recalculateEstimateItem(item);
       refreshEstimateAiMissingFields(item);
 
