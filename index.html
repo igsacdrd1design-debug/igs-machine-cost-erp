@@ -8,7 +8,7 @@
   <meta name="googlebot" content="noindex, nofollow, noarchive, nosnippet">
   <meta name="referrer" content="no-referrer">
   <title>IGS 機台材料成本 ERP｜快速估價</title>
-  <link rel="stylesheet" href="style.css?v=20260625-igs-v3-24-process-tag-unified">
+  <link rel="stylesheet" href="style.css?v=20260625-igs-v3-25-nav-process-cleanup">
 </head>
 <body class="authLocked">
   <section id="authGate" class="authGate" aria-labelledby="loginTitle">
@@ -41,13 +41,13 @@
     <nav class="navList phaseOneNav" aria-label="主要功能">
       <button class="nav active" data-view="dashboard" data-title="首頁查價">首頁查價</button>
       <button class="nav" data-view="machines" data-title="機台總覽">機台總覽</button>
-      <button class="nav" data-view="costRecords" data-title="成本紀錄">成本紀錄</button>
-      <button class="nav navPhoto" data-view="quotationEntry" data-title="估價單建檔">估價單建檔</button>
       <button class="nav navEstimate" data-view="smartEstimate" data-title="快速估價">快速估價</button>
     </nav>
 
-    <details class="sidebarToolMenu">
+    <details class="sidebarToolMenu" id="advancedToolMenu">
       <summary>進階工具 ⚙</summary>
+      <button class="sideToolAction" type="button" data-open-view="costRecords" data-open-title="成本紀錄">成本紀錄</button>
+      <button class="sideToolAction" type="button" data-open-view="quotationEntry" data-open-title="估價單建檔">估價單建檔</button>
       <button class="sideToolAction" type="button" data-open-view="priceCenter" data-open-title="進階價格中心">進階價格中心</button>
     </details>
 
@@ -958,7 +958,7 @@
     <section id="smartEstimate" class="view">
       <div class="quickIntro estimateIntro">
         <div>
-          <span class="eyebrow">v3.24 · 製程標籤按鈕群組統一</span>
+          <span class="eyebrow">v3.25 · 導航精簡與製程規則整理</span>
           <h2>快速估價：掃描、貼文字或手動輸入都能立即試算</h2>
           <p>小件採四段平滑計價，單位依材質自動判斷；AI 掃描、製程按鈕與缺漏警示皆可直接人工確認。</p>
         </div>
@@ -1359,6 +1359,6 @@
   <datalist id="estimateWhiteInkOptions"></datalist>
   <datalist id="estimateSpecialEffectOptions"></datalist>
   <script src="data.js?v=20260624-igs-v2-4"></script>
-  <script src="app.js?v=20260625-igs-v3-24-process-tag-unified"></script>
+  <script src="app.js?v=20260625-igs-v3-25-nav-process-cleanup"></script>
 </body>
 </html>

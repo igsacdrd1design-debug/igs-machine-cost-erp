@@ -1,6 +1,6 @@
-/* IGS ERP app.js — v3.24 製程標籤按鈕群組統一版 */
+/* IGS ERP app.js — v3.25 導航精簡與製程規則整理版 */
 // =====================================================
-// IGS 機台材料成本 ERP — 前端 v3.24 製程標籤按鈕群組統一版
+// IGS 機台材料成本 ERP — 前端 v3.25 導航精簡與製程規則整理版
 // 1. ERP 密碼登入
 // 2. 工作階段驗證
 // 3. 私人 Google Sheet 安全讀取
@@ -40,14 +40,19 @@ const PROCESS_TAG_GROUPS = Object.freeze([
   }
 ]);
 
-// Gemini 辨識只能從這份製程菜單中選擇，不接受自由文字標籤。
+// 新的 Gemini 辨識只能從畫面上的 17 個製程選項中選擇；舊資料仍可保留歷史標籤。
+const AI_ALLOWED_PROCESS_TAGS = Object.freeze(
+  [...new Set(PROCESS_TAG_GROUPS.flatMap((group) => group.tags))]
+);
+
 const LEGACY_PROCESS_TAGS = Object.freeze([
   "黑色直噴", "正面印刷", "背面印刷", "雙面印刷", "局部白墨", "滿版白墨",
   "霧膜", "亮膜", "不透光處理", "雷射切割", "倒角", "黏著組裝", "金屬件組裝"
 ]);
 
+// 完整標籤表只用於讀取、顯示及相容舊資料，不能直接當成 AI 新辨識選單。
 const STANDARD_PROCESS_TAGS = Object.freeze(
-  [...new Set([...PROCESS_TAG_GROUPS.flatMap((group) => group.tags), ...LEGACY_PROCESS_TAGS])]
+  [...new Set([...AI_ALLOWED_PROCESS_TAGS, ...LEGACY_PROCESS_TAGS])]
 );
 
 const PROCESS_TAG_DISPLAY_LABELS = Object.freeze({
@@ -91,7 +96,7 @@ function getAiMaterialMenu() {
 function getAiRecognitionConstraints() {
   return {
     allowedMaterials: getAiMaterialMenu(),
-    allowedProcessTags: [...STANDARD_PROCESS_TAGS],
+    allowedProcessTags: [...AI_ALLOWED_PROCESS_TAGS],
   };
 }
 
@@ -152,7 +157,7 @@ function fuzzyNormalizeAiProcessTag(value) {
   if (/導c角|导c角|c角/.test(compact)) return "導C角";
   if (/燒光|烧光|火拋光|火抛光|拋光|抛光/.test(compact)) return "燒光";
   const canonical = canonicalProcessTag(text);
-  return STANDARD_PROCESS_TAGS.includes(canonical) ? canonical : "";
+  return AI_ALLOWED_PROCESS_TAGS.includes(canonical) ? canonical : "";
 }
 
 /**
@@ -303,6 +308,8 @@ const pageDescriptions = {
   smartEstimate: "快速估價：可用 AI 掃描、貼上文字或手動輸入，並套用公司公式與歷史資料。",
   artOptimization: "僅針對美術材料與印刷製程提出降本及視覺概念模擬。",
 };
+
+const ADVANCED_TOOL_VIEWS = new Set(["costRecords", "quotationEntry", "priceCenter"]);
 
 
 
@@ -1326,10 +1333,32 @@ function handleAuthenticationFailure(message) {
 }
 
 function activateView(viewId, title = "") {
-  document.querySelectorAll(".nav").forEach((item) => item.classList.toggle("active", item.dataset.view === viewId));
+  document.querySelectorAll(".nav").forEach((item) => {
+    const isActive = item.dataset.view === viewId;
+    item.classList.toggle("active", isActive);
+    if (isActive) item.setAttribute("aria-current", "page");
+    else item.removeAttribute("aria-current");
+  });
+
+  document.querySelectorAll(".sideToolAction[data-open-view]").forEach((item) => {
+    const isActive = item.dataset.openView === viewId;
+    item.classList.toggle("active", isActive);
+    if (isActive) item.setAttribute("aria-current", "page");
+    else item.removeAttribute("aria-current");
+  });
+
+  const advancedMenu = $("advancedToolMenu");
+  const isAdvancedView = ADVANCED_TOOL_VIEWS.has(viewId);
+  if (advancedMenu) {
+    advancedMenu.classList.toggle("hasActiveTool", isAdvancedView);
+    if (isAdvancedView) advancedMenu.open = true;
+  }
+
   document.querySelectorAll(".view").forEach((view) => view.classList.toggle("active", view.id === viewId));
-  const nav = document.querySelector(`.nav[data-view="${viewId}"]`);
-  $("pageTitle").textContent = title || nav?.dataset.title || nav?.textContent.trim() || "IGS ERP";
+  const primaryNav = document.querySelector(`.nav[data-view="${viewId}"]`);
+  const advancedNav = document.querySelector(`.sideToolAction[data-open-view="${viewId}"]`);
+  const viewTrigger = primaryNav || advancedNav;
+  $("pageTitle").textContent = title || viewTrigger?.dataset.title || viewTrigger?.dataset.openTitle || viewTrigger?.textContent.trim() || "IGS ERP";
   $("pageDescription").textContent = pageDescriptions[viewId] || "";
   $("globalSearch").style.display = ["quotationEntry", "quickMachine", "machine360Setup", "dataImport", "priceCenter", "smartEstimate", "artOptimization"].includes(viewId) ? "none" : "block";
   window.scrollTo({ top: 0, behavior: "smooth" });
@@ -1619,8 +1648,7 @@ async function submitMachineStaged() {
       const created = state.machines.find((machine)=>machine.id===createdRaw.id) || state.machines.find((machine)=>norm(machine.code)===norm(createdRaw.code));
       if (created) await offerPendingPriceLinksForMachine(created);
     }
-    const machineNav = document.querySelector('[data-view="machines"]');
-    if (machineNav) machineNav.click();
+    activateView('machines', '機台總覽');
   } catch (error) {
     showNotice(`寫入機台失敗：${error.message}`, "error");
   } finally {
@@ -2117,7 +2145,7 @@ async function handleCreateCostOrder(event) {
     const feedbackItem={...firstMaterial,...parseDimensions(firstMaterial.spec||''),widthMm:parseDimensions(firstMaterial.spec||'').widthMm,heightMm:parseDimensions(firstMaterial.spec||'').heightMm};
     resetQuotationForm();
     await loadData();
-    document.querySelector('[data-view="costRecords"]')?.click();
+    activateView('costRecords', '成本紀錄');
     showSaveSuccessToast({item:feedbackItem,total:result.total,itemCount:result.itemCount||validItems.length});
   } catch (error) {
     showNotice(`成本資料寫入失敗：${error.message}`, "error");
@@ -8599,7 +8627,7 @@ function showSaveSuccessToast(savedItem){
 }
 
 function resetEstimateEditor(){state.currentEstimateId='';state.estimateDraftItems=[];clearEstimateTextInput();$('estimateProjectForm').reset();$('estimateId').value='';$('estimateTargetType').value='new';$('estimatePriceBasis').value='sampleTwd';$('estimateOrderType').value='auto';$('estimateVersion').value='v1';$('estimateDate').value=todayValue();$('estimateStatus').value='草稿';clearEstimateSourceDocument();updateEstimateTargetMode();renderEstimateDraft();}
-function loadEstimateProject(id){const project=state.estimateProjects.find((p)=>p.id===id);if(!project)return;state.currentEstimateId=id;$('estimateId').value=id;$('estimateTargetType').value=project.machineId?'existing':'new';$('estimateMachine').value=project.machineId;$('estimateName').value=project.name;$('estimateVersion').value=project.version;$('estimateDate').value=project.date;$('estimateStatus').value=project.status;$('estimateNote').value=project.note;state.estimateDraftItems=state.estimateItems.filter((i)=>i.estimateId===id).map((i)=>({...i,usageManuallySet:true,marketManuallySet:true}));updateEstimateTargetMode();renderEstimateDraft();document.querySelector('[data-view="smartEstimate"]')?.click();}
+function loadEstimateProject(id){const project=state.estimateProjects.find((p)=>p.id===id);if(!project)return;state.currentEstimateId=id;$('estimateId').value=id;$('estimateTargetType').value=project.machineId?'existing':'new';$('estimateMachine').value=project.machineId;$('estimateName').value=project.name;$('estimateVersion').value=project.version;$('estimateDate').value=project.date;$('estimateStatus').value=project.status;$('estimateNote').value=project.note;state.estimateDraftItems=state.estimateItems.filter((i)=>i.estimateId===id).map((i)=>({...i,usageManuallySet:true,marketManuallySet:true}));updateEstimateTargetMode();renderEstimateDraft();activateView('smartEstimate', '快速估價');}
 
 async function saveCurrentEstimate(){
   const name=$('estimateName').value.trim();
@@ -8635,7 +8663,7 @@ async function saveEstimateAndOpenOptimization(){
   populateOptimizationEstimateOptions();
   $('optimizationEstimate').value=project.id;
   renderSimulationViewOptions();
-  document.querySelector('[data-view="artOptimization"]')?.click();
+  activateView('artOptimization', 'AI 美術降本');
   $('optimizationStatus').textContent=`已載入估價「${project.name}」，可直接產生美術降本方案。`;
 }
 

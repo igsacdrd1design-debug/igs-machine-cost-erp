@@ -2038,8 +2038,29 @@ td small { color: var(--muted); }
 .processTagGroup { display: grid; grid-template-columns: 86px minmax(0, 1fr); gap: 8px; align-items: start; }
 .processTagGroup > span { padding-top: 7px; color: var(--muted); font-size: 12px; font-weight: 800; }
 .processTagGroup > div { display: flex; flex-wrap: wrap; gap: 7px; }
-.processTagButton { min-height: 32px; padding: 6px 10px; border: 1px solid #c9d5d4; border-radius: 999px; color: #35545e; background: #fff; cursor: pointer; font-size: 12px; font-weight: 700; }
+.processTagButton {
+  min-width: 44px;
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 9px 13px;
+  border: 1px solid #c9d5d4;
+  border-radius: 999px;
+  color: #35545e;
+  background: #fff;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.2;
+  touch-action: manipulation;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+  transition: background-color .14s ease, border-color .14s ease, color .14s ease, box-shadow .14s ease, transform .08s ease;
+}
 .processTagButton:hover { border-color: var(--blue); background: var(--blue-soft); }
+.processTagButton:focus-visible { outline: 3px solid rgba(47,125,115,.24); outline-offset: 2px; }
+.processTagButton:active { transform: scale(.97); }
 .processTagButton.selected { border-color: #2f7d73; color: #fff; background: #2f7d73; box-shadow: 0 2px 8px rgba(47,125,115,.2); }
 .processTagSummary { display: block; margin-top: 6px; color: #6d766f; line-height: 1.45; }
 .compactTags { width: 580px; max-width: 64vw; padding: 8px; }
@@ -2430,15 +2451,6 @@ td small { color: var(--muted); }
 
 
 /* v3.18 三層卡片 UX、製程 Toggle 與信心度語意色 */
-.processTagButton{
-  min-width:44px;
-  min-height:44px;
-  padding:9px 13px;
-  display:inline-flex;
-  align-items:center;
-  justify-content:center;
-  line-height:1.2;
-}
 .draftBadgeRow{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
 .confidenceSemanticBadge{
   display:inline-flex;align-items:center;justify-content:center;
@@ -2522,13 +2534,6 @@ body.estimate-developer-mode .estimateDeveloperLayer{display:grid;gap:11px}
 }
 
 /* v3.19 製程標籤原地切換：避免重繪造成畫面跳動 */
-.processTagButton{
-  touch-action:manipulation;
-  user-select:none;
-  -webkit-tap-highlight-color:transparent;
-  transition:background-color .14s ease,border-color .14s ease,color .14s ease,box-shadow .14s ease,transform .08s ease;
-}
-.processTagButton:active{transform:scale(.97)}
 @media (prefers-reduced-motion:reduce){.processTagButton{transition:none}}
 
 
@@ -2904,3 +2909,61 @@ body.estimate-developer-mode .estimateDeveloperLayer{display:grid;gap:11px}
 .tableProcessField .processTagButtons { margin: 0; }
 .tableProcessField .processTagSummary { margin-top: 7px; }
 .tableProcessField .processMoreGroup > summary { cursor: pointer; font-weight: 800; color: var(--blue); }
+
+
+/* v3.25 主導航精簡、進階工具狀態與製程共用樣式整理 */
+.phaseOneNav { grid-template-columns: 1fr; }
+.sidebarToolMenu summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.sidebarToolMenu summary::after {
+  content: "＋";
+  font-size: 15px;
+  line-height: 1;
+}
+.sidebarToolMenu[open] summary::after { content: "－"; }
+.sidebarToolMenu.hasActiveTool {
+  border-color: rgba(255,255,255,.28);
+  background: rgba(255,255,255,.04);
+}
+.sidebarToolMenu.hasActiveTool > summary { color: #fff; }
+.sideToolAction.active {
+  background: rgba(255,255,255,.16);
+  color: #fff;
+  font-weight: 850;
+  box-shadow: inset 3px 0 0 rgba(255,255,255,.72);
+}
+.sideToolAction:focus-visible,
+.sidebarToolMenu summary:focus-visible {
+  outline: 2px solid rgba(255,255,255,.7);
+  outline-offset: -3px;
+}
+
+@media (max-width: 1080px) {
+  .phaseOneNav { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .sidebarToolMenu { margin: 10px 0 0; }
+  .sidebarToolMenu summary { justify-content: center; }
+  .sidebarToolMenu[open] {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+  .sidebarToolMenu[open] > summary { grid-column: 1 / -1; }
+  .sideToolAction {
+    min-height: 42px;
+    text-align: center;
+    border-top: 1px solid rgba(255,255,255,.08);
+    border-left: 1px solid rgba(255,255,255,.06);
+  }
+  .sideToolAction.active { box-shadow: inset 0 -3px 0 rgba(255,255,255,.72); }
+}
+
+@media (max-width: 560px) {
+  .phaseOneNav { grid-template-columns: 1fr; }
+  .sidebarToolMenu[open] { grid-template-columns: 1fr; }
+  .sidebarToolMenu[open] > summary { grid-column: auto; }
+  .sideToolAction { text-align: left; }
+  .sideToolAction.active { box-shadow: inset 3px 0 0 rgba(255,255,255,.72); }
+}
