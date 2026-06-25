@@ -2161,3 +2161,61 @@ td small { color: var(--muted); }
 .homePriceMeta{text-align:right;white-space:nowrap}
 .homePriceMeta strong{color:var(--navy);font-size:18px}
 @media(max-width:640px){.homePriceRow{align-items:flex-start;flex-direction:column}.homePriceMeta{text-align:left;white-space:normal}}
+
+
+/* v3.6 四份資料匯入與機台總覽 */
+.importStepGrid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 14px;
+  margin-top: 16px;
+}
+.importStepCard {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  min-height: 230px;
+  padding: 18px;
+  border: 1px solid var(--line, #dfe4ea);
+  border-radius: 16px;
+  background: var(--panel, #fff);
+}
+.importStepCard.ready { border-color: #9bb7d4; }
+.importStepCard.loading { border-color: #d5a63e; }
+.importStepCard.success { border-color: #58a77b; box-shadow: 0 0 0 2px rgba(88,167,123,.08); }
+.importStepCard.error { border-color: #d66a6a; box-shadow: 0 0 0 2px rgba(214,106,106,.08); }
+.importStepCard h3 { margin: 0; }
+.importStepCard p { margin: 0; color: var(--muted, #667085); line-height: 1.55; flex: 1; }
+.importStepCard strong { word-break: break-all; font-size: 13px; }
+.importStepCard small { color: var(--muted, #667085); line-height: 1.45; }
+.importStepCard small.success { color: #237a4b; }
+.importStepCard small.error { color: #b42318; }
+.importStepCard small.loading { color: #9a6700; }
+.importStepNumber {
+  display: inline-grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 999px;
+  background: #172b4d;
+  color: #fff;
+  font-weight: 800;
+}
+.referenceImportSummary {
+  margin-top: 16px;
+  padding: 13px 15px;
+  border-radius: 12px;
+  background: #f5f7fa;
+  color: #475467;
+  line-height: 1.5;
+}
+.referenceImportSummary.success { background: #ecfdf3; color: #166534; }
+.referenceImportSummary.error { background: #fef3f2; color: #b42318; }
+.importMetrics { margin-top: 0; }
+@media (max-width: 1200px) {
+  .importStepGrid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 700px) {
+  .importStepGrid { grid-template-columns: 1fr; }
+}

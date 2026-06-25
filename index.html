@@ -40,10 +40,11 @@
 
     <nav class="navList phaseOneNav" aria-label="主要功能">
       <button class="nav active" data-view="dashboard" data-title="首頁查價">首頁查價</button>
+      <button class="nav" data-view="machines" data-title="機台總覽">機台總覽</button>
       <button class="nav" data-view="costRecords" data-title="成本紀錄">成本紀錄</button>
       <button class="nav navPhoto" data-view="quotationEntry" data-title="估價單建檔">估價單建檔</button>
       <button class="nav navEstimate" data-view="smartEstimate" data-title="公式估算器">公式估算器</button>
-      <button class="nav" data-view="priceCenter" data-title="價格中心">價格中心</button>
+      <button class="nav navDataImport" data-view="dataImport" data-title="資料匯入">資料匯入</button>
     </nav>
 
     <div class="sidebarFoot">
@@ -74,12 +75,14 @@
         <div>
           <span class="eyebrow">PHASE 1｜任務導向</span>
           <h2>查價、記一筆、做估價</h2>
-          <p>先用右上方搜尋框查歷史紀錄；找不到時再用公式估算器。價格中心與進階分析暫時凍結，但資料不會刪除。</p>
+          <p>先查歷史紀錄或瀏覽全部機台；找不到價格時再用公式估算器。四份基礎資料可從「資料匯入」一次檢查並依序寫入。</p>
         </div>
         <div class="homeTaskActions">
+          <button class="button secondary" type="button" data-home-view="machines">查看全部機台</button>
           <button class="button secondary" type="button" data-home-view="costRecords">我要查紀錄</button>
           <button class="button secondary" type="button" data-home-view="quotationEntry">我要記一筆</button>
           <button class="button primary" type="button" data-home-view="smartEstimate">我要估價</button>
+          <button class="button ghost" type="button" data-home-view="dataImport">匯入基礎資料</button>
         </div>
       </div>
       <div class="panel homePricePanel">
@@ -141,8 +144,8 @@
     <section id="machines" class="view">
       <div class="panel filterPanel">
         <div>
-          <h2>機台搜尋</h2>
-          <p class="muted">可用機台名稱、代碼、分類或材料品項搜尋。</p>
+          <h2>機台總覽與搜尋</h2>
+          <p class="muted">未輸入關鍵字時會顯示全部機台；也可用機台名稱、代碼、分類或材料品項篩選。</p>
         </div>
         <div class="filterControls">
           <label for="categoryFilter">機台分類</label>
@@ -661,6 +664,83 @@
       </div>
     </section>
 
+
+    <section id="dataImport" class="view">
+      <div class="quickIntro dataImportIntro">
+        <div>
+          <span class="eyebrow">v3.6 · 四份資料安全匯入</span>
+          <h2>先檢查四份 CSV，再依固定順序一次匯入</h2>
+          <p>系統會先驗證欄位與資料列，再依「材料主檔 → 製程規則 → 歷史報價 → 量產參考」寫入。重複匯入相同資料時會更新原紀錄，不會建立第二筆。</p>
+        </div>
+        <div class="apiBadge connected">可安全重試｜量產資料獨立保存</div>
+      </div>
+
+      <div class="panel importWorkflowPanel">
+        <div class="panelHead">
+          <div>
+            <h2>四份 CSV 檔案</h2>
+            <p class="muted">請選擇壓縮檔 templates 資料夾中的四份 CSV；也可使用欄位相同的新版本。</p>
+          </div>
+          <div class="panelActions">
+            <button id="validateReferenceCsvBundle" class="button secondary" type="button">先檢查四份資料</button>
+            <button id="importReferenceCsvBundle" class="button primary" type="button">依序匯入四份</button>
+          </div>
+        </div>
+        <div class="importStepGrid">
+          <article class="importStepCard" data-import-kind="material">
+            <span class="importStepNumber">1</span>
+            <h3>材料價格主檔</h3>
+            <p>寫入「材料價格主檔」，提供包價與材料基準。</p>
+            <label class="button secondary fileButton">選擇材料 CSV<input id="bulkMaterialPriceCsv" type="file" accept=".csv,text/csv" hidden></label>
+            <strong id="bulkMaterialPriceName">尚未選擇</strong>
+            <small id="bulkMaterialPriceStatus">等待檔案</small>
+          </article>
+          <article class="importStepCard" data-import-kind="process">
+            <span class="importStepNumber">2</span>
+            <h3>製程／印刷規則</h3>
+            <p>寫入「內部估價規則」，未定義價格維持待補。</p>
+            <label class="button secondary fileButton">選擇製程 CSV<input id="bulkProcessRuleCsv" type="file" accept=".csv,text/csv" hidden></label>
+            <strong id="bulkProcessRuleName">尚未選擇</strong>
+            <small id="bulkProcessRuleStatus">等待檔案</small>
+          </article>
+          <article class="importStepCard" data-import-kind="history">
+            <span class="importStepNumber">3</span>
+            <h3>歷史報價待認證</h3>
+            <p>寫入「價格待認證」，不會直接覆蓋正式估價基準。</p>
+            <label class="button secondary fileButton">選擇歷史 CSV<input id="bulkPriceReviewCsv" type="file" accept=".csv,text/csv" hidden></label>
+            <strong id="bulkPriceReviewName">尚未選擇</strong>
+            <small id="bulkPriceReviewStatus">等待檔案</small>
+          </article>
+          <article class="importStepCard" data-import-kind="production">
+            <span class="importStepNumber">4</span>
+            <h3>量產價格參考</h3>
+            <p>寫入獨立「量產價格參考」分頁，只在量產估價情境使用。</p>
+            <label class="button secondary fileButton">選擇量產 CSV<input id="bulkProductionPriceCsv" type="file" accept=".csv,text/csv" hidden></label>
+            <strong id="bulkProductionPriceName">尚未選擇</strong>
+            <small id="bulkProductionPriceStatus">等待檔案</small>
+          </article>
+        </div>
+        <div id="referenceImportSummary" class="referenceImportSummary">請先選擇四份 CSV。</div>
+      </div>
+
+      <div class="panel">
+        <div class="panelHead">
+          <div><h2>目前資料量</h2><p class="muted">重新讀取資料後會顯示 Google Sheet 中的實際筆數。</p></div>
+          <button id="openAdvancedPriceCenter" class="button ghost" type="button" data-open-view="priceCenter">開啟進階價格中心</button>
+        </div>
+        <div class="priceReviewMetrics importMetrics">
+          <div><span>材料主檔</span><strong id="importMaterialCount">0</strong></div>
+          <div><span>製程規則</span><strong id="importProcessCount">0</strong></div>
+          <div><span>歷史待認證</span><strong id="importHistoryCount">0</strong></div>
+          <div class="approved"><span>量產參考</span><strong id="importProductionCount">0</strong></div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="panelHead"><div><h2>量產價格參考預覽</h2><p class="muted">量產資料與台灣打樣歷史分開保存，避免互相覆蓋。</p></div></div>
+        <div class="tableWrap"><table class="v20Table"><thead><tr><th>品項</th><th>專案／機台</th><th>材質</th><th>尺寸</th><th>RMB</th><th>TWD</th><th>製程</th></tr></thead><tbody id="productionPriceReferenceRows"></tbody></table></div>
+      </div>
+    </section>
 
     <section id="priceCenter" class="view">
       <div class="quickIntro priceIntro">
