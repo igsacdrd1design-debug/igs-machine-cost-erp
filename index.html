@@ -8,7 +8,7 @@
   <meta name="googlebot" content="noindex, nofollow, noarchive, nosnippet">
   <meta name="referrer" content="no-referrer">
   <title>IGS 機台材料成本 ERP｜快速估價</title>
-  <link rel="stylesheet" href="style.css?v=20260625-igs-v3-19-process-toggle-stable">
+  <link rel="stylesheet" href="style.css?v=20260625-igs-v3-23-v318-full-integration">
 </head>
 <body class="authLocked">
   <section id="authGate" class="authGate" aria-labelledby="loginTitle">
@@ -857,6 +857,7 @@
           <div class="panelActions">
             <label class="button secondary fileButton">匯入近期價格待認證 CSV<input id="priceReviewCsv" type="file" accept=".csv,text/csv" hidden></label>
             <button id="exportPriceReviews" class="button ghost" type="button">匯出待認證 CSV</button>
+            <label class="button primary fileButton">📷 上傳報價單（AI辨識）<input id="priceReviewAiBatchFile" type="file" accept="image/jpeg,image/png,image/webp,application/pdf,.pdf" hidden></label>
           </div>
         </div>
 
@@ -867,7 +868,10 @@
           <div class="missing"><span>待補價格</span><strong id="priceReviewMissingCount">0</strong></div>
         </div>
 
+        <p id="priceReviewAiBatchStatus" class="photoStatus muted">可上傳圖片或 PDF，由 Gemini 辨識後預覽並批次建立為待認證。</p>
         <div class="priceReviewToolbar">
+          <label class="priceReviewSelectAll"><input id="priceReviewSelectAll" type="checkbox"> 全選目前結果</label>
+          <button id="batchCertifyPriceReviews" class="button secondary compact" type="button" disabled>批次認證選中項目</button>
           <input id="priceReviewSearch" class="inlineSearch" type="search" placeholder="搜尋品項、材質、專案、供應商">
           <select id="priceReviewStatusFilter">
             <option value="">全部狀態</option>
@@ -902,13 +906,15 @@
         <div class="priceReviewFormGrid">
           <label class="wide"><span>品項名稱 *</span><input id="priceReviewItemName" type="text" required></label>
           <label><span>品項代碼</span><input id="priceReviewItemCode" type="text"></label>
-          <label><span>專案／機台</span><input id="priceReviewProject" type="text"></label>
+          <label class="wide"><span>歸屬機台</span><select id="priceReviewMachine"><option value="">未指定機台</option></select><small>選取後，這筆歷史價格會立即出現在該機台的總覽中。</small></label>
+          <label><span>專案名稱</span><input id="priceReviewProject" type="text"></label>
+          <label><span>費用類型</span><select id="priceReviewCostType"><option>打樣版費用</option><option>測試台費用</option><option>實際費用</option></select></label>
           <label><span>標準材質</span><select id="priceReviewMaterial"></select></label>
           <label><span>厚度 mm</span><input id="priceReviewThickness" type="number" min="0" step="0.1"></label>
           <label><span>寬 mm</span><input id="priceReviewWidth" type="number" min="0" step="0.1"></label>
           <label><span>高 mm</span><input id="priceReviewHeight" type="number" min="0" step="0.1"></label>
           <label><span>數量</span><input id="priceReviewQty" type="number" min="0" step="0.01" value="1"></label>
-          <label><span>計價單位</span><input id="priceReviewUnit" type="text" value="件"></label>
+          <label class="automaticUnitField"><span>自動計價單位</span><input id="priceReviewUnit" type="hidden" value="件"><strong id="priceReviewAutoUnit">件</strong><small>依材質自動判斷；板材＝才、貼紙＝件、燈條＝公尺。</small></label>
           <label><span>實際單價 TWD</span><input id="priceReviewUnitPrice" type="number" min="0" step="0.01"></label>
           <label><span>正式報價日期</span><input id="priceReviewQuoteDate" type="date"></label>
           <label><span>供應商</span><input id="priceReviewSupplier" type="text" list="supplierOptions"></label>
@@ -921,23 +927,25 @@
           </label>
           <div class="wide priceReviewAiPanel">
             <div>
-              <strong>AI 看圖辨識材質與製程</strong>
-              <p>支援 JPG、PNG、WebP；辨識結果只會帶入表單，仍需人工確認。</p>
+              <strong>AI 辨識發包圖／報價檔並保存附件</strong>
+              <p>支援 JPG、PNG、WebP、PDF；AI 會帶入品項、尺寸、材質、價格與製程，儲存時原檔會進私人 Google Drive。</p>
             </div>
             <div class="priceReviewAiControls">
-              <label class="button ghost compact">選擇發包圖<input id="priceReviewProcessImage" type="file" accept="image/jpeg,image/png,image/webp" hidden></label>
-              <button id="analyzePriceReviewProcessImage" class="button secondary compact" type="button" disabled>AI 看圖選擇</button>
+              <label class="button ghost compact">選擇發包圖／報價檔<input id="priceReviewProcessImage" type="file" accept="image/jpeg,image/png,image/webp,application/pdf,.pdf" hidden></label>
+              <button id="analyzePriceReviewProcessImage" class="button secondary compact" type="button" disabled>AI 辨識檔案</button>
               <button id="clearPriceReviewProcessImage" class="button ghost compact" type="button" disabled>清除圖片</button>
             </div>
             <div id="priceReviewProcessImagePreviewWrap" class="priceReviewAiPreview" hidden>
               <img id="priceReviewProcessImagePreview" alt="發包圖預覽">
+              <iframe id="priceReviewProcessPdfPreview" class="priceReviewPdfPreview" title="報價 PDF 預覽" hidden></iframe>
               <span id="priceReviewProcessImageName"></span>
             </div>
-            <p id="priceReviewProcessAiStatus" class="photoStatus muted">尚未選擇發包圖</p>
+            <p id="priceReviewProcessAiStatus" class="photoStatus muted">尚未選擇發包圖或報價檔</p>
           </div>
-          <label class="wide"><span>來源文件</span><input id="priceReviewSourceFile" type="text"></label>
+          <label class="wide"><span>來源文件名稱</span><input id="priceReviewSourceFile" type="text" placeholder="選擇檔案後自動帶入，也可手動記錄來源"></label>
           <label class="wide"><span>來源備註</span><textarea id="priceReviewNote" rows="3"></textarea></label>
           <label class="checkboxField wide"><input id="priceReviewIncludeBaseline" type="checkbox"><span>納入智能估價與歷史價格基準</span></label>
+          <label class="checkboxField wide syncMachineCostField"><input id="priceReviewSyncCost" type="checkbox"><span>認證時同步機台成本</span><small id="priceReviewSyncStatus">新認證會自動檢查機台與重複資料；勾選可讓已認證但尚未同步的資料再次執行同步。</small></label>
         </div>
         <div class="formActions">
           <button id="savePriceReviewDialog" class="button primary" type="submit">儲存認證資料</button>
@@ -950,9 +958,9 @@
     <section id="smartEstimate" class="view">
       <div class="quickIntro estimateIntro">
         <div>
-          <span class="eyebrow">v3.15 · 價格過渡＋AI 歷史提示＋手機首頁</span>
+          <span class="eyebrow">v3.23 · v3.18+ 四階段完整整合</span>
           <h2>快速估價：掃描、貼文字或手動輸入都能立即試算</h2>
-          <p>一般板材採整才包價並加入材質耗損與最低消費；AI 掃描結果會直接帶入明細，缺漏欄位以紅色提醒。</p>
+          <p>小件採四段平滑計價，單位依材質自動判斷；AI 掃描、製程按鈕與缺漏警示皆可直接人工確認。</p>
         </div>
         <div id="estimateStatusBadge" class="apiBadge">尚未建立估價</div>
       </div>
@@ -1135,7 +1143,7 @@
         <div class="panelHead estimateWorkspaceHead">
           <div>
             <h2>4. 快速估價明細</h2>
-            <p class="muted">先確認繁中品名、材質、尺寸、數量與單價；系統自動顯示尺寸級距及才數。</p>
+            <p class="muted">先確認品名、材質、尺寸與數量；計價單位會依材質自動判斷：板材用「才」、貼紙用「件」、燈條用「公尺」。小於 1 才會套用四段平滑計價，不會直接跳成整才高價。</p>
           </div>
           <div class="panelActions">
             <input id="quickEstimateAiScanFile" type="file" hidden accept=".jpg,.jpeg,.png,.webp,.pdf,image/jpeg,image/png,image/webp,application/pdf">
@@ -1227,6 +1235,63 @@
   </main>
 
 
+  <dialog id="priceReviewAiBatchDialog" class="priceReviewAiBatchDialog">
+    <form id="priceReviewAiBatchForm" class="priceReviewAiBatchForm">
+      <div class="dialogHead">
+        <div><span class="eyebrow">Gemini 批次辨識</span><h2>確認待認證資料</h2><p>AI 結果只建立為「待認證」，不會直接納入估價基準或機台成本。</p></div>
+        <button id="closePriceReviewAiBatchDialog" class="dialogClose" type="button" aria-label="關閉">×</button>
+      </div>
+      <div class="aiBatchMetaGrid">
+        <label><span>供應商</span><input id="priceReviewAiBatchSupplier" type="text" list="supplierOptions"></label>
+        <label><span>正式報價日期</span><input id="priceReviewAiBatchDate" type="date"></label>
+        <label><span>專案／機台文字</span><input id="priceReviewAiBatchProject" type="text"></label>
+      </div>
+      <div id="priceReviewAiBatchRows" class="priceReviewAiBatchRows"></div>
+      <div class="formActions stickyDialogActions">
+        <button id="savePriceReviewAiBatch" class="button primary" type="submit">批次建立為待認證</button>
+        <button id="cancelPriceReviewAiBatch" class="button ghost" type="button">取消</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="batchCertificationDialog" class="batchCertificationDialog">
+    <form id="batchCertificationForm" class="batchCertificationForm">
+      <div class="dialogHead">
+        <div><span class="eyebrow">批次認證</span><h2>確認機台與衝突處理</h2><p id="batchCertificationSummary">系統不會靜默覆蓋既有資料。</p></div>
+        <button id="closeBatchCertificationDialog" class="dialogClose" type="button" aria-label="關閉">×</button>
+      </div>
+      <div class="batchCertificationHeader"><span>品項</span><span>歸屬機台</span><span>衝突檢查</span><span>處理方式</span></div>
+      <div id="batchCertificationRows" class="batchCertificationRows"></div>
+      <div class="formActions stickyDialogActions">
+        <button id="confirmBatchCertification" class="button primary" type="submit">執行批次認證</button>
+        <button id="cancelBatchCertification" class="button ghost" type="button">取消</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="certifyMachineDialog" class="compactDecisionDialog">
+    <div class="compactDecisionContent">
+      <div class="dialogHead"><div><span class="eyebrow">認證同步</span><h2>選擇歸屬機台</h2><p>「<strong id="certifyMachineItemName"></strong>」尚未對應機台。可選擇機台，或只納入價格基準。</p></div></div>
+      <label><span>歸屬機台</span><select id="certifyMachineSelect"></select></label>
+      <div class="formActions"><button class="button primary" type="button" data-certify-machine-action="confirm">確認</button><button class="button ghost" type="button" data-certify-machine-action="cancel">取消</button></div>
+    </div>
+  </dialog>
+
+  <dialog id="priceConflictDialog" class="compactDecisionDialog">
+    <div class="compactDecisionContent">
+      <div class="dialogHead"><div><span class="eyebrow">防重複檢查</span><h2 id="priceConflictTitle">發現價格衝突</h2><p id="priceConflictMessage"></p></div></div>
+      <div id="priceConflictActions" class="formActions conflictActions"></div>
+    </div>
+  </dialog>
+
+  <dialog id="machineLinkDialog" class="machineLinkDialog">
+    <div class="machineLinkContent">
+      <div class="dialogHead"><div><span class="eyebrow">新增機台後自動關聯</span><h2 id="machineLinkTitle">發現可關聯資料</h2><p id="machineLinkMessage"></p></div></div>
+      <div id="machineLinkRows" class="machineLinkRows"></div>
+      <div class="formActions"><button class="button primary" type="button" data-machine-link-action="all">全部關聯</button><button class="button secondary" type="button" data-machine-link-action="selected">關聯選取</button><button class="button ghost" type="button" data-machine-link-action="later">稍後再說</button></div>
+    </div>
+  </dialog>
+
   <dialog id="aiCredentialDialog" class="aiCredentialDialog">
     <form id="aiCredentialForm" class="aiCredentialForm">
       <div class="dialogHead">
@@ -1294,6 +1359,6 @@
   <datalist id="estimateWhiteInkOptions"></datalist>
   <datalist id="estimateSpecialEffectOptions"></datalist>
   <script src="data.js?v=20260624-igs-v2-4"></script>
-  <script src="app.js?v=20260625-igs-v3-20-machine-entry-links"></script>
+  <script src="app.js?v=20260625-igs-v3-23-v318-full-integration"></script>
 </body>
 </html>

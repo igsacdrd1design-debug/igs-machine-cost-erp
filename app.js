@@ -1,6 +1,6 @@
-/* IGS ERP app.js — v3.20 機台入口與快速建立補強 */
+/* IGS ERP app.js — v3.23 v3.18+ 四階段完整整合版 */
 // =====================================================
-// IGS 機台材料成本 ERP — 前端 v3.20 機台入口與快速建立補強
+// IGS 機台材料成本 ERP — 前端 v3.23 v3.18+ 四階段完整整合版
 // 1. ERP 密碼登入
 // 2. 工作階段驗證
 // 3. 私人 Google Sheet 安全讀取
@@ -28,25 +28,37 @@ const STANDARD_MATERIAL_OPTIONS = Object.freeze([
 ]);
 
 const PROCESS_TAG_GROUPS = Object.freeze([
-  { label: "印刷", tags: ["四色直噴", "白色直噴", "黑色直噴", "四色黑", "正面印刷", "背面印刷", "不透光銀底印刷"] },
-  { label: "表面效果", tags: ["鏡面貼紙", "亮膜", "霧膜", "3D膜", "七彩雷射膜", "背膠"] },
-  { label: "加工", tags: ["裁切外型", "異型切割", "雕刻", "導C角", "導R角", "壓克力折彎", "熱彎成型", "鑽孔", "攻牙", "銑槽／銑溝", "燒光", "烤漆", "蝕刻"] },
-  { label: "其他", tags: ["導光", "發光字", "無印刷"] }
+  {
+    key: "common",
+    label: "常用",
+    tags: ["四色直噴", "白色直噴", "裁切外型", "雕刻", "3D膜", "壓克力折彎", "導C角", "燒光", "鏡面貼紙", "四色黑"]
+  },
+  {
+    key: "more",
+    label: "更多",
+    tags: ["鑽孔", "背膠", "異型切割", "噴砂", "CNC", "網版印刷", "不透光銀底印刷"]
+  }
 ]);
 
 // Gemini 辨識只能從這份製程菜單中選擇，不接受自由文字標籤。
+const LEGACY_PROCESS_TAGS = Object.freeze([
+  "黑色直噴", "正面印刷", "背面印刷", "雙面印刷", "局部白墨", "滿版白墨",
+  "霧膜", "亮膜", "不透光處理", "雷射切割", "倒角", "黏著組裝", "金屬件組裝"
+]);
+
 const STANDARD_PROCESS_TAGS = Object.freeze(
-  [...new Set(PROCESS_TAG_GROUPS.flatMap((group) => group.tags))]
+  [...new Set([...PROCESS_TAG_GROUPS.flatMap((group) => group.tags), ...LEGACY_PROCESS_TAGS])]
 );
 
 const PROCESS_TAG_DISPLAY_LABELS = Object.freeze({
   "四色直噴": "四色",
   "白色直噴": "白墨",
   "裁切外型": "切割外型",
-  "異型切割": "異型切割",
+  "異型切割": "異形裁切",
   "壓克力折彎": "折彎",
   "燒光": "燒光",
   "鏡面貼紙": "鏡面貼紙",
+  "不透光銀底印刷": "不透光銀底",
 });
 
 function processTagDisplayLabel(tag) {
@@ -128,14 +140,16 @@ function aiProcessSourceValues(aiItem) {
 /**
  * AI 製程模糊對應層。
  * 依需求先轉為簡化別名，再由既有 normalizeProcessTags() 對應回系統標準標籤。
- * 注意：本版依需求將「導C角」與「燒光」都收斂成「燒光」；原始內容保留在 originalProcesses。
+ * 導C角與燒光為不同製程，AI 必須分別對應，避免錯選。
  */
 function fuzzyNormalizeAiProcessTag(value) {
   const text = standardizeErpText(String(value || "")).trim();
   const compact = text.replace(/[\s　_\-－—–/／()（）【】\[\]]+/g, "").toLowerCase();
   if (!compact) return "";
-  if (/四色直噴|四色印刷|四色/.test(compact)) return "四色";
-  if (/導c角|导c角|燒光|烧光|火拋光|火抛光|拋光|抛光/.test(compact)) return "燒光";
+  if (/四色直噴|四色印刷|四色/.test(compact)) return "四色直噴";
+  if (/白色直噴|白墨|白色印刷/.test(compact)) return "白色直噴";
+  if (/導c角|导c角|c角/.test(compact)) return "導C角";
+  if (/燒光|烧光|火拋光|火抛光|拋光|抛光/.test(compact)) return "燒光";
   const canonical = canonicalProcessTag(text);
   return STANDARD_PROCESS_TAGS.includes(canonical) ? canonical : "";
 }
@@ -270,7 +284,8 @@ const PROCESS_TAG_ALIASES = Object.freeze({
   "雕刻": "雕刻", "導c角": "導C角", "導C角": "導C角", "折彎": "壓克力折彎",
   "壓克力折彎": "壓克力折彎", "熱彎": "熱彎成型", "熱彎成型": "熱彎成型", "鑽孔": "鑽孔", "攻牙": "攻牙", "導r角": "導R角", "導R角": "導R角", "銑槽": "銑槽／銑溝", "銑溝": "銑槽／銑溝",
   "銑槽／銑溝": "銑槽／銑溝", "燒光": "燒光", "拋光": "燒光",
-  "烤漆": "烤漆", "蝕刻": "蝕刻", "導光": "導光", "發光字": "發光字", "立體字": "發光字", "無印刷": "無印刷"
+  "烤漆": "烤漆", "蝕刻": "蝕刻", "導光": "導光", "發光字": "發光字", "立體字": "發光字", "無印刷": "無印刷",
+  "異形裁切": "異型切割", "噴砂": "噴砂", "cnc": "CNC", "CNC": "CNC", "網版": "網版印刷", "網版印刷": "網版印刷"
 });
 
 const pageDescriptions = {
@@ -527,6 +542,11 @@ let state = {
   sizeRules: [],
   internalPriceRules: [],
   priceReviews: [],
+  // v3.18+ 規格中的概念名稱：pendingPrices 對應價格待認證；estimates 對應機台成本明細。
+  pendingPrices: [],
+  estimates: [],
+  priceReviewSelectedIds: new Set(),
+  priceReviewAiBatch: null,
   productionPriceReferences: [],
   referenceImportFiles: { material: null, process: null, history: null, production: null },
   referenceImportValidation: {},
@@ -610,13 +630,27 @@ function normalizeProcessTags(value) {
   return unique(source.map(canonicalProcessTag).filter(Boolean));
 }
 
+function syncStateAliases() {
+  state.pendingPrices = state.priceReviews;
+  state.estimates = state.costItems;
+}
+
 function processTagsText(value) {
   return normalizeProcessTags(value).join("、");
 }
 
 function processTagButtonsHtml(value, attributeName, attributeValue) {
   const selected = new Set(normalizeProcessTags(value));
-  return PROCESS_TAG_GROUPS.map((group) => `<div class="processTagGroup"><span>${escapeHTML(group.label)}</span><div>${group.tags.map((tag) => `<button type="button" class="processTagButton ${selected.has(tag) ? "selected" : ""}" ${attributeName}="${escapeHTML(attributeValue)}" data-process-tag="${escapeHTML(tag)}" aria-pressed="${selected.has(tag) ? "true" : "false"}">${escapeHTML(processTagDisplayLabel(tag))}</button>`).join("")}</div></div>`).join("");
+  const renderButtons = (tags) => tags.map((tag) => `<button type="button" class="processTagButton ${selected.has(tag) ? "selected" : ""}" ${attributeName}="${escapeHTML(attributeValue)}" data-process-tag="${escapeHTML(tag)}" aria-pressed="${selected.has(tag) ? "true" : "false"}">${escapeHTML(processTagDisplayLabel(tag))}</button>`).join("");
+  const common = PROCESS_TAG_GROUPS.find((group) => group.key === "common") || PROCESS_TAG_GROUPS[0];
+  const more = PROCESS_TAG_GROUPS.find((group) => group.key === "more");
+  const moreSelected = Boolean(more?.tags.some((tag) => selected.has(tag)));
+  const visibleTags = new Set(PROCESS_TAG_GROUPS.flatMap((group) => group.tags));
+  const legacySelected = [...selected].filter((tag) => !visibleTags.has(tag));
+  const legacyHtml = legacySelected.length
+    ? `<div class="processTagGroup legacyProcessGroup"><span>既有</span><div>${renderButtons(legacySelected)}</div></div>`
+    : "";
+  return `<div class="processTagGroup commonProcessGroup"><span>${escapeHTML(common.label)}</span><div>${renderButtons(common.tags)}</div></div>${more ? `<details class="processMoreGroup" ${moreSelected ? "open" : ""}><summary>＋ 更多製程</summary><div class="processTagGroup"><span>${escapeHTML(more.label)}</span><div>${renderButtons(more.tags)}</div></div></details>` : ""}${legacyHtml}`;
 }
 
 function estimateConfidenceMeta(value) {
@@ -722,7 +756,7 @@ function normalizeMachine(row) {
 function normalizeCostOrder(row) {
   return {
     id: String(firstValue(row, ["成本單ID", "costOrderId", "id"])),
-    machineId: String(firstValue(row, ["機台ID", "machineId"])),
+    machineId: String(firstValue(row, ["機台ID", "machineId"])) || resolveMachineIdFromProject(firstValue(row, ["專案／機台", "project"])),
     type: String(firstValue(row, ["費用類型", "成本類型", "type"])),
     date: normalizeDate(firstValue(row, ["日期", "date"])),
     supplierId: String(firstValue(row, ["供應商ID", "supplierId"])),
@@ -1084,7 +1118,10 @@ function resetPrivateState() {
   state.sizeRules = [];
   state.internalPriceRules = [];
   state.priceReviews = [];
+  state.priceReviewSelectedIds = new Set();
+  state.priceReviewAiBatch = null;
   state.productionPriceReferences = [];
+  syncStateAliases();
   state.referenceImportFiles = { material: null, process: null, history: null, production: null };
   state.referenceImportValidation = {};
   state.priceReviewProcessImagePayload = null;
@@ -1410,6 +1447,7 @@ async function handleQuotationQuickCreateMachine(event) {
     populateMachineAreaOptions();
     closeQuotationQuickCreateMachineDialog();
     showNotice(`已建立並選取機台「${created.name}（${created.code}）」。`);
+    await offerPendingPriceLinksForMachine(created);
   } catch (error) {
     showNotice(`快速建立機台失敗：${error.message}`, "error");
   } finally {
@@ -1541,7 +1579,8 @@ async function submitMachineStaged() {
     );
 
     const result = response.result || {};
-    const count = toNumber(result.count) || (Array.isArray(result.machines) ? result.machines.length : 0);
+    const createdMachines = (Array.isArray(result.machines) ? result.machines : []).map(normalizeMachine);
+    const count = toNumber(result.count) || createdMachines.length;
 
     state.stagedMachines = [];
     saveStagedMachines();
@@ -1549,6 +1588,10 @@ async function submitMachineStaged() {
     await loadData();
 
     showNotice(`已成功寫入 ${count} 筆機台資料。`);
+    for (const createdRaw of createdMachines) {
+      const created = state.machines.find((machine)=>machine.id===createdRaw.id) || state.machines.find((machine)=>norm(machine.code)===norm(createdRaw.code));
+      if (created) await offerPendingPriceLinksForMachine(created);
+    }
     const machineNav = document.querySelector('[data-view="machines"]');
     if (machineNav) machineNav.click();
   } catch (error) {
@@ -1788,7 +1831,7 @@ function applyQuotationAnalysis(result) {
       name: String(item.name || ""),
       spec: normalizedSpec,
       qty: toNumber(item.qty) || 1,
-      unit: String(item.unit || ""),
+      unit: automaticPricingUnitForMaterial(item.material, [item.name,item.spec].filter(Boolean).join(' ')),
       price: toNumber(item.price),
       material: String(item.material || ""),
       thickness: item.thicknessMm > 0 ? String(item.thicknessMm) : String(item.thickness || ""),
@@ -1932,6 +1975,11 @@ function handleDraftRowInput(event) {
     return;
   }
 
+  if (item.itemType !== "附加費用" && ["material", "spec", "name"].includes(field)) {
+    item.unit = automaticPricingUnitForMaterial(item.material, [item.name,item.spec].filter(Boolean).join(' '));
+    const hiddenUnit=row.querySelector('[data-field="unit"]');if(hiddenUnit)hiddenUnit.value=item.unit;
+    const autoUnit=row.querySelector('[data-draft-auto-unit]');if(autoUnit)autoUnit.textContent=item.unit;
+  }
   if (item.aiImported && ["material", "spec", "itemType"].includes(field)) {
     refreshDraftAiConfidence(item);
     updateDraftAiReviewRow(row, item);
@@ -2031,7 +2079,7 @@ async function handleCreateCostOrder(event) {
         name: String(item.name || "").trim(),
         spec: String(item.spec || "").trim(),
         qty: item.itemType === "附加費用" ? 1 : toNumber(item.qty),
-        unit: String(item.unit || "").trim(),
+        unit: item.itemType === "附加費用" ? "" : automaticPricingUnitForMaterial(item.material, [item.name,item.spec].filter(Boolean).join(' ')),
         price: toNumber(item.price),
         material: String(item.material || "").trim(),
         thickness: String(item.thickness || "").trim(),
@@ -3118,6 +3166,7 @@ async function loadData() {
     state.internalPriceRules = (Array.isArray(result.internalPriceRules) ? result.internalPriceRules : []).map(normalizeInternalPriceRule);
     state.priceReviews = (Array.isArray(result.priceReviews) ? result.priceReviews : []).map(normalizePriceReview);
     state.productionPriceReferences = (Array.isArray(result.productionPriceReferences) ? result.productionPriceReferences : []).map(normalizeProductionPriceReference);
+    syncStateAliases();
 
     populateControls();
     renderAll();
@@ -3151,6 +3200,16 @@ function populateControls() {
   quotationMachine.innerHTML = machineOptions.length
     ? machineOptions.map((item) => `<option value="${escapeHTML(item.value)}">${escapeHTML(item.label)}</option>`).join("")
     : '<option value="">請先建立機台</option>';
+
+  const priceReviewMachine = $("priceReviewMachine");
+  if (priceReviewMachine) {
+    const currentReviewMachine = priceReviewMachine.value;
+    priceReviewMachine.innerHTML = '<option value="">未指定機台</option>' + machineOptions
+      .map((item) => `<option value="${escapeHTML(item.value)}">${escapeHTML(item.label)}</option>`).join("");
+    if ([...priceReviewMachine.options].some((option) => option.value === currentReviewMachine)) {
+      priceReviewMachine.value = currentReviewMachine;
+    }
+  }
 
   const machine360Machine = $("machine360Machine");
   if (machine360Machine) {
@@ -3330,6 +3389,8 @@ function renderMachineCards() {
     ? machines.map((machine) => {
       const totals = totalsForMachine(machine.id);
       const orderCount = state.costOrders.filter((order) => order.machineId === machine.id).length;
+      const reviewCount = state.priceReviews.filter((review) => review.machineId === machine.id).length;
+      const pendingReviewCount = state.priceReviews.filter((review) => review.machineId === machine.id && review.status !== '已認證').length;
       return `<article class="machineCard">
         <div class="machineImage ${(machine.imageFileId || machine.imageUrl) ? "hasImage" : ""}">
           ${machine.imageFileId ? `<img data-secure-file-id="${escapeHTML(machine.imageFileId)}" alt="${escapeHTML(machine.name)}" loading="lazy">` : machine.imageUrl ? `<img src="${escapeHTML(machine.imageUrl)}" alt="${escapeHTML(machine.name)}" loading="lazy">` : `<span>${escapeHTML(machine.name.slice(0, 2).toUpperCase())}</span>`}
@@ -3338,6 +3399,7 @@ function renderMachineCards() {
           <div class="cardTags">
             <span class="tag">${escapeHTML(machine.category)}</span>
             <span class="tag">${orderCount} 張成本單</span>
+            ${reviewCount ? `<span class="tag reviewTag">${reviewCount} 筆歷史價格${pendingReviewCount ? `・${pendingReviewCount} 待認證` : ''}</span>` : ''}
           </div>
           <h3>${escapeHTML(machine.name)}</h3>
           <p class="machineCode">${escapeHTML(machine.code || machine.id || "未填代碼")}</p>
@@ -3454,6 +3516,30 @@ function dialogViewsForMachine(machine) {
   }];
 }
 
+function renderMachineLinkedPriceReviews(machineId) {
+  const rows = state.priceReviews
+    .filter((review) => review.machineId === machineId)
+    .sort((a, b) => dateValue(b.quoteDate || b.updatedAt) - dateValue(a.quoteDate || a.updatedAt));
+  if (!rows.length) {
+    return `<section class="machineReviewSection"><div class="machineReviewHead"><div><h3>歷史報價／待認證</h3><p>尚未有價格紀錄連結到這台機台。</p></div></div></section>`;
+  }
+  return `<section class="machineReviewSection">
+    <div class="machineReviewHead">
+      <div><h3>歷史報價／待認證</h3><p>從價格中心連結的紀錄；未同步成成本單前，不會計入機台成本總額。</p></div>
+      <span class="apiBadge">${rows.length} 筆</span>
+    </div>
+    <div class="machineReviewList">${rows.map((row) => `
+      <article class="machineReviewRow">
+        <div><span class="priceReviewStatus ${priceReviewStatusClass(row.status)}">${escapeHTML(row.status)}</span><strong>${escapeHTML(row.itemName || '未命名品項')}</strong><small>${escapeHTML([row.material, row.thicknessMm ? `${roundDisplay(row.thicknessMm)}mm` : '', row.processTags].filter(Boolean).join('｜'))}</small></div>
+        <div class="machineReviewAmount"><strong>${row.unitPrice ? money(row.unitPrice) : '待補'}</strong><small>${row.syncedCostOrderId ? `已同步 ${escapeHTML(row.syncedCostOrderId)}` : '尚未計入成本'}</small></div>
+        <div class="machineReviewActions">
+          ${row.sourceFileId ? `<button class="tableAction" type="button" data-view-file="${escapeHTML(row.sourceFileId)}" data-file-name="${escapeHTML(row.sourceFileName || row.sourceFile || '來源檔案')}">查看檔案</button>` : ''}
+          <button class="tableAction" type="button" data-edit-machine-review="${escapeHTML(row.id)}">檢視／修改</button>
+        </div>
+      </article>`).join('')}</div>
+  </section>`;
+}
+
 function openMachineDialog(machineId) {
   const machine = machineById(machineId);
   if (!machine) return;
@@ -3520,6 +3606,7 @@ function openMachineDialog(machineId) {
         </div>
       </section>` : `
       <div class="machineAreaCostPanel">這台機台尚未上傳代表圖或角度圖，暫時無法建立可點擊成本位置。</div>`}
+    ${renderMachineLinkedPriceReviews(machineId)}
     <div class="stageTabs" role="tablist">
       ${COST_TYPES.map((type, index) => `<button class="stageTab ${index === 0 ? "active" : ""}" type="button" data-stage="${escapeHTML(type)}">${escapeHTML(type)}</button>`).join("")}
     </div>
@@ -3532,6 +3619,14 @@ function openMachineDialog(machineId) {
       state.selectedMachineStage = button.dataset.stage;
       renderDialogStage(machineId, state.selectedMachineStage);
       if (state.selectedMachineArea) renderMachineAreaCostPanel(machineId, state.selectedMachineArea, state.selectedMachineStage);
+    });
+  });
+  $("machineDialogContent").querySelectorAll("[data-edit-machine-review]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const review = state.priceReviews.find((row) => row.id === button.dataset.editMachineReview);
+      if (!review) return;
+      $("machineDialog").close();
+      openPriceReviewDialog(review);
     });
   });
   renderDialogStage(machineId, state.selectedMachineStage);
@@ -3745,7 +3840,10 @@ function renderDialogStage(machineId, type) {
 
 
 function renderDraftItems() {
-  state.draftItems.forEach((item) => { if (item.aiImported) refreshDraftAiConfidence(item); });
+  state.draftItems.forEach((item) => {
+    if (item.aiImported) refreshDraftAiConfidence(item);
+    if (item.itemType !== "附加費用") item.unit = automaticPricingUnitForMaterial(item.material, [item.name,item.spec].filter(Boolean).join(' '));
+  });
   $("draftItemRows").innerHTML = state.draftItems.map((item, index) => {
     const isFee = item.itemType === "附加費用";
     const tags = normalizeProcessTags(item.processTags);
@@ -3762,7 +3860,7 @@ function renderDraftItems() {
       <td><div class="draftNameWithBadge"><div class="draftBadgeRow"><span class="aiReviewBadge" data-ai-review-badge ${needsAiReview ? '' : 'hidden'} title="${escapeHTML(reviewText)}">⚠️ 需人工確認</span>${item.aiImported ? `<span class="confidenceSemanticBadge ${estimateConfidenceMeta(item.confidence).className}">${estimateConfidenceMeta(item.confidence).label}</span>` : ''}</div><input class="tableInput itemNameInput" data-field="name" value="${escapeHTML(item.name)}" placeholder="${isFee ? "例如：運費／版費" : "品項名稱"}"></div></td>
       <td data-ai-spec-cell class="${aiMissing.has('widthMm') || aiMissing.has('heightMm') || aiMissing.has('dimension') ? 'ai-review-field' : ''}"><input class="tableInput specInput" data-field="spec" value="${escapeHTML(item.spec)}" placeholder="規格／包裝" ${isFee ? "disabled" : ""}></td>
       <td><input class="tableInput numberInput" data-field="qty" type="number" min="0" step="0.01" value="${isFee ? 1 : item.qty}" ${isFee ? "disabled" : ""}></td>
-      <td><input class="tableInput unitInput" data-field="unit" value="${escapeHTML(item.unit)}" placeholder="可留空" ${isFee ? "disabled" : ""}></td>
+      <td><input type="hidden" data-field="unit" value="${escapeHTML(item.unit)}"><span class="draftAutoUnit" data-draft-auto-unit>${isFee ? '—' : escapeHTML(item.unit || automaticPricingUnitForMaterial(item.material,[item.name,item.spec].join(' ')))}</span></td>
       <td><input class="tableInput numberInput" data-field="price" type="number" min="0" step="0.01" value="${item.price || ""}" placeholder="${isFee ? "費用金額" : "單價"}"></td>
       <td data-ai-material-cell class="${aiMissing.has('material') ? 'ai-review-field' : ''}"><select class="tableInput materialInput" data-field="material" ${isFee ? "disabled" : ""}>${standardMaterialOptionsHtml(item.material)}</select></td>
       <td><input class="tableInput thicknessInput" data-field="thickness" value="${escapeHTML(item.thickness || "")}" placeholder="厚度" ${isFee ? "disabled" : ""}></td>
@@ -3962,7 +4060,17 @@ function normalizeMaterialPrice(row) {
   };
 }
 
+function resolveMachineIdFromProject(project) {
+  const key = norm(project || '');
+  if (!key) return '';
+  const exact = state.machines.find((machine) => norm(machine.name) === key || norm(machine.code) === key || norm(machine.id) === key);
+  if (exact) return exact.id;
+  const partial = state.machines.filter((machine) => key.includes(norm(machine.name)) || norm(machine.name).includes(key));
+  return partial.length === 1 ? partial[0].id : '';
+}
+
 function normalizePriceReview(row) {
+  const project = String(firstValue(row, ["專案／機台", "project"]));
   return {
     id: String(firstValue(row, ["價格紀錄ID", "id"])),
     sourceFile: String(firstValue(row, ["來源文件", "sourceFile"])),
@@ -3970,7 +4078,8 @@ function normalizePriceReview(row) {
     fileSavedDate: normalizeDate(firstValue(row, ["檔案最後儲存日", "fileSavedDate"])),
     quoteDate: normalizeDate(firstValue(row, ["正式報價日期", "quoteDate"])),
     supplier: String(firstValue(row, ["供應商", "supplier"])),
-    project: String(firstValue(row, ["專案／機台", "project"])),
+    project,
+    machineId: String(firstValue(row, ["機台ID", "machineId"])) || resolveMachineIdFromProject(project),
     itemCode: String(firstValue(row, ["品項代碼", "itemCode"])),
     itemName: String(firstValue(row, ["繁中品項名稱", "itemName"])),
     material: String(firstValue(row, ["標準材質", "material"])),
@@ -3984,6 +4093,13 @@ function normalizePriceReview(row) {
     taxType: String(firstValue(row, ["稅別", "taxType"])),
     status: String(firstValue(row, ["認證狀態", "status"], "待認證")),
     includeBaseline: String(firstValue(row, ["是否納入基準", "includeBaseline"], "否")),
+    sourceFileId: String(firstValue(row, ["來源檔案ID", "sourceFileId"])),
+    sourceFileName: String(firstValue(row, ["來源檔名", "sourceFileName"])),
+    sourceFileUrl: String(firstValue(row, ["來源檔案URL", "sourceFileUrl"])),
+    costType: String(firstValue(row, ["費用類型", "costType"], "打樣版費用")),
+    syncedCostOrderId: String(firstValue(row, ["同步成本單ID", "syncedCostOrderId"])),
+    aiStatus: String(firstValue(row, ["AI辨識狀態", "aiStatus"])),
+    aiRawText: String(firstValue(row, ["AI辨識原文", "aiRawText"])),
     note: String(firstValue(row, ["來源備註", "note"])),
     createdAt: String(firstValue(row, ["建立時間", "createdAt"])),
     updatedAt: String(firstValue(row, ["更新時間", "updatedAt"])),
@@ -4226,9 +4342,30 @@ function setupV20() {
   $('priceReviewSearch')?.addEventListener('input', renderPriceReviews);
   $('priceReviewStatusFilter')?.addEventListener('change', renderPriceReviews);
   $('priceReviewRows')?.addEventListener('click', handlePriceReviewRowsClick);
+  $('priceReviewRows')?.addEventListener('change', handlePriceReviewSelectionChange);
+  $('priceReviewSelectAll')?.addEventListener('change', handlePriceReviewSelectAll);
+  $('batchCertifyPriceReviews')?.addEventListener('click', openBatchCertificationDialog);
+  $('priceReviewAiBatchFile')?.addEventListener('change', handlePriceReviewAiBatchFile);
+  $('priceReviewAiBatchForm')?.addEventListener('submit', savePriceReviewAiBatch);
+  $('priceReviewAiBatchRows')?.addEventListener('click', handlePriceReviewAiBatchClick);
+  $('priceReviewAiBatchRows')?.addEventListener('input', handlePriceReviewAiBatchInput);
+  $('closePriceReviewAiBatchDialog')?.addEventListener('click', closePriceReviewAiBatchDialog);
+  $('cancelPriceReviewAiBatch')?.addEventListener('click', closePriceReviewAiBatchDialog);
+  $('batchCertificationForm')?.addEventListener('submit', executeBatchCertification);
+  $('batchCertificationRows')?.addEventListener('change', handleBatchCertificationChange);
+  $('closeBatchCertificationDialog')?.addEventListener('click', closeBatchCertificationDialog);
+  $('cancelBatchCertification')?.addEventListener('click', closeBatchCertificationDialog);
+  $('priceConflictDialog')?.addEventListener('click', handlePriceConflictDialogClick);
+  $('machineLinkDialog')?.addEventListener('click', handleMachineLinkDialogClick);
+  $('certifyMachineDialog')?.addEventListener('click', handleCertificationMachineDialogClick);
   $('priceReviewForm')?.addEventListener('submit', savePriceReviewFromDialog);
   $('closePriceReviewDialog')?.addEventListener('click', closePriceReviewDialog);
   $('priceReviewProcessTagButtons')?.addEventListener('click', handlePriceReviewProcessTagClick);
+  $('priceReviewMachine')?.addEventListener('change', () => {
+    const machine = machineById($('priceReviewMachine').value);
+    if (machine && !$('priceReviewProject').value.trim()) $('priceReviewProject').value = machine.name;
+  });
+  $('priceReviewMaterial')?.addEventListener('change', updatePriceReviewAutomaticUnit);
   $('priceReviewProcessImage')?.addEventListener('change', handlePriceReviewProcessImageChange);
   $('analyzePriceReviewProcessImage')?.addEventListener('click', analyzePriceReviewProcessImage);
   $('clearPriceReviewProcessImage')?.addEventListener('click', clearPriceReviewProcessImage);
@@ -4435,6 +4572,7 @@ function renderMaterialPrices() {
 
 
 function priceReviewToRecord(review) {
+  const unit = automaticPricingUnitForMaterial(review.material, [review.itemName, review.sourceFile].filter(Boolean).join(' '));
   return {
     id: review.id,
     sourceFile: review.sourceFile,
@@ -4443,6 +4581,7 @@ function priceReviewToRecord(review) {
     quoteDate: review.quoteDate,
     supplier: review.supplier,
     project: review.project,
+    machineId: review.machineId || '',
     itemCode: review.itemCode,
     itemName: review.itemName,
     material: review.material,
@@ -4450,12 +4589,19 @@ function priceReviewToRecord(review) {
     widthMm: review.widthMm,
     heightMm: review.heightMm,
     qty: review.qty,
-    unit: review.unit,
+    unit,
     unitPrice: review.unitPrice || "",
     processTags: review.processTags,
     taxType: review.taxType,
     status: review.status,
     includeBaseline: review.includeBaseline,
+    costType: review.costType || '打樣版費用',
+    sourceFileId: review.sourceFileId || '',
+    sourceFileName: review.sourceFileName || review.sourceFile || '',
+    sourceFileUrl: review.sourceFileUrl || '',
+    syncedCostOrderId: review.syncedCostOrderId || '',
+    aiStatus: review.aiStatus || '',
+    aiRawText: review.aiRawText || '',
     note: review.note,
   };
 }
@@ -4575,12 +4721,19 @@ function renderPriceReviews() {
     const baseline = priceReviewBaselineFor(row);
     const difference = baseline?.value && row.unitPrice ? (row.unitPrice-baseline.value)/baseline.value*100 : null;
     const dimensions = row.widthMm && row.heightMm ? `${roundDisplay(row.widthMm)} × ${roundDisplay(row.heightMm)}mm` : '尺寸待補';
-    return `<article class="priceReviewCard">
+    const linkedMachine = machineById(row.machineId);
+    const eligible = row.status !== '已認證' && toNumber(row.unitPrice) > 0;
+    const checked = eligible && state.priceReviewSelectedIds.has(row.id);
+    return `<article class="priceReviewCard ${checked ? 'selected' : ''}" data-price-review-id="${escapeHTML(row.id)}">
+      <label class="priceReviewSelectBox" title="選取批次認證">
+        <input type="checkbox" data-select-price-review="${escapeHTML(row.id)}" ${checked ? 'checked' : ''} ${eligible ? '' : 'disabled'}>
+        <span>選取</span>
+      </label>
       <div class="priceReviewMain">
         <div class="priceReviewTitle">
           <span class="priceReviewStatus ${priceReviewStatusClass(row.status)}">${escapeHTML(row.status)}</span>
           <strong>${escapeHTML(row.itemName || '未命名品項')}</strong>
-          <small>${escapeHTML([row.itemCode,row.project].filter(Boolean).join('｜') || row.sourceFile || '—')}</small>
+          <small>${escapeHTML([row.itemCode,linkedMachine?.name || row.project].filter(Boolean).join('｜') || row.sourceFile || '—')}</small>
         </div>
         <div class="priceReviewSpec">
           <span>${escapeHTML(row.material || '材質待補')}${row.thicknessMm?` ${roundDisplay(row.thicknessMm)}mm`:''}</span>
@@ -4591,7 +4744,7 @@ function renderPriceReviews() {
       <div class="priceReviewPrice">
         <small>實際單價</small>
         <strong>${row.unitPrice ? money(row.unitPrice) : '待補'}</strong>
-        <span>${escapeHTML(row.unit || '件')}｜數量 ${roundDisplay(row.qty||1)}</span>
+        <span>${escapeHTML(row.unit || automaticPricingUnitForMaterial(row.material,row.itemName))}｜數量 ${roundDisplay(row.qty||1)}</span>
       </div>
       <div class="priceReviewCompare">
         <small>內部相似基準</small>
@@ -4602,16 +4755,18 @@ function renderPriceReviews() {
         <span>報價日：${escapeHTML(row.quoteDate || '待補')}</span>
         <span>供應商：${escapeHTML(row.supplier || '待補')}</span>
         <span>稅別：${escapeHTML(row.taxType || '待補')}</span>
+        ${row.syncedCostOrderId ? `<span class="syncedLabel">已同步成本：${escapeHTML(row.syncedCostOrderId)}</span>` : ''}
       </div>
       <div class="priceReviewActions">
+        ${row.sourceFileId ? `<button class="button ghost compact" type="button" data-view-file="${escapeHTML(row.sourceFileId)}" data-file-name="${escapeHTML(row.sourceFileName || row.sourceFile || '來源檔案')}">查看來源檔</button>` : ''}
         <button class="button ghost compact" type="button" data-edit-review="${escapeHTML(row.id)}">檢視／修改</button>
-        ${row.unitPrice?`<button class="button primary compact" type="button" data-certify-review="${escapeHTML(row.id)}">認證並納入</button>`:''}
+        ${eligible?`<button class="button primary compact" type="button" data-certify-review="${escapeHTML(row.id)}">認證並納入</button>`:''}
         <button class="linkButton dangerText" type="button" data-delete-review="${escapeHTML(row.id)}">刪除</button>
       </div>
     </article>`;
   }).join('') : '<div class="empty">沒有符合條件的待認證價格。</div>';
+  updatePriceReviewSelectionControls(rows);
 }
-
 function renderPriceReviewProcessTags() {
   const input = $('priceReviewProcessTags');
   const container = $('priceReviewProcessTagButtons');
@@ -4630,78 +4785,124 @@ function handlePriceReviewProcessTagClick(event) {
   const tag = canonicalProcessTag(button.dataset.processTag);
   if (tags.has(tag)) tags.delete(tag); else tags.add(tag);
   $('priceReviewProcessTags').value = [...tags].join('、');
-  renderPriceReviewProcessTags();
+  const selected=tags.has(tag);
+  button.classList.toggle('selected',selected);
+  button.setAttribute('aria-pressed',selected?'true':'false');
+  const summary=$('priceReviewProcessTagSummary');
+  if(summary)summary.textContent=tags.size?`已選擇：${[...tags].join('、')}`:'尚未選擇製程';
 }
 
 async function handlePriceReviewProcessImageChange(event) {
   const file = event.target.files?.[0];
   if (!file) return;
   try {
-    state.priceReviewProcessImagePayload = await compressImageFile(file, 1800, 0.86);
-    $('priceReviewProcessImagePreview').src = state.priceReviewProcessImagePayload.dataUrl;
+    state.priceReviewProcessImagePayload = await prepareQuotationDocument(file);
+    const isPdf = state.priceReviewProcessImagePayload.mimeType === 'application/pdf';
     $('priceReviewProcessImageName').textContent = file.name;
+    if ($('priceReviewSourceFile')) $('priceReviewSourceFile').value = file.name;
+    state.priceReviewAiRawText = '';
     $('priceReviewProcessImagePreviewWrap').hidden = false;
+    $('priceReviewProcessImagePreview').hidden = isPdf;
+    $('priceReviewProcessPdfPreview').hidden = !isPdf;
+    if (isPdf) {
+      $('priceReviewProcessPdfPreview').src = state.priceReviewProcessImagePayload.dataUrl;
+      $('priceReviewProcessImagePreview').removeAttribute('src');
+    } else {
+      $('priceReviewProcessImagePreview').src = state.priceReviewProcessImagePayload.dataUrl;
+      $('priceReviewProcessPdfPreview').removeAttribute('src');
+    }
     $('analyzePriceReviewProcessImage').disabled = false;
     $('clearPriceReviewProcessImage').disabled = false;
-    $('priceReviewProcessAiStatus').textContent = '圖片已準備完成，可讓 AI 辨識材質、尺寸與製程。';
+    $('priceReviewProcessAiStatus').textContent = `${isPdf ? 'PDF' : '圖片'}已準備完成；儲存時會上傳私人 Drive，也可先用 AI 辨識。`;
     $('priceReviewProcessAiStatus').className = 'photoStatus muted ready';
   } catch (error) {
     clearPriceReviewProcessImage();
-    showNotice(`發包圖處理失敗：${error.message}`, 'error');
+    showNotice(`來源檔案處理失敗：${error.message}`, 'error');
   }
 }
-
 function clearPriceReviewProcessImage() {
   state.priceReviewProcessImagePayload = null;
+  state.priceReviewAiRawText = '';
   if ($('priceReviewProcessImage')) $('priceReviewProcessImage').value = '';
-  if ($('priceReviewProcessImagePreview')) $('priceReviewProcessImagePreview').removeAttribute('src');
+  if ($('priceReviewProcessImagePreview')) { $('priceReviewProcessImagePreview').removeAttribute('src'); $('priceReviewProcessImagePreview').hidden = false; }
+  if ($('priceReviewProcessPdfPreview')) { $('priceReviewProcessPdfPreview').removeAttribute('src'); $('priceReviewProcessPdfPreview').hidden = true; }
   if ($('priceReviewProcessImagePreviewWrap')) $('priceReviewProcessImagePreviewWrap').hidden = true;
   if ($('priceReviewProcessImageName')) $('priceReviewProcessImageName').textContent = '';
   if ($('analyzePriceReviewProcessImage')) $('analyzePriceReviewProcessImage').disabled = true;
   if ($('clearPriceReviewProcessImage')) $('clearPriceReviewProcessImage').disabled = true;
   if ($('priceReviewProcessAiStatus')) {
-    $('priceReviewProcessAiStatus').textContent = '尚未選擇發包圖';
+    $('priceReviewProcessAiStatus').textContent = '尚未選擇發包圖或報價檔';
     $('priceReviewProcessAiStatus').className = 'photoStatus muted';
   }
 }
 
-async function analyzePriceReviewProcessImage() {
-  if (!state.priceReviewProcessImagePayload) { showNotice('請先選擇發包圖。', 'warn'); return; }
-  const button = $('analyzePriceReviewProcessImage');
-  button.disabled = true;
-  button.textContent = 'AI 辨識中…';
-  $('priceReviewProcessAiStatus').textContent = 'Gemini 正在讀取材質、尺寸與印刷加工說明…';
-  $('priceReviewProcessAiStatus').className = 'photoStatus muted loading';
+async function getPriceReviewMachineImagePayload() {
+  const machineId = $('priceReviewMachine')?.value || '';
+  const machine = machineById(machineId);
+  if (!machine?.imageFileId) return null;
   try {
-    const response = await secureApiRequest({
-      action: 'analyzeProcessImage',
-      image: stripDataUrl(state.priceReviewProcessImagePayload),
-      ...getAiRecognitionConstraints(),
-    }, { timeoutMs: 180000 });
+    const response = await secureApiRequest({ action: 'getImageData', fileId: machine.imageFileId }, { includeToken: true, timeoutMs: 60000 });
     const result = response.result || {};
-    if (result.itemName && !$('priceReviewItemName').value.trim()) $('priceReviewItemName').value = result.itemName;
-    if (result.itemCode && !$('priceReviewItemCode').value.trim()) $('priceReviewItemCode').value = result.itemCode;
-    if (result.normalizedMaterial) setSelectOptions($('priceReviewMaterial'), result.normalizedMaterial);
-    if (toNumber(result.thicknessMm) > 0) $('priceReviewThickness').value = toNumber(result.thicknessMm);
-    if (toNumber(result.widthMm) > 0) $('priceReviewWidth').value = toNumber(result.widthMm);
-    if (toNumber(result.heightMm) > 0) $('priceReviewHeight').value = toNumber(result.heightMm);
-    $('priceReviewProcessTags').value = processTagsText([...normalizeProcessTags($('priceReviewProcessTags').value), ...(result.processTags || [])]);
-    renderPriceReviewProcessTags();
-    if (result.rawText) $('priceReviewNote').value = [$('priceReviewNote').value.trim(), `AI原文：${result.rawText}`].filter(Boolean).join('\n');
-    const issues = Array.isArray(result.issues) ? result.issues.filter(Boolean) : [];
-    $('priceReviewProcessAiStatus').textContent = `辨識完成：${normalizeProcessTags(result.processTags).length} 個製程標籤${issues.length ? `；提醒：${issues.join('、')}` : ''}`;
-    $('priceReviewProcessAiStatus').className = 'photoStatus muted success';
-    showNotice('AI 已帶入材質、尺寸與製程，請人工確認後儲存。', 'success');
+    if (!String(result.mimeType || '').startsWith('image/')) return null;
+    return { name: result.name || 'machine.jpg', mimeType: result.mimeType || 'image/jpeg', base64: result.base64 || '' };
   } catch (error) {
-    $('priceReviewProcessAiStatus').textContent = `辨識失敗：${error.message}`;
-    $('priceReviewProcessAiStatus').className = 'photoStatus muted error';
-    showNotice(`AI 看圖辨識失敗：${error.message}`, 'error');
-  } finally {
-    button.disabled = false;
-    button.textContent = 'AI 看圖選擇';
+    console.info('價格認證 AI 無法附加機台圖片：', error.message);
+    return null;
   }
 }
 
+async function analyzePriceReviewProcessImage() {
+  if (!state.priceReviewProcessImagePayload) { showNotice('請先選擇發包圖、報價圖片或 PDF。', 'warn'); return; }
+  const button = $('analyzePriceReviewProcessImage');
+  button.disabled = true;
+  button.textContent = 'AI 辨識中…';
+  $('priceReviewProcessAiStatus').textContent = 'Gemini 正在讀取檔案中的品項、材質、尺寸、價格與製程…';
+  $('priceReviewProcessAiStatus').className = 'photoStatus muted loading';
+  try {
+    const response = await secureApiRequest({
+      action: 'analyzeQuotation',
+      document: stripDataUrl(state.priceReviewProcessImagePayload),
+      machineImage: await getPriceReviewMachineImagePayload(),
+      ...getAiRecognitionConstraints(),
+    }, { timeoutMs: 240000 });
+    const result = response.result || {};
+    const items = Array.isArray(result.items) ? result.items : [];
+    const first = items[0] ? normalizeAIExtractedItem(items[0]) : {};
+    if (first.name && !$('priceReviewItemName').value.trim()) $('priceReviewItemName').value = first.name;
+    if (first.fileName && !$('priceReviewItemCode').value.trim()) $('priceReviewItemCode').value = first.fileName;
+    if (first.material) setSelectOptions($('priceReviewMaterial'), first.material);
+    if (toNumber(first.thicknessMm || first.thickness) > 0) $('priceReviewThickness').value = toNumber(first.thicknessMm || first.thickness);
+    const dims = parseDimensions(first.spec || '');
+    const widthMm = toNumber(first.widthMm || dims.widthMm);
+    const heightMm = toNumber(first.heightMm || dims.heightMm);
+    if (widthMm > 0) $('priceReviewWidth').value = widthMm;
+    if (heightMm > 0) $('priceReviewHeight').value = heightMm;
+    if (toNumber(first.qty) > 0) $('priceReviewQty').value = toNumber(first.qty);
+    if (toNumber(first.price) > 0) $('priceReviewUnitPrice').value = toNumber(first.price);
+    if (result.supplier && !$('priceReviewSupplier').value.trim()) $('priceReviewSupplier').value = result.supplier;
+    if (result.date && !$('priceReviewQuoteDate').value) $('priceReviewQuoteDate').value = normalizeDate(result.date);
+    if (result.project && !$('priceReviewProject').value.trim()) $('priceReviewProject').value = result.project;
+    $('priceReviewProcessTags').value = processTagsText([...normalizeProcessTags($('priceReviewProcessTags').value), ...(first.processTags || first.processes || [])]);
+    renderPriceReviewProcessTags();
+    const noteParts = [$('priceReviewNote').value.trim()];
+    if (items.length > 1) noteParts.push(`AI 共辨識 ${items.length} 筆，本視窗先帶入第 1 筆；其餘品項請另建紀錄。`);
+    state.priceReviewAiRawText = String(result.rawText || '');
+    if (result.rawText) noteParts.push(`AI原文：${result.rawText}`);
+    const issues = Array.isArray(result.issues) ? result.issues.filter(Boolean) : [];
+    if (issues.length) noteParts.push(`辨識提醒：${issues.join('、')}`);
+    $('priceReviewNote').value = noteParts.filter(Boolean).join('\n');
+    $('priceReviewProcessAiStatus').textContent = `辨識完成：${items.length || 1} 筆品項；已帶入第一筆，請人工確認後儲存。`;
+    $('priceReviewProcessAiStatus').className = 'photoStatus muted success';
+    showNotice('AI 已帶入價格認證欄位；原始檔案會在儲存時上傳私人 Drive。', 'success');
+  } catch (error) {
+    $('priceReviewProcessAiStatus').textContent = `辨識失敗：${error.message}`;
+    $('priceReviewProcessAiStatus').className = 'photoStatus muted error';
+    showNotice(`AI 檔案辨識失敗：${error.message}`, 'error');
+  } finally {
+    button.disabled = false;
+    button.textContent = 'AI 辨識檔案';
+  }
+}
 function openPriceReviewDialog(review) {
   if (!review || !$('priceReviewDialog')) return;
   $('priceReviewId').value = review.id || '';
@@ -4712,9 +4913,18 @@ function openPriceReviewDialog(review) {
   $('priceReviewWidth').value = review.widthMm || '';
   $('priceReviewHeight').value = review.heightMm || '';
   $('priceReviewQty').value = review.qty || 1;
-  $('priceReviewUnit').value = review.unit || '件';
+  $('priceReviewUnit').value = automaticPricingUnitForMaterial(review.material, review.itemName);
+  updatePriceReviewAutomaticUnit();
   $('priceReviewUnitPrice').value = review.unitPrice || '';
   $('priceReviewProject').value = review.project || '';
+  const matchedMachine = review.machineId || state.machines.find((machine) => norm(machine.name) === norm(review.project) || norm(machine.code) === norm(review.project))?.id || '';
+  if ($('priceReviewMachine')) $('priceReviewMachine').value = matchedMachine;
+  if ($('priceReviewCostType')) $('priceReviewCostType').value = review.costType || '打樣版費用';
+  if ($('priceReviewSyncCost')) {
+    $('priceReviewSyncCost').checked = false;
+    $('priceReviewSyncCost').disabled = Boolean(review.syncedCostOrderId);
+  }
+  if ($('priceReviewSyncStatus')) $('priceReviewSyncStatus').textContent = review.syncedCostOrderId ? `已同步成本單：${review.syncedCostOrderId}` : '連結機台後會顯示於機台總覽；勾選後可另建立成本單。';
   $('priceReviewSupplier').value = review.supplier || '';
   $('priceReviewQuoteDate').value = review.quoteDate || '';
   $('priceReviewTaxType').value = review.taxType || '';
@@ -4723,7 +4933,11 @@ function openPriceReviewDialog(review) {
   clearPriceReviewProcessImage();
   $('priceReviewStatus').value = review.status || '待認證';
   $('priceReviewIncludeBaseline').checked = review.includeBaseline === '是';
-  $('priceReviewSourceFile').value = review.sourceFile || '';
+  $('priceReviewSourceFile').value = review.sourceFileName || review.sourceFile || '';
+  if (review.sourceFileId) {
+    $('priceReviewProcessAiStatus').textContent = `已保存來源檔案：${review.sourceFileName || review.sourceFile || '檔案'}`;
+    $('priceReviewProcessAiStatus').className = 'photoStatus muted success';
+  }
   $('priceReviewNote').value = review.note || '';
   $('priceReviewDialog').showModal();
 }
@@ -4746,9 +4960,19 @@ function priceReviewFromDialog() {
     widthMm: toNumber($('priceReviewWidth').value),
     heightMm: toNumber($('priceReviewHeight').value),
     qty: toNumber($('priceReviewQty').value) || 1,
-    unit: $('priceReviewUnit').value.trim() || '件',
+    unit: automaticPricingUnitForMaterial($('priceReviewMaterial').value.trim(), $('priceReviewItemName').value.trim()),
     unitPrice: $('priceReviewUnitPrice').value === '' ? '' : toNumber($('priceReviewUnitPrice').value),
-    project: $('priceReviewProject').value.trim(),
+    project: $('priceReviewProject').value.trim() || machineById($('priceReviewMachine')?.value)?.name || '',
+    machineId: $('priceReviewMachine')?.value || '',
+    costType: $('priceReviewCostType')?.value || '打樣版費用',
+    syncCost: Boolean($('priceReviewSyncCost')?.checked),
+    sourceDocument: state.priceReviewProcessImagePayload ? stripDataUrl(state.priceReviewProcessImagePayload) : null,
+    sourceFileId: existing.sourceFileId || '',
+    sourceFileName: existing.sourceFileName || existing.sourceFile || '',
+    sourceFileUrl: existing.sourceFileUrl || '',
+    syncedCostOrderId: existing.syncedCostOrderId || '',
+    aiStatus: state.priceReviewProcessImagePayload ? 'AI已辨識／待人工確認' : existing.aiStatus || '',
+    aiRawText: state.priceReviewAiRawText || existing.aiRawText || '',
     supplier: $('priceReviewSupplier').value.trim(),
     quoteDate: $('priceReviewQuoteDate').value,
     taxType: $('priceReviewTaxType').value.trim(),
@@ -4767,7 +4991,9 @@ async function savePriceReviewRecords(records, successMessage='待認證價格�
     const index = state.priceReviews.findIndex((row)=>row.id===item.id);
     if (index >= 0) state.priceReviews[index]=item; else state.priceReviews.push(item);
   });
+  syncStateAliases();
   renderPriceReviews();
+  renderMachineCards();
   renderEstimateDraft();
   if(successMessage && !options.silent)showNotice(successMessage,'success');
   return { saved, result: response.result || {} };
@@ -4784,8 +5010,20 @@ async function savePriceReviewFromDialog(event) {
   const button = $('savePriceReviewDialog');
   button.disabled = true;
   try {
-    await savePriceReviewRecords([record], record.status==='已認證'?'價格已認證並納入智能估價。':'待認證價格已更新。');
-    closePriceReviewDialog();
+    const existing=state.priceReviews.find((row)=>row.id===record.id)||record;
+    const shouldRunCertificationFlow = record.status === '已認證' && (
+      record.syncCost || existing.status !== '已認證' || !existing.syncedCostOrderId
+    );
+    if(shouldRunCertificationFlow){
+      const result=await certifyPriceReviewWithSync({...existing,...record},{interactive:true,machineId:record.machineId});
+      if(result.cancelled)return;
+      closePriceReviewDialog();populateControls();showNotice(result.synced?'價格已認證並同步為機台成本紀錄。':'價格已認證並納入估價基準。','success');
+    }else{
+      record.syncCost=false;
+      await savePriceReviewRecords([record], '');
+      closePriceReviewDialog();populateControls();
+      showNotice('價格認證資料已儲存，機台總覽已同步更新。','success');
+    }
   } catch(error) {
     showNotice(`儲存失敗：${error.message}`,'error');
   } finally {
@@ -4793,25 +5031,308 @@ async function savePriceReviewFromDialog(event) {
   }
 }
 
+function updatePriceReviewAutomaticUnit() {
+  const material = $('priceReviewMaterial')?.value || '';
+  const itemName = $('priceReviewItemName')?.value || '';
+  const unit = automaticPricingUnitForMaterial(material, itemName);
+  if ($('priceReviewUnit')) $('priceReviewUnit').value = unit;
+  if ($('priceReviewAutoUnit')) $('priceReviewAutoUnit').textContent = unit;
+  return unit;
+}
+
+function handlePriceReviewSelectionChange(event) {
+  const checkbox = event.target.closest('[data-select-price-review]');
+  if (!checkbox) return;
+  const id = checkbox.dataset.selectPriceReview;
+  if (checkbox.checked) state.priceReviewSelectedIds.add(id);
+  else state.priceReviewSelectedIds.delete(id);
+  checkbox.closest('.priceReviewCard')?.classList.toggle('selected', checkbox.checked);
+  updatePriceReviewSelectionControls();
+}
+
+function eligibleVisiblePriceReviews() {
+  const keyword = norm($('priceReviewSearch')?.value || '');
+  const statusFilter = $('priceReviewStatusFilter')?.value || '';
+  return state.priceReviews.filter((row) =>
+    row.status !== '已認證' && toNumber(row.unitPrice) > 0 &&
+    (!statusFilter || row.status === statusFilter) &&
+    (!keyword || norm([row.sourceFile,row.project,row.itemCode,row.itemName,row.material,row.processTags,row.supplier,row.note].join(' ')).includes(keyword))
+  );
+}
+
+function updatePriceReviewSelectionControls(visibleRows = null) {
+  const eligible = (visibleRows || eligibleVisiblePriceReviews()).filter((row)=>row.status !== '已認證' && toNumber(row.unitPrice) > 0);
+  const selectedCount = [...state.priceReviewSelectedIds].filter((id)=>state.priceReviews.some((row)=>row.id===id && row.status !== '已認證')).length;
+  const selectAll = $('priceReviewSelectAll');
+  if (selectAll) {
+    const selectedVisible = eligible.filter((row)=>state.priceReviewSelectedIds.has(row.id)).length;
+    selectAll.checked = eligible.length > 0 && selectedVisible === eligible.length;
+    selectAll.indeterminate = selectedVisible > 0 && selectedVisible < eligible.length;
+    selectAll.disabled = eligible.length === 0;
+  }
+  const button = $('batchCertifyPriceReviews');
+  if (button) {
+    button.disabled = selectedCount === 0;
+    button.textContent = selectedCount ? `批次認證選中項目（${selectedCount}）` : '批次認證選中項目';
+  }
+}
+
+function handlePriceReviewSelectAll(event) {
+  eligibleVisiblePriceReviews().forEach((row)=>{
+    if (event.target.checked) state.priceReviewSelectedIds.add(row.id);
+    else state.priceReviewSelectedIds.delete(row.id);
+  });
+  renderPriceReviews();
+}
+
+function comparableText(value) {
+  return standardizeErpText(value || '').toLowerCase().replace(/[\s　_\-－—–/／()（）【】\[\],，.。:：]+/g,'');
+}
+
+function levenshteinSimilarity(a, b) {
+  const left = [...comparableText(a)];
+  const right = [...comparableText(b)];
+  if (!left.length && !right.length) return 1;
+  if (!left.length || !right.length) return 0;
+  const previous = Array.from({length:right.length+1},(_,i)=>i);
+  for (let i=1;i<=left.length;i+=1) {
+    const current=[i];
+    for (let j=1;j<=right.length;j+=1) {
+      current[j]=Math.min(current[j-1]+1,previous[j]+1,previous[j-1]+(left[i-1]===right[j-1]?0:1));
+    }
+    for (let j=0;j<current.length;j+=1) previous[j]=current[j];
+  }
+  return 1-previous[right.length]/Math.max(left.length,right.length);
+}
+
+function machineMatchScore(machine, text) {
+  const query = comparableText(text);
+  if (!query) return 0;
+  const code = comparableText(machine.code);
+  const name = comparableText(machine.name);
+  if (query === code || query === name) return 1;
+  if ((name && query.includes(name)) || (query && name.includes(query))) return 0.95;
+  return Math.max(levenshteinSimilarity(query,name), code ? levenshteinSimilarity(query,code) : 0);
+}
+
+function bestMachineMatchForReview(review) {
+  if (review?.machineId && machineById(review.machineId)) return { machine: machineById(review.machineId), score: 1 };
+  const source = review?.project || '';
+  const candidates = state.machines.map((machine)=>({machine,score:machineMatchScore(machine,source)})).sort((a,b)=>b.score-a.score);
+  return candidates[0]?.score >= 0.8 ? candidates[0] : null;
+}
+
+function reviewDimensions(review) {
+  return { widthMm:toNumber(review?.widthMm), heightMm:toNumber(review?.heightMm) };
+}
+
+function costItemDimensions(item) {
+  const parsed = parseDimensions(item?.spec || '');
+  return { widthMm:toNumber(parsed.widthMm), heightMm:toNumber(parsed.heightMm) };
+}
+
+function dimensionsWithinFiveMm(a,b) {
+  if (!(a.widthMm>0&&a.heightMm>0&&b.widthMm>0&&b.heightMm>0)) return false;
+  const direct=Math.abs(a.widthMm-b.widthMm)<5&&Math.abs(a.heightMm-b.heightMm)<5;
+  const rotated=Math.abs(a.widthMm-b.heightMm)<5&&Math.abs(a.heightMm-b.widthMm)<5;
+  return direct||rotated;
+}
+
+function findPriceReviewCostConflicts(review, machineId = review?.machineId) {
+  if (!machineId) return [];
+  const targetDims=reviewDimensions(review);
+  const orderMap=new Map(state.costOrders.map((order)=>[order.id,order]));
+  return state.costItems.map((item)=>({item,order:orderMap.get(item.costOrderId)}))
+    .filter(({item,order})=>order&&order.machineId===machineId&&order.type===(review.costType||'打樣版費用')&&item.itemType!=='附加費用')
+    .filter(({item})=>levenshteinSimilarity(review.itemName,item.name)>=0.8)
+    .filter(({item})=>strictMaterialCompatibility(review.material,item.material))
+    .filter(({item})=>dimensionsWithinFiveMm(targetDims,costItemDimensions(item)))
+    .map(({item,order})=>({
+      item,order,
+      sameAmount:Math.abs(toNumber(item.price)-toNumber(review.unitPrice))<0.01,
+      nameScore:levenshteinSimilarity(review.itemName,item.name),
+    }));
+}
+
+let certificationMachineResolver = null;
+function requestCertificationMachine(review) {
+  const dialog=$('certifyMachineDialog');
+  if (!dialog) return Promise.resolve({cancelled:false,machineId:'',certifyOnly:true});
+  $('certifyMachineItemName').textContent=review.itemName||'未命名品項';
+  const select=$('certifyMachineSelect');
+  select.innerHTML='<option value="">僅認證，不歸入機台</option>'+state.machines.map((machine)=>`<option value="${escapeHTML(machine.id)}">${escapeHTML(machine.name)}${machine.code?`（${escapeHTML(machine.code)}）`:''}</option>`).join('');
+  dialog.showModal();
+  return new Promise((resolve)=>{certificationMachineResolver=resolve;});
+}
+function closeCertificationMachineDialog(result={cancelled:true}) {
+  $('certifyMachineDialog')?.close();
+  const resolve=certificationMachineResolver; certificationMachineResolver=null;
+  if(resolve)resolve(result);
+}
+function handleCertificationMachineDialogClick(event) {
+  const action=event.target.closest('[data-certify-machine-action]')?.dataset.certifyMachineAction;
+  if(!action)return;
+  if(action==='cancel'){closeCertificationMachineDialog({cancelled:true});return;}
+  const machineId=$('certifyMachineSelect')?.value||'';
+  closeCertificationMachineDialog({cancelled:false,machineId,certifyOnly:!machineId});
+}
+
+let priceConflictResolver = null;
+function resolvePriceConflict(review, conflicts) {
+  const dialog=$('priceConflictDialog');
+  const conflict=conflicts[0];
+  if(!dialog||!conflict)return Promise.resolve({action:'add'});
+  const same=conflicts.every((entry)=>entry.sameAmount);
+  $('priceConflictTitle').textContent=same?'已存在相同價格':'發現價格衝突';
+  $('priceConflictMessage').innerHTML=same
+    ? `機台內已有「<strong>${escapeHTML(conflict.item.name)}</strong>」，單價同為 <strong>${money(conflict.item.price)}</strong>。建議不要重複建立成本明細。`
+    : `機台內已有「<strong>${escapeHTML(conflict.item.name)}</strong>」單價 <strong>${money(conflict.item.price)}</strong>，新價格為 <strong>${money(review.unitPrice)}</strong>。請選擇處理方式。`;
+  const actions=$('priceConflictActions');
+  actions.innerHTML=same
+    ? `<button class="button primary" type="button" data-conflict-action="skip">跳過重複成本（建議）</button><button class="button secondary" type="button" data-conflict-action="add">兩筆都保留</button><button class="button ghost" type="button" data-conflict-action="cancel">取消</button>`
+    : `<button class="button secondary" type="button" data-conflict-action="keep">保留既有價格</button><button class="button primary" type="button" data-conflict-action="update" data-conflict-item-id="${escapeHTML(conflict.item.id)}">更新既有成本</button><button class="button secondary" type="button" data-conflict-action="add">兩筆都保留</button><button class="button ghost" type="button" data-conflict-action="cancel">取消</button>`;
+  dialog.showModal();
+  return new Promise((resolve)=>{priceConflictResolver=resolve;});
+}
+function handlePriceConflictDialogClick(event) {
+  const button=event.target.closest('[data-conflict-action]');
+  if(!button)return;
+  const result={action:button.dataset.conflictAction,itemId:button.dataset.conflictItemId||''};
+  $('priceConflictDialog')?.close();
+  const resolve=priceConflictResolver;priceConflictResolver=null;
+  if(resolve)resolve(result);
+}
+
+async function certifyPriceReviewWithSync(review, options={}) {
+  if(!review)return{cancelled:true};
+  if(!review.unitPrice||!review.quoteDate||!review.supplier){
+    if(options.interactive!==false){openPriceReviewDialog({...review,status:'已認證',includeBaseline:'是'});showNotice('請補齊實際單價、正式報價日期與供應商後再認證。','warn');}
+    return{cancelled:true,reason:'missing'};
+  }
+  let machineId=options.machineId||review.machineId||bestMachineMatchForReview(review)?.machine?.id||'';
+  let certifyOnly=Boolean(options.certifyOnly);
+  if(!machineId&&!certifyOnly){
+    if(options.interactive===false)certifyOnly=true;
+    else{
+      const choice=await requestCertificationMachine(review);
+      if(choice.cancelled)return{cancelled:true};
+      machineId=choice.machineId||'';certifyOnly=choice.certifyOnly;
+    }
+  }
+  const record={...priceReviewToRecord(review),machineId,project:review.project||machineById(machineId)?.name||'',status:'已認證',includeBaseline:'是'};
+  let resolution=options.resolution||'';
+  let conflictItemId=options.conflictItemId||'';
+  let conflicts=[];
+  if(machineId&&!certifyOnly){
+    conflicts=findPriceReviewCostConflicts({...review,machineId},machineId);
+    if(conflicts.length&&!resolution){
+      if(options.interactive===false)resolution=conflicts.every((entry)=>entry.sameAmount)?'skip':'keep';
+      else{
+        const choice=await resolvePriceConflict(review,conflicts);
+        if(choice.action==='cancel')return{cancelled:true};
+        resolution=choice.action;conflictItemId=choice.itemId||conflicts[0].item.id;
+      }
+    }
+    if(!conflicts.length&&!resolution)resolution='add';
+  }
+  if(certifyOnly||resolution==='skip'||resolution==='keep'){
+    record.syncCost=false;
+    record.syncResolution=resolution||'certifyOnly';
+  }else{
+    record.syncCost=true;
+    record.syncResolution=resolution||'add';
+    record.conflictItemId=conflictItemId;
+  }
+  const result=await savePriceReviewRecords([record],'',{silent:true});
+  state.priceReviewSelectedIds.delete(review.id);
+  if(record.syncCost&&options.reload!==false)await loadData();
+  else{syncStateAliases();renderPriceReviews();renderMachineCards();renderEstimateDraft();}
+  return{cancelled:false,synced:Boolean(record.syncCost),resolution:record.syncResolution,result};
+}
+
+function renderBatchCertificationRows() {
+  const body=$('batchCertificationRows');
+  if(!body)return;
+  body.innerHTML=(state.batchCertificationDraft||[]).map((entry,index)=>{
+    const review=entry.review;
+    const conflict=entry.conflicts?.[0];
+    const conflictText=!entry.machineId?'未指定機台｜只納入價格基準':!conflict?'無衝突｜將建立機台成本':conflict.sameAmount?`相同價格已存在 ${money(conflict.item.price)}`:`既有 ${money(conflict.item.price)}／新 ${money(review.unitPrice)}`;
+    const options=!entry.machineId
+      ? '<option value="certifyOnly">僅認證不歸入</option>'
+      : !conflict
+        ? '<option value="add">建立機台成本</option>'
+        : conflict.sameAmount
+          ? '<option value="skip">跳過重複成本（建議）</option><option value="add">兩筆都留</option>'
+          : '<option value="keep">保留既有</option><option value="update">更新既有</option><option value="add">兩筆都留</option>';
+    return `<div class="batchCertificationRow" data-batch-cert-index="${index}">
+      <label class="batchCertificationInclude"><input type="checkbox" data-batch-cert-field="include" ${entry.include?'checked':''}> <span>${escapeHTML(review.itemName)}</span></label>
+      <select data-batch-cert-field="machineId"><option value="">不歸入機台</option>${state.machines.map((machine)=>`<option value="${escapeHTML(machine.id)}" ${entry.machineId===machine.id?'selected':''}>${escapeHTML(machine.name)}</option>`).join('')}</select>
+      <span class="batchConflictText ${conflict?'hasConflict':'clear'}">${escapeHTML(conflictText)}</span>
+      <select data-batch-cert-field="resolution">${options}</select>
+    </div>`;
+  }).join('');
+  (state.batchCertificationDraft||[]).forEach((entry,index)=>{
+    const select=body.querySelector(`[data-batch-cert-index="${index}"] [data-batch-cert-field="resolution"]`);
+    if(select&&[...select.options].some((option)=>option.value===entry.resolution))select.value=entry.resolution;
+  });
+}
+
+function openBatchCertificationDialog() {
+  const reviews=[...state.priceReviewSelectedIds].map((id)=>state.priceReviews.find((row)=>row.id===id)).filter(Boolean);
+  if(!reviews.length){showNotice('請先選取要批次認證的資料。','warn');return;}
+  state.batchCertificationDraft=reviews.map((review)=>{
+    const machineId=review.machineId||bestMachineMatchForReview(review)?.machine?.id||'';
+    const conflicts=machineId?findPriceReviewCostConflicts({...review,machineId},machineId):[];
+    return{review,machineId,conflicts,include:true,resolution:!machineId?'certifyOnly':!conflicts.length?'add':conflicts.every((entry)=>entry.sameAmount)?'skip':'keep'};
+  });
+  renderBatchCertificationRows();
+  $('batchCertificationSummary').textContent=`共 ${reviews.length} 筆；衝突會集中列出，系統不會靜默覆蓋。`;
+  $('batchCertificationDialog')?.showModal();
+}
+function closeBatchCertificationDialog(){state.batchCertificationDraft=[];$('batchCertificationDialog')?.close();}
+function handleBatchCertificationChange(event){
+  const row=event.target.closest('[data-batch-cert-index]');
+  const field=event.target.dataset.batchCertField;
+  if(!row||!field)return;
+  const entry=state.batchCertificationDraft?.[Number(row.dataset.batchCertIndex)];if(!entry)return;
+  if(field==='include')entry.include=event.target.checked;
+  if(field==='resolution')entry.resolution=event.target.value;
+  if(field==='machineId'){
+    entry.machineId=event.target.value;
+    entry.conflicts=entry.machineId?findPriceReviewCostConflicts({...entry.review,machineId:entry.machineId},entry.machineId):[];
+    entry.resolution=!entry.machineId?'certifyOnly':!entry.conflicts.length?'add':entry.conflicts.every((item)=>item.sameAmount)?'skip':'keep';
+    renderBatchCertificationRows();
+  }
+}
+async function executeBatchCertification(event){
+  event.preventDefault();
+  const entries=(state.batchCertificationDraft||[]).filter((entry)=>entry.include);
+  if(!entries.length){showNotice('至少選擇一筆資料。','warn');return;}
+  const button=$('confirmBatchCertification');button.disabled=true;button.textContent='認證中…';
+  let success=0,synced=0;const failures=[];
+  try{
+    for(const entry of entries){
+      try{
+        const result=await certifyPriceReviewWithSync(entry.review,{interactive:false,machineId:entry.machineId,certifyOnly:entry.resolution==='certifyOnly',resolution:entry.resolution,conflictItemId:entry.conflicts?.[0]?.item?.id||'',reload:false});
+        if(!result.cancelled){success+=1;if(result.synced)synced+=1;}else failures.push(`${entry.review.itemName}：資料不完整`);
+      }catch(error){failures.push(`${entry.review.itemName}：${error.message}`);}
+    }
+    if(synced)await loadData();else{syncStateAliases();renderPriceReviews();renderMachineCards();}
+    closeBatchCertificationDialog();
+    showNotice(`批次認證完成 ${success} 筆，其中 ${synced} 筆同步至機台${failures.length?`；失敗 ${failures.length} 筆：${failures.slice(0,3).join('、')}`:''}`,failures.length?'warn':'success');
+  }finally{button.disabled=false;button.textContent='執行批次認證';}
+}
+
 async function handlePriceReviewRowsClick(event) {
   const edit = event.target.closest('[data-edit-review]');
-  if (edit) {
-    openPriceReviewDialog(state.priceReviews.find((row)=>row.id===edit.dataset.editReview));
-    return;
-  }
+  if (edit) { openPriceReviewDialog(state.priceReviews.find((row)=>row.id===edit.dataset.editReview)); return; }
   const certify = event.target.closest('[data-certify-review]');
   if (certify) {
-    const review = state.priceReviews.find((row)=>row.id===certify.dataset.certifyReview);
-    if (!review) return;
-    if (!review.quoteDate || !review.supplier) {
-      openPriceReviewDialog({...review,status:'已認證',includeBaseline:'是'});
-      showNotice('請補齊正式報價日期與供應商後再認證。','warn');
-      return;
-    }
-    if (!confirm(`確定將「${review.itemName}」認證並納入智能估價基準嗎？`)) return;
-    try {
-      await savePriceReviewRecords([{...priceReviewToRecord(review),status:'已認證',includeBaseline:'是'}],'價格已認證並納入智能估價。');
-    } catch(error) { showNotice(`認證失敗：${error.message}`,'error'); }
+    const review=state.priceReviews.find((row)=>row.id===certify.dataset.certifyReview);
+    try{
+      const result=await certifyPriceReviewWithSync(review,{interactive:true});
+      if(!result.cancelled)showNotice(result.synced?'價格已認證並同步至機台成本。':'價格已認證並納入估價基準。','success');
+    }catch(error){showNotice(`認證失敗：${error.message}`,'error');}
     return;
   }
   const del = event.target.closest('[data-delete-review]');
@@ -4821,9 +5342,143 @@ async function handlePriceReviewRowsClick(event) {
   try {
     await secureApiRequest({action:'deletePriceReview',id:del.dataset.deleteReview},{timeoutMs:30000});
     state.priceReviews=state.priceReviews.filter((row)=>row.id!==del.dataset.deleteReview);
+    state.priceReviewSelectedIds.delete(del.dataset.deleteReview);
+    syncStateAliases();
     renderPriceReviews(); renderEstimateDraft();
     showNotice('待認證價格已刪除。','success');
   } catch(error) { showNotice(`刪除失敗：${error.message}`,'error'); }
+}
+
+function aiBatchRecordFromItem(raw,index,result,file){
+  const item=normalizeAIExtractedItem(raw||{});
+  const dims=parseDimensions(item.spec||'');
+  const widthMm=toNumber(item.widthMm||dims.widthMm);
+  const heightMm=toNumber(item.heightMm||dims.heightMm);
+  const qty=Math.max(1,toNumber(item.qty)||1);
+  const unitPrice=toNumber(item.price||item.documentUnitPrice)||(toNumber(item.amount||item.documentAmount)>0?toNumber(item.amount||item.documentAmount)/qty:0);
+  return{
+    tempId:`AI-${Date.now()}-${index}`,
+    include:true,
+    itemName:item.name||item.originalName||`AI品項 ${index+1}`,
+    itemCode:item.fileName||item.code||'',
+    material:item.material||'',
+    thicknessMm:toNumber(item.thicknessMm||item.thickness),
+    widthMm,heightMm,qty,
+    unit:automaticPricingUnitForMaterial(item.material,[item.name,item.spec].join(' ')),
+    unitPrice,
+    processTags:processTagsText(item.processTags||item.processes||[]),
+    supplier:result.supplier||'',quoteDate:normalizeDate(result.date||''),project:result.project||'',
+    taxType:result.quotationMode||'',sourceFile:file.name,note:item.note||'',confidence:toNumber(item.confidence)<=1?toNumber(item.confidence)*100:toNumber(item.confidence),
+  };
+}
+
+async function handlePriceReviewAiBatchFile(event){
+  const file=event.target.files?.[0];event.target.value='';if(!file)return;
+  const status=$('priceReviewAiBatchStatus');
+  try{
+    status.textContent='正在準備檔案並呼叫 Gemini 辨識…';
+    const document=await prepareQuotationDocument(file);
+    const response=await secureApiRequest({action:'analyzeQuotation',document:stripDataUrl(document),...getAiRecognitionConstraints()},{timeoutMs:240000});
+    const result=response.result||{};
+    const items=(Array.isArray(result.items)?result.items:[]).map((item,index)=>aiBatchRecordFromItem(item,index,result,file));
+    if(!items.length)throw new Error('AI 沒有辨識出可建立的品項。');
+    state.priceReviewAiBatch={document,fileName:file.name,rawText:result.rawText||'',issues:result.issues||[],items};
+    renderPriceReviewAiBatch();
+    $('priceReviewAiBatchSupplier').value=result.supplier||'';
+    $('priceReviewAiBatchDate').value=normalizeDate(result.date||'');
+    $('priceReviewAiBatchProject').value=result.project||'';
+    $('priceReviewAiBatchStatus').textContent=`已辨識 ${items.length} 筆，請確認後批次建立為待認證。`;
+    $('priceReviewAiBatchDialog')?.showModal();
+  }catch(error){status.textContent=`AI 辨識失敗：${error.message}`;showNotice(`AI 掃描失敗：${error.message}`,'error');}
+}
+
+function renderPriceReviewAiBatch(){
+  const root=$('priceReviewAiBatchRows');if(!root)return;
+  const items=state.priceReviewAiBatch?.items||[];
+  root.innerHTML=items.map((item,index)=>`<article class="aiBatchReviewCard" data-ai-batch-index="${index}">
+    <div class="aiBatchReviewHead"><label><input type="checkbox" data-ai-batch-field="include" ${item.include?'checked':''}> 建立此筆</label><span class="confidenceSemanticBadge ${estimateConfidenceMeta(item.confidence).className}">${estimateConfidenceMeta(item.confidence).label}</span></div>
+    <div class="aiBatchReviewGrid">
+      <label class="wide"><span>品項名稱</span><input data-ai-batch-field="itemName" value="${escapeHTML(item.itemName)}"></label>
+      <label><span>品項代碼</span><input data-ai-batch-field="itemCode" value="${escapeHTML(item.itemCode)}"></label>
+      <label><span>材質</span><select data-ai-batch-field="material">${standardMaterialOptionsHtml(item.material)}</select></label>
+      <label><span>厚度 mm</span><input type="number" step="0.1" data-ai-batch-field="thicknessMm" value="${item.thicknessMm||''}"></label>
+      <label><span>寬 mm</span><input type="number" step="0.1" data-ai-batch-field="widthMm" value="${item.widthMm||''}"></label>
+      <label><span>高 mm</span><input type="number" step="0.1" data-ai-batch-field="heightMm" value="${item.heightMm||''}"></label>
+      <label><span>數量</span><input type="number" min="1" step="1" data-ai-batch-field="qty" value="${item.qty}"></label>
+      <label><span>自動單位</span><strong class="aiBatchAutoUnit">${escapeHTML(item.unit)}</strong></label>
+      <label><span>實際單價 TWD</span><input type="number" min="0" step="0.01" data-ai-batch-field="unitPrice" value="${item.unitPrice||''}"></label>
+      <div class="wide aiBatchProcessField"><span>製程標籤</span><div class="processTagButtons compactTags">${processTagButtonsHtml(item.processTags,'data-ai-batch-process',index)}</div><small>${escapeHTML(item.processTags||'尚未選擇')}</small></div>
+    </div>
+  </article>`).join('');
+}
+function handlePriceReviewAiBatchInput(event){
+  const card=event.target.closest('[data-ai-batch-index]');const field=event.target.dataset.aiBatchField;if(!card||!field)return;
+  const item=state.priceReviewAiBatch?.items?.[Number(card.dataset.aiBatchIndex)];if(!item)return;
+  if(field==='include')item.include=event.target.checked;
+  else if(['thicknessMm','widthMm','heightMm','qty','unitPrice'].includes(field))item[field]=toNumber(event.target.value);
+  else item[field]=event.target.value;
+  if(field==='material'){
+    item.unit=automaticPricingUnitForMaterial(item.material,item.itemName);
+    card.querySelector('.aiBatchAutoUnit').textContent=item.unit;
+  }
+}
+function handlePriceReviewAiBatchClick(event){
+  const button=event.target.closest('[data-ai-batch-process]');if(!button)return;
+  const item=state.priceReviewAiBatch?.items?.[Number(button.dataset.aiBatchProcess)];if(!item)return;
+  const tags=new Set(normalizeProcessTags(item.processTags));const tag=canonicalProcessTag(button.dataset.processTag);
+  if(tags.has(tag))tags.delete(tag);else tags.add(tag);item.processTags=[...tags].join('、');
+  const selected=tags.has(tag);button.classList.toggle('selected',selected);button.setAttribute('aria-pressed',selected?'true':'false');
+  const summary=button.closest('.aiBatchProcessField')?.querySelector('small');if(summary)summary.textContent=item.processTags||'尚未選擇';
+}
+function closePriceReviewAiBatchDialog(){state.priceReviewAiBatch=null;$('priceReviewAiBatchDialog')?.close();}
+async function savePriceReviewAiBatch(event){
+  event.preventDefault();const batch=state.priceReviewAiBatch;if(!batch)return;
+  const selected=batch.items.filter((item)=>item.include&&item.itemName.trim());if(!selected.length){showNotice('至少選擇一筆有效品項。','warn');return;}
+  const supplier=$('priceReviewAiBatchSupplier').value.trim();const quoteDate=$('priceReviewAiBatchDate').value;const project=$('priceReviewAiBatchProject').value.trim();
+  const records=selected.map((item,index)=>({
+    sourceFile:batch.fileName,sourceRow:index+1,fileSavedDate:new Date().toISOString().slice(0,10),quoteDate,supplier,project,
+    itemCode:item.itemCode,itemName:item.itemName,material:item.material,thicknessMm:item.thicknessMm,widthMm:item.widthMm,heightMm:item.heightMm,
+    qty:item.qty||1,unit:automaticPricingUnitForMaterial(item.material,item.itemName),unitPrice:item.unitPrice||'',processTags:item.processTags,
+    taxType:'',status:item.unitPrice>0?'待認證':'待補價格',includeBaseline:'否',note:[item.note,(batch.issues||[]).join('、')].filter(Boolean).join('｜'),
+    aiStatus:'AI批次辨識／待人工確認',aiRawText:batch.rawText,sourceDocument:stripDataUrl(batch.document),
+  }));
+  const button=$('savePriceReviewAiBatch');button.disabled=true;button.textContent='建立中…';
+  try{
+    await savePriceReviewRecords(records,`已由 AI 建立 ${records.length} 筆待認證資料。`);
+    closePriceReviewAiBatchDialog();
+    if($('priceReviewStatusFilter'))$('priceReviewStatusFilter').value='待認證';
+    renderPriceReviews();
+  }catch(error){showNotice(`批次建立失敗：${error.message}`,'error');}
+  finally{button.disabled=false;button.textContent='批次建立為待認證';}
+}
+
+let machineLinkDraft=null;
+function findPendingPriceMatchesForMachine(machine){
+  return state.priceReviews.filter((review)=>review.status!=='已認證'&&!review.machineId&&review.project&&machineMatchScore(machine,review.project)>=0.8);
+}
+async function offerPendingPriceLinksForMachine(machine){
+  const matches=findPendingPriceMatchesForMachine(machine);if(!matches.length)return;
+  machineLinkDraft={machine,matches,selected:new Set(matches.map((row)=>row.id))};
+  $('machineLinkTitle').textContent=`發現 ${matches.length} 筆可關聯資料`;
+  $('machineLinkMessage').textContent=`「${machine.name}」建立完成。以下待認證資料的專案／機台名稱相似度達 80%，請確認是否關聯。`;
+  $('machineLinkRows').innerHTML=matches.map((row)=>{
+    const score=Math.round(machineMatchScore(machine,row.project)*100);
+    return `<label class="machineLinkRow"><input type="checkbox" data-machine-link-review="${escapeHTML(row.id)}" checked><span><strong>${escapeHTML(row.itemName)}</strong><small>${escapeHTML(row.project)}｜${escapeHTML(row.material||'材質待補')}</small></span><span class="machineLinkScore">相似 ${score}%</span></label>`;
+  }).join('');
+  $('machineLinkDialog')?.showModal();
+}
+async function handleMachineLinkDialogClick(event){
+  const checkbox=event.target.closest('[data-machine-link-review]');
+  if(checkbox&&machineLinkDraft){if(checkbox.checked)machineLinkDraft.selected.add(checkbox.dataset.machineLinkReview);else machineLinkDraft.selected.delete(checkbox.dataset.machineLinkReview);return;}
+  const action=event.target.closest('[data-machine-link-action]')?.dataset.machineLinkAction;if(!action||!machineLinkDraft)return;
+  if(action==='later'){$('machineLinkDialog')?.close();machineLinkDraft=null;return;}
+  const ids=action==='all'?new Set(machineLinkDraft.matches.map((row)=>row.id)):machineLinkDraft.selected;
+  const records=machineLinkDraft.matches.filter((row)=>ids.has(row.id)).map((row)=>({...priceReviewToRecord(row),machineId:machineLinkDraft.machine.id,project:row.project||machineLinkDraft.machine.name}));
+  if(!records.length){showNotice('請至少選擇一筆資料。','warn');return;}
+  try{
+    await savePriceReviewRecords(records,`已將 ${records.length} 筆待認證資料關聯至「${machineLinkDraft.machine.name}」。`);
+    $('machineLinkDialog')?.close();machineLinkDraft=null;
+  }catch(error){showNotice(`關聯失敗：${error.message}`,'error');}
 }
 
 function mapPriceReviewCsvRow(headers, row) {
@@ -4837,6 +5492,7 @@ function mapPriceReviewCsvRow(headers, row) {
     quoteDate: map['正式報價日期'] || map['報價日期'],
     supplier: map['供應商'],
     project: map['專案／機台'] || map['專案/機台'],
+    machineId: map['機台ID'],
     itemCode: map['品項代碼'],
     itemName: map['繁中品項名稱'] || map['品項名稱'],
     material: map['標準材質'] || map['材質'],
@@ -5777,19 +6433,19 @@ function estimateLightStripByDatabase(item,basisKey){
 }
 
 
-function automaticEstimatePricingUnit(item){
-  const materialText=standardizeErpText(item?.material||item?.name||'');
-  if(isLightStripItem(item)){
-    const source=standardizeErpText([item?.spec,item?.originalSpec,item?.name,item?.material].filter(Boolean).join(' '));
-    return /(?:公分|\bcm\b)/i.test(source)&&!/(?:公尺|\bm\b)/i.test(source)?'公分':'公尺';
+function automaticPricingUnitForMaterial(material, sourceText=''){
+  const combined=standardizeErpText([material,sourceText].filter(Boolean).join(' '));
+  if(/燈條/.test(combined)){
+    return /(?:公分|\bcm\b)/i.test(combined)&&!/(?:公尺|\bm\b)/i.test(combined)?'公分':'公尺';
   }
-  const descriptor=materialDescriptor(materialText);
+  const descriptor=materialDescriptor(combined);
   if(['壓克力','PVC','PC','安迪板'].includes(descriptor.family))return'才';
-  if(descriptor.family==='貼紙'){
-    const explicit=standardizeErpText([item?.spec,item?.originalSpec,item?.unit].filter(Boolean).join(' '));
-    return /(?:每才|按才|才價|\/才)/.test(explicit)?'才':'件';
-  }
-  return String(item?.unit||'件').trim()||'件';
+  if(descriptor.family==='貼紙')return'件';
+  return'件';
+}
+
+function automaticEstimatePricingUnit(item){
+  return automaticPricingUnitForMaterial(item?.material||item?.name||'', [item?.spec,item?.originalSpec,item?.name].filter(Boolean).join(' '));
 }
 
 function applyAutomaticEstimatePricingUnit(item){
@@ -5816,47 +6472,56 @@ function unifiedHasIrregularShape(processTags,item){
   return /異[型形](?:裁切|切割)|切割外型/.test(raw);
 }
 
-function unifiedFourStageBundleUnitCost({exactCai,bundleRate,qty,wasteRatio,basisKey}){
+function calculateSinglePieceMaterialCost(bundlePricePerCai,exactCai,wasteRate,basisKey='sampleTwd'){
   const exact=Math.max(0,toNumber(exactCai));
-  const rate=Math.max(0,toNumber(bundleRate));
-  const quantityDiscount=unifiedQuantityDiscount(qty);
+  const rate=Math.max(0,toNumber(bundlePricePerCai));
   const minimum=unifiedStageRate(FOUR_STAGE_MIN_CHARGE_TWD,basisKey);
-  const waste=Math.max(0,toNumber(wasteRatio));
-  let beforeDiscount=0;
+  const waste=Math.max(0,toNumber(wasteRate));
+  let cost=0;
   let stage='';
   let expression='';
+  let billingCai=0;
 
   if(exact<FOUR_STAGE_SMALL_START_TSAI){
-    beforeDiscount=minimum;
+    cost=minimum;
     stage='超小件';
     expression=`超小件 ${Math.round(exact*10000)/10000}才：最低單件 ${Math.round(minimum*100)/100}`;
   }else if(exact<FOUR_STAGE_NEAR_ONE_START_TSAI){
-    const progress=(exact-FOUR_STAGE_SMALL_START_TSAI)/(FOUR_STAGE_NEAR_ONE_START_TSAI-FOUR_STAGE_SMALL_START_TSAI);
+    const ratio=(exact-FOUR_STAGE_SMALL_START_TSAI)/(FOUR_STAGE_NEAR_ONE_START_TSAI-FOUR_STAGE_SMALL_START_TSAI);
     const target=rate*FOUR_STAGE_NEAR_ONE_START_TSAI;
-    beforeDiscount=minimum+(target-minimum)*progress;
+    cost=minimum+(target-minimum)*ratio;
     stage='小件過渡';
-    expression=`小件線性插值：${Math.round(minimum*100)/100} + (${Math.round(target*100)/100} - ${Math.round(minimum*100)/100}) × ${Math.round(progress*10000)/10000}`;
+    expression=`小件線性插值：${Math.round(minimum*100)/100} + (${Math.round(target*100)/100} - ${Math.round(minimum*100)/100}) × ${Math.round(ratio*10000)/10000}`;
   }else if(exact<FOUR_STAGE_STANDARD_START_TSAI){
-    beforeDiscount=rate;
+    cost=rate;
     stage='接近1才';
     expression=`接近1才：1才包價 ${Math.round(rate*100)/100}（不加耗損）`;
   }else{
-    const billing=Math.max(1,Math.ceil(exact));
-    beforeDiscount=billing*rate*(1+waste);
+    billingCai=Math.max(1,Math.ceil(exact));
+    cost=billingCai*rate*(1+waste);
     stage='標準件';
-    expression=`${billing}才 × ${Math.round(rate*100)/100}/才 × ${Math.round((1+waste)*10000)/10000}(含耗損)`;
+    expression=`${billingCai}才 × ${Math.round(rate*100)/100}/才 × ${Math.round((1+waste)*10000)/10000}(含耗損)`;
   }
 
-  const unitCost=beforeDiscount*quantityDiscount;
-  if(quantityDiscount<1)expression+=` × ${quantityDiscount}(多件折扣)`;
+  return{cost,stage,expression,minimum,exactCai:exact,billingCai};
+}
+
+function unifiedFourStageBundleUnitCost({exactCai,bundleRate,qty,wasteRatio,basisKey}){
+  const single=calculateSinglePieceMaterialCost(bundleRate,exactCai,wasteRatio,basisKey);
+  const quantityDiscount=unifiedQuantityDiscount(qty);
+  const unitCost=single.cost*quantityDiscount;
+  const expression=quantityDiscount<1
+    ?`${single.expression} × ${quantityDiscount}(多件折扣)`
+    :single.expression;
   return{
     unitCost,
-    beforeDiscount,
-    stage,
+    beforeDiscount:single.cost,
+    stage:single.stage,
     expression,
     quantityDiscount,
-    minimum,
-    exactCai:exact,
+    minimum:single.minimum,
+    exactCai:single.exactCai,
+    billingCai:single.billingCai,
   };
 }
 
@@ -5942,9 +6607,9 @@ function estimateProcessSummaryText(item) {
 function applyEstimateProcessSummary(item, value) {
   const tags=normalizeProcessTags(value||'');
   item.processSummary=tags.join('、');
-  const printGroup=new Set(PROCESS_TAG_GROUPS.find((group)=>group.label==='印刷')?.tags||[]);
-  const effectGroup=new Set(PROCESS_TAG_GROUPS.find((group)=>group.label==='表面效果')?.tags||[]);
-  const processGroup=new Set(PROCESS_TAG_GROUPS.find((group)=>group.label==='加工')?.tags||[]);
+  const printGroup=new Set(['四色直噴','白色直噴','四色黑','網版印刷','黑色直噴','正面印刷','背面印刷','雙面印刷','局部白墨','滿版白墨']);
+  const effectGroup=new Set(['3D膜','鏡面貼紙','噴砂','不透光銀底印刷','霧膜','亮膜','不透光處理']);
+  const processGroup=new Set([...STANDARD_PROCESS_TAGS].filter((tag)=>!printGroup.has(tag)&&!effectGroup.has(tag)));
   const print=tags.filter((tag)=>printGroup.has(tag));
   const effects=tags.filter((tag)=>effectGroup.has(tag));
   const processes=tags.filter((tag)=>processGroup.has(tag));
@@ -7411,7 +8076,7 @@ function renderEstimateDraft(){
       :0;
 
     return `<article class="estimateQuickCard estimateThreeLayerCard ${aiMissing.size?'hasAiMissing':''} ${hasCriticalAiMissing?'error-highlight':''} ${needsAiReview?'ai-review-card':''}" data-estimate-index="${index}">
-      ${warning?`<div class="estimateWarningBanner ${escapeHTML(warning.kind)}"><span>${escapeHTML(warning.message)}</span>${warning.showProcessButton?`<button type="button" data-estimate-open-process="${index}">＋ 補充製程</button>`:''}</div>`:''}
+      ${warning?`<div class="estimateWarningBanner ${escapeHTML(warning.kind)}"><span>${escapeHTML(warning.message)}</span>${warning.showProcessButton?`<button type="button" data-estimate-open-process="${index}">[+ 補充製程]</button>`:''}</div>`:''}
 
       <header class="estimateSummaryLayer">
         <div class="estimateSummaryMain">
@@ -7750,7 +8415,7 @@ function updateEstimateWarningBanner(card,item,index){
     banner?.remove();
     return;
   }
-  const html=`<span>${escapeHTML(warning.message)}</span>${warning.showProcessButton?`<button type="button" data-estimate-open-process="${index}">＋ 補充製程</button>`:''}`;
+  const html=`<span>${escapeHTML(warning.message)}</span>${warning.showProcessButton?`<button type="button" data-estimate-open-process="${index}">[+ 補充製程]</button>`:''}`;
   if(!banner){
     card.insertAdjacentHTML('afterbegin',`<div class="estimateWarningBanner ${escapeHTML(warning.kind)}">${html}</div>`);
     banner=card.querySelector('.estimateWarningBanner');

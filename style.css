@@ -2616,3 +2616,284 @@ body.estimate-developer-mode .estimateDeveloperLayer{display:grid;gap:11px}
   .quickMachineDialogGrid label.wide { grid-column: auto; }
   .homeImportHint { width: 100%; }
 }
+
+
+/* v3.21 歷史價格機台同步與附件 AI */
+.reviewTag { background:#eef7f4; color:#176b5b; }
+.machineReviewSection { margin:18px 0; padding:16px; border:1px solid #d8e4e2; border-radius:16px; background:#f8fbfa; }
+.machineReviewHead { display:flex; align-items:flex-start; justify-content:space-between; gap:12px; margin-bottom:12px; }
+.machineReviewHead h3 { margin:0 0 4px; }
+.machineReviewHead p { margin:0; color:var(--muted); font-size:13px; }
+.machineReviewList { display:grid; gap:8px; }
+.machineReviewRow { display:grid; grid-template-columns:minmax(0,1fr) auto auto; align-items:center; gap:14px; padding:12px; border:1px solid #e2e8e6; border-radius:12px; background:white; }
+.machineReviewRow > div:first-child { display:grid; grid-template-columns:auto 1fr; gap:4px 8px; align-items:center; min-width:0; }
+.machineReviewRow small { grid-column:1/-1; color:var(--muted); }
+.machineReviewAmount { text-align:right; display:flex; flex-direction:column; }
+.machineReviewActions { display:flex; gap:6px; flex-wrap:wrap; justify-content:flex-end; }
+.priceReviewPdfPreview { width:100%; min-height:260px; border:0; border-radius:10px; background:white; }
+.syncMachineCostField { align-items:flex-start; }
+.syncMachineCostField span { font-weight:700; }
+.syncMachineCostField small { display:block; margin-top:3px; color:var(--muted); }
+#priceReviewMachine + small { display:block; margin-top:5px; color:var(--muted); }
+@media (max-width:760px) {
+  .machineReviewRow { grid-template-columns:1fr; }
+  .machineReviewAmount { text-align:left; }
+  .machineReviewActions { justify-content:flex-start; }
+}
+
+/* v3.23｜v3.18+ 四大指令完整整合 */
+.processMoreGroup {
+  border-top: 1px dashed #d5dfdc;
+  padding-top: 8px;
+}
+.processMoreGroup > summary {
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  padding: 7px 10px;
+  border-radius: 10px;
+  color: #35616a;
+  font-size: 12px;
+  font-weight: 900;
+  cursor: pointer;
+  list-style: none;
+}
+.processMoreGroup > summary::-webkit-details-marker { display: none; }
+.processMoreGroup > summary:hover,
+.processMoreGroup > summary:focus-visible { background: #eaf3f1; outline: none; }
+.processMoreGroup[open] > summary { margin-bottom: 8px; background: #eaf3f1; }
+.legacyProcessGroup { margin-top: 8px; padding-top: 8px; border-top: 1px dashed #d5dfdc; }
+.legacyProcessGroup > span { color: #8b6b30; }
+.legacyProcessGroup .processTagButton { border-style: dashed; }
+
+.automaticUnitField,
+.draftAutoUnit {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 42px;
+  padding: 8px 11px;
+  border: 1px solid #d9e2df;
+  border-radius: 11px;
+  background: #f3f7f6;
+  color: #315b55;
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.priceReviewToolbar {
+  grid-template-columns: auto auto minmax(240px, 1fr) 190px;
+  align-items: center;
+}
+.priceReviewSelectAll {
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 11px;
+  border: 1px solid #d8e2df;
+  border-radius: 11px;
+  background: #f8fbfa;
+  color: #315b55;
+  font-size: 13px;
+  font-weight: 850;
+  white-space: nowrap;
+}
+.priceReviewSelectAll input,
+.priceReviewSelectBox input,
+.batchCertificationInclude input,
+.aiBatchInclude input,
+.machineLinkRow input { width: 18px; height: 18px; accent-color: #2f7d73; }
+.priceReviewCard {
+  grid-template-columns: 34px minmax(280px, 1.6fr) minmax(125px, .55fr) minmax(150px, .7fr) minmax(180px, .8fr) auto;
+  transition: border-color .14s ease, box-shadow .14s ease, background-color .14s ease;
+}
+.priceReviewCard.selected {
+  border-color: #73a99f;
+  background: #f5fbf9;
+  box-shadow: 0 0 0 3px rgba(47,125,115,.10);
+}
+.priceReviewSelectBox { align-self: stretch; display: flex; align-items: flex-start; justify-content: center; padding-top: 3px; }
+
+.priceReviewAiBatchDialog,
+.batchCertificationDialog,
+.machineLinkDialog,
+.compactDecisionDialog {
+  width: min(1120px, calc(100vw - 28px));
+  max-height: min(88vh, 900px);
+  padding: 0;
+  border: 1px solid #3f4f56;
+  border-radius: 22px;
+  background: #fbfaf6;
+  box-shadow: 0 28px 80px rgba(18,37,46,.34);
+}
+.compactDecisionDialog { width: min(620px, calc(100vw - 28px)); }
+.machineLinkDialog { width: min(900px, calc(100vw - 28px)); }
+.priceReviewAiBatchDialog::backdrop,
+.batchCertificationDialog::backdrop,
+.machineLinkDialog::backdrop,
+.compactDecisionDialog::backdrop {
+  background: rgba(15,31,39,.60);
+  backdrop-filter: blur(3px);
+}
+.priceReviewAiBatchForm,
+.batchCertificationForm,
+.machineLinkContent,
+.compactDecisionContent { padding: 22px; }
+.priceReviewAiBatchForm,
+.batchCertificationForm { max-height: min(88vh, 900px); overflow: auto; }
+.aiBatchMetaGrid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 11px;
+  margin: 12px 0 16px;
+}
+.aiBatchMetaGrid label,
+.compactDecisionContent > label { display: grid; gap: 6px; }
+.aiBatchMetaGrid label > span,
+.compactDecisionContent > label > span { color: var(--muted); font-size: 12px; font-weight: 800; }
+.aiBatchMetaGrid input,
+.compactDecisionContent select,
+.batchCertificationRow select {
+  width: 100%; min-height: 44px; padding: 9px 11px;
+  border: 1px solid var(--line); border-radius: 11px; background: #fff; color: var(--deep);
+}
+.priceReviewAiBatchRows { display: grid; gap: 10px; }
+.aiBatchRow {
+  display: grid;
+  grid-template-columns: 34px minmax(210px, 1.4fr) minmax(130px, .8fr) repeat(4, minmax(92px, .55fr)) minmax(170px, 1fr);
+  gap: 8px;
+  align-items: start;
+  padding: 12px;
+  border: 1px solid #dce4e1;
+  border-radius: 14px;
+  background: #fff;
+}
+.aiBatchRow label { display: grid; gap: 5px; min-width: 0; }
+.aiBatchRow label > span { color: var(--muted); font-size: 10px; font-weight: 800; }
+.aiBatchRow input,
+.aiBatchRow select { width: 100%; min-height: 40px; padding: 7px 9px; border: 1px solid #d8dfdc; border-radius: 9px; background: #fff; }
+.aiBatchRow .processTagButtons { grid-column: 2 / -1; }
+.aiBatchInclude { padding-top: 22px; }
+.aiBatchConfidence { display: inline-flex; align-items: center; min-height: 24px; width: fit-content; padding: 3px 8px; border-radius: 999px; background: #fff4d8; color: #875d0d; font-size: 11px; font-weight: 900; }
+
+.batchCertificationHeader,
+.batchCertificationRow {
+  display: grid;
+  grid-template-columns: minmax(210px, 1.25fr) minmax(180px, 1fr) minmax(210px, 1.1fr) minmax(190px, 1fr);
+  gap: 10px;
+  align-items: center;
+}
+.batchCertificationHeader { padding: 0 12px 7px; color: var(--muted); font-size: 11px; font-weight: 900; }
+.batchCertificationRows { display: grid; gap: 8px; }
+.batchCertificationRow { padding: 11px 12px; border: 1px solid #dde5e2; border-radius: 13px; background: #fff; }
+.batchCertificationInclude { min-height: 44px; display: flex; align-items: center; gap: 8px; font-weight: 850; }
+.batchConflictText { font-size: 12px; line-height: 1.5; }
+.batchConflictText.clear { color: #287246; }
+.batchConflictText.hasConflict { color: #9b5521; font-weight: 800; }
+.stickyDialogActions { position: sticky; bottom: -22px; z-index: 4; margin: 18px -22px -22px; padding: 14px 22px; border-top: 1px solid #dce3e0; background: rgba(251,250,246,.96); backdrop-filter: blur(8px); }
+
+.conflictActions { flex-wrap: wrap; }
+.conflictActions .button { flex: 1 1 160px; }
+.machineLinkRows { display: grid; gap: 8px; max-height: 52vh; overflow: auto; margin: 14px 0; }
+.machineLinkRow {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+  padding: 11px 12px;
+  border: 1px solid #dce4e1;
+  border-radius: 12px;
+  background: #fff;
+}
+.machineLinkRow strong { color: #17343e; }
+.machineLinkRow small { display: block; margin-top: 3px; color: var(--muted); }
+.machineLinkScore { padding: 4px 8px; border-radius: 999px; background: #e8f5ed; color: #246b44; font-size: 11px; font-weight: 900; }
+
+@media (max-width: 980px) {
+  .priceReviewToolbar { grid-template-columns: 1fr 1fr; }
+  .priceReviewToolbar .inlineSearch { grid-column: 1 / -1; }
+  .priceReviewCard { grid-template-columns: 34px minmax(0,1fr) auto; }
+  .priceReviewCard > :not(.priceReviewSelectBox):not(.priceReviewMain):not(.priceReviewActions) { grid-column: 2 / -1; }
+  .priceReviewActions { grid-column: 2 / -1; justify-content: flex-start; }
+  .aiBatchMetaGrid { grid-template-columns: 1fr; }
+  .aiBatchRow { grid-template-columns: 34px repeat(2, minmax(0, 1fr)); }
+  .aiBatchRow .processTagButtons { grid-column: 2 / -1; }
+  .batchCertificationHeader { display: none; }
+  .batchCertificationRow { grid-template-columns: 1fr 1fr; }
+  .batchCertificationInclude { grid-column: 1 / -1; }
+}
+@media (max-width: 680px) {
+  .priceReviewToolbar { grid-template-columns: 1fr; }
+  .priceReviewToolbar .inlineSearch { grid-column: auto; }
+  .priceReviewToolbar > * { width: 100%; }
+  .priceReviewCard { grid-template-columns: 30px minmax(0,1fr); }
+  .priceReviewCard > :not(.priceReviewSelectBox) { grid-column: 2; }
+  .priceReviewAiBatchForm,
+  .batchCertificationForm,
+  .machineLinkContent,
+  .compactDecisionContent { padding: 16px; }
+  .stickyDialogActions { bottom: -16px; margin: 14px -16px -16px; padding: 12px 16px; }
+  .aiBatchRow { grid-template-columns: 30px minmax(0,1fr); }
+  .aiBatchRow > *:not(.aiBatchInclude) { grid-column: 2; }
+  .aiBatchRow .processTagButtons { grid-column: 2; }
+  .batchCertificationRow { grid-template-columns: 1fr; }
+  .batchCertificationInclude { grid-column: auto; }
+  .machineLinkRow { grid-template-columns: 28px minmax(0,1fr); }
+  .machineLinkScore { grid-column: 2; width: fit-content; }
+}
+
+/* AI 待認證批次預覽實際卡片結構 */
+.aiBatchReviewCard {
+  padding: 12px;
+  border: 1px solid #dce4e1;
+  border-radius: 15px;
+  background: #fff;
+}
+.aiBatchReviewHead {
+  min-height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 9px;
+}
+.aiBatchReviewHead label { display: inline-flex; align-items: center; gap: 8px; font-weight: 900; }
+.aiBatchReviewHead input { width: 18px; height: 18px; accent-color: #2f7d73; }
+.aiBatchReviewGrid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 9px;
+}
+.aiBatchReviewGrid label,
+.aiBatchProcessField { display: grid; gap: 5px; min-width: 0; }
+.aiBatchReviewGrid label > span,
+.aiBatchProcessField > span { color: var(--muted); font-size: 11px; font-weight: 850; }
+.aiBatchReviewGrid input,
+.aiBatchReviewGrid select {
+  width: 100%; min-height: 42px; padding: 8px 10px;
+  border: 1px solid #d8dfdc; border-radius: 10px; background: #fff; color: var(--deep);
+}
+.aiBatchReviewGrid .wide { grid-column: span 2; }
+.aiBatchProcessField { grid-column: 1 / -1 !important; }
+.aiBatchAutoUnit { min-height: 42px; display: flex; align-items: center; padding: 8px 10px; border: 1px solid #d9e2df; border-radius: 10px; background: #f3f7f6; color: #315b55; }
+.aiBatchProcessField > small { color: var(--muted); line-height: 1.45; }
+@media (max-width: 900px) {
+  .aiBatchReviewGrid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 560px) {
+  .aiBatchReviewGrid { grid-template-columns: 1fr; }
+  .aiBatchReviewGrid .wide { grid-column: auto; }
+}
+.priceReviewSelectBox { position: relative; }
+.priceReviewSelectBox > span {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0,0,0,0);
+  white-space: nowrap;
+  border: 0;
+}
