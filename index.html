@@ -7,8 +7,8 @@
   <meta name="robots" content="noindex, nofollow, noarchive, nosnippet">
   <meta name="googlebot" content="noindex, nofollow, noarchive, nosnippet">
   <meta name="referrer" content="no-referrer">
-  <title>IGS 機台材料成本 ERP</title>
-  <link rel="stylesheet" href="style.css?v=20260624-igs-v3-5-unified">
+  <title>IGS 機台材料成本 ERP｜快速估價</title>
+  <link rel="stylesheet" href="style.css?v=20260625-igs-v3-15-transition-prompt-mobile">
 </head>
 <body class="authLocked">
   <section id="authGate" class="authGate" aria-labelledby="loginTitle">
@@ -43,9 +43,13 @@
       <button class="nav" data-view="machines" data-title="機台總覽">機台總覽</button>
       <button class="nav" data-view="costRecords" data-title="成本紀錄">成本紀錄</button>
       <button class="nav navPhoto" data-view="quotationEntry" data-title="估價單建檔">估價單建檔</button>
-      <button class="nav navEstimate" data-view="smartEstimate" data-title="公式估算器">公式估算器</button>
-      <button class="nav navDataImport" data-view="dataImport" data-title="資料匯入">資料匯入</button>
+      <button class="nav navEstimate" data-view="smartEstimate" data-title="快速估價">快速估價</button>
     </nav>
+
+    <details class="sidebarToolMenu">
+      <summary>進階工具 ⚙</summary>
+      <button class="sideToolAction" type="button" data-open-view="priceCenter" data-open-title="進階價格中心">進階價格中心</button>
+    </details>
 
     <div class="sidebarFoot">
       <span id="dataStatus" class="statusDot">資料準備中</span>
@@ -58,7 +62,7 @@
     <section class="topbar">
       <div>
         <h1 id="pageTitle">首頁查價</h1>
-        <p id="pageDescription">搜尋歷史價格，或直接進入公式估算器。</p>
+        <p id="pageDescription">搜尋歷史價格，或直接進入快速估價。</p>
       </div>
       <div class="topbarActions">
         <button id="aiAccountButton" class="aiAccountButton missing" type="button">AI 額度：檢查中</button>
@@ -69,20 +73,28 @@
     </section>
 
     <div id="notice" class="notice" hidden></div>
+    <div id="saveSuccessToast" class="saveSuccessToast" role="status" aria-live="polite" aria-atomic="true" hidden></div>
 
     <section id="dashboard" class="view active">
       <div class="homeTaskPanel">
         <div>
           <span class="eyebrow">PHASE 1｜任務導向</span>
           <h2>查價、記一筆、做估價</h2>
-          <p>先查歷史紀錄或瀏覽全部機台；找不到價格時再用公式估算器。四份基礎資料可從「資料匯入」一次檢查並依序寫入。</p>
+          <p>先查歷史紀錄或瀏覽全部機台；找不到價格時再用快速估價。四份基礎資料請從「進階價格中心」內開啟資料匯入。</p>
         </div>
         <div class="homeTaskActions">
-          <button class="button secondary" type="button" data-home-view="machines">查看全部機台</button>
-          <button class="button secondary" type="button" data-home-view="costRecords">我要查紀錄</button>
-          <button class="button secondary" type="button" data-home-view="quotationEntry">我要記一筆</button>
-          <button class="button primary" type="button" data-home-view="smartEstimate">我要估價</button>
-          <button class="button ghost" type="button" data-home-view="dataImport">匯入基礎資料</button>
+          <button class="button secondary homeTaskButton" type="button" data-home-action="search">
+            <strong>🔍 查價</strong>
+            <span>搜尋歷史報價</span>
+          </button>
+          <button class="button secondary homeTaskButton" type="button" data-home-view="costRecords">
+            <strong>✏️ 記一筆</strong>
+            <span>錄入新報價</span>
+          </button>
+          <button class="button primary homeTaskButton" type="button" data-home-view="smartEstimate">
+            <strong>💰 估價</strong>
+            <span>輸入規格算價</span>
+          </button>
         </div>
       </div>
       <div class="panel homePricePanel">
@@ -752,6 +764,16 @@
         <div class="apiBadge connected">內部價格優先｜AI 不使用網路搜尋</div>
       </div>
 
+
+      <div class="panel priceCenterImportEntry">
+        <div>
+          <span class="eyebrow">低頻工具</span>
+          <h2>資料匯入</h2>
+          <p class="muted">材料主檔、製程規則、歷史報價與量產參考統一從這裡匯入，避免佔用日常主導覽。</p>
+        </div>
+        <button class="button secondary" type="button" data-open-view="dataImport" data-open-title="資料匯入">開啟資料匯入</button>
+      </div>
+
       <div class="v20Grid twoCol">
         <div class="panel">
           <div class="panelHead">
@@ -921,9 +943,9 @@
     <section id="smartEstimate" class="view">
       <div class="quickIntro estimateIntro">
         <div>
-          <span class="eyebrow">v3.7 · 材質下拉＋H/W 分欄＋即時重算</span>
-          <h2>輸入規格，以硬公式產生可追溯的低中高估價</h2>
-          <p>一般板材採「整才包價」，超過 10 才改用拆項估算；特殊製程另計，所有公式與歷史參考都會顯示。</p>
+          <span class="eyebrow">v3.15 · 價格過渡＋AI 歷史提示＋手機首頁</span>
+          <h2>快速估價：掃描、貼文字或手動輸入都能立即試算</h2>
+          <p>一般板材採整才包價並加入材質耗損與最低消費；AI 掃描結果會直接帶入明細，缺漏欄位以紅色提醒。</p>
         </div>
         <div id="estimateStatusBadge" class="apiBadge">尚未建立估價</div>
       </div>
@@ -964,6 +986,17 @@
               <input id="estimateDate" type="date">
             </label>
 
+
+
+
+
+            <div class="estimateProjectActions">
+              <button id="loadMachineActualItems" class="button secondary" type="button" hidden>載入既有機台實際品項</button>
+            </div>
+
+            <details class="estimateAdvancedProject">
+              <summary>進階設定：基準、類型、版本與狀態</summary>
+              <div class="estimateAdvancedProjectGrid">
             <label>
               <span>內部估價基準</span>
               <select id="estimatePriceBasis">
@@ -976,7 +1009,6 @@
               </select>
               <small>一般板材每才一律 Math.ceil 無條件進位；包價已含材料、四色、白墨與基本切割，不再重複套倍率或印刷費。燈條仍按長度計價。</small>
             </label>
-
             <label>
               <span>估價類型</span>
               <select id="estimateOrderType">
@@ -988,38 +1020,28 @@
               </select>
               <small>影響樂觀／基準／保守區間；打樣與新工藝的上緣較高。</small>
             </label>
-
             <label>
               <span>打樣 TWD → 打樣 RMB 除數</span>
               <input id="estimateSampleTwdRmbDivisor" type="number" min="0.01" step="0.01" value="4.5">
             </label>
-
             <label>
               <span>打樣 RMB → 量產 RMB 除數</span>
               <input id="estimateProductionRmbDivisor" type="number" min="0.01" step="0.01" value="3.3">
               <small>為符合既有 200 TWD → 44 RMB → 13 RMB 的歷史基準，量產係數套在打樣 RMB 上。</small>
             </label>
-
-            <div class="estimateProjectActions">
-              <button id="loadMachineActualItems" class="button secondary" type="button" hidden>載入既有機台實際品項</button>
-            </div>
-
-            <details class="estimateAdvancedProject">
-              <summary>版本、狀態與備註</summary>
-              <div class="estimateAdvancedProjectGrid">
-                <label><span>版本</span><input id="estimateVersion" type="text" value="V1"></label>
-                <label><span>狀態</span><select id="estimateStatus"><option>草稿</option><option>待確認</option><option>已核准</option><option>已作廢</option></select></label>
+                <label><span>版本（自動 v1 起算）</span><input id="estimateVersion" type="text" value="v1"></label>
+                <label><span>狀態</span><select id="estimateStatus"><option selected>草稿</option><option>待確認</option><option>已核准</option><option>已作廢</option></select></label>
                 <label class="wide"><span>備註</span><textarea id="estimateNote" rows="3"></textarea></label>
               </div>
             </details>
           </form>
         </div>
 
-        <div class="panel estimateAiPanel" hidden>
+        <div class="panel estimateAiPanel">
           <div class="panelHead">
             <div>
-              <h2>2. AI 快速匯入</h2>
-              <p class="muted">支援估價單、材料表、印刷規格圖與 PDF。</p>
+              <h2>2. AI 掃描匯入</h2>
+              <p class="muted">上傳 JPG、PNG、WebP 或 PDF，辨識品項、材質、尺寸、厚度、製程與可見價格，並直接帶入快速試算。</p>
             </div>
             <span id="estimateAiBadge" class="apiBadge">尚未分析</span>
           </div>
@@ -1053,7 +1075,7 @@
           </div>
 
           <div class="formActions estimateAiActions">
-            <button id="analyzeEstimateSource" class="button primary" type="button" disabled>AI 辨識並立即試算</button>
+            <button id="analyzeEstimateSource" class="button primary" type="button" disabled>AI 掃描並帶入試算</button>
             <button id="clearEstimateSource" class="button ghost" type="button">清除檔案</button>
           </div>
           <p id="estimateAiStatus" class="photoStatus muted">尚未選擇檔案。</p>
@@ -1067,7 +1089,7 @@
         <div class="panel estimateTextPanel">
           <div class="panelHead">
             <div>
-              <h2>3. 貼上文字快速估價</h2>
+              <h2>3. 貼上文字匯入</h2>
               <p class="muted">直接貼入「編號＋材質／尺寸／厚度／製程」，不需呼叫 AI 也能解析並套用內部價格。</p>
             </div>
             <span id="estimateTextBadge" class="apiBadge">尚未解析</span>
@@ -1105,10 +1127,12 @@
       <div class="panel estimateWorkspacePanel">
         <div class="panelHead estimateWorkspaceHead">
           <div>
-            <h2>4. 快速試算明細</h2>
+            <h2>4. 快速估價明細</h2>
             <p class="muted">先確認繁中品名、材質、尺寸、數量與單價；系統自動顯示尺寸級距及才數。</p>
           </div>
           <div class="panelActions">
+            <input id="quickEstimateAiScanFile" type="file" hidden accept=".jpg,.jpeg,.png,.webp,.pdf,image/jpeg,image/png,image/webp,application/pdf">
+            <button id="quickEstimateAiScan" class="button primary" type="button">🤖 AI 掃描報價單/圖片自動填入</button>
             <button id="addEstimateItem" class="button secondary" type="button">＋ 手動新增品項</button>
             <button id="estimateMissingPrices" class="button secondary" type="button" disabled>AI 依內部資料補估</button>
             <button id="recalculateEstimate" class="button ghost" type="button">重新計算</button>
@@ -1231,6 +1255,6 @@
   <datalist id="estimateWhiteInkOptions"></datalist>
   <datalist id="estimateSpecialEffectOptions"></datalist>
   <script src="data.js?v=20260624-igs-v2-4"></script>
-  <script src="app.js?v=20260624-igs-v3-2-processing-grade"></script>
+  <script src="app.js?v=20260625-igs-v3-15-transition-prompt-mobile"></script>
 </body>
 </html>
