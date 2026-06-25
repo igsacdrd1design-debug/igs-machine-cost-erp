@@ -8,7 +8,7 @@
   <meta name="googlebot" content="noindex, nofollow, noarchive, nosnippet">
   <meta name="referrer" content="no-referrer">
   <title>IGS 機台材料成本 ERP</title>
-  <link rel="stylesheet" href="style.css?v=20260624-igs-v3-2-processing-grade">
+  <link rel="stylesheet" href="style.css?v=20260624-igs-v3-5-unified">
 </head>
 <body class="authLocked">
   <section id="authGate" class="authGate" aria-labelledby="loginTitle">
@@ -38,18 +38,11 @@
       </div>
     </div>
 
-    <nav class="navList" aria-label="主要功能">
-      <button class="nav active" data-view="dashboard" data-title="Dashboard">Dashboard</button>
-      <button class="nav" data-view="machines" data-title="機台搜尋">機台搜尋</button>
+    <nav class="navList phaseOneNav" aria-label="主要功能">
+      <button class="nav active" data-view="dashboard" data-title="首頁查價">首頁查價</button>
       <button class="nav" data-view="costRecords" data-title="成本紀錄">成本紀錄</button>
-      <button class="nav" data-view="machineTotals" data-title="機台成本總覽">機台成本總覽</button>
       <button class="nav navPhoto" data-view="quotationEntry" data-title="估價單建檔">估價單建檔</button>
-      <button class="nav navAccent" data-view="quickMachine" data-title="快速建立機台">快速建立機台</button>
-      <button class="nav nav360" data-view="machine360Setup" data-title="360° 機台建置">360° 機台建置</button>
-      <button class="nav navPrice" data-view="priceCenter" data-title="價格中心">價格中心</button>
-      <button class="nav navEstimate" data-view="smartEstimate" data-title="智能成本估算">智能成本估算</button>
-      <button class="nav navOptimize" data-view="artOptimization" data-title="AI 美術降本中心">AI 美術降本中心</button>
-      <button class="nav" data-view="suppliers" data-title="供應商">供應商</button>
+      <button class="nav navEstimate" data-view="smartEstimate" data-title="公式估算器">公式估算器</button>
     </nav>
 
     <div class="sidebarFoot">
@@ -62,8 +55,8 @@
   <main>
     <section class="topbar">
       <div>
-        <h1 id="pageTitle">Dashboard</h1>
-        <p id="pageDescription">集中查看機台、材料品項與三階段成本。</p>
+        <h1 id="pageTitle">首頁查價</h1>
+        <p id="pageDescription">搜尋歷史價格，或直接進入公式估算器。</p>
       </div>
       <div class="topbarActions">
         <button id="aiAccountButton" class="aiAccountButton missing" type="button">AI 額度：檢查中</button>
@@ -76,6 +69,28 @@
     <div id="notice" class="notice" hidden></div>
 
     <section id="dashboard" class="view active">
+      <div class="homeTaskPanel">
+        <div>
+          <span class="eyebrow">PHASE 1｜任務導向</span>
+          <h2>查價、記一筆、做估價</h2>
+          <p>先用右上方搜尋框查歷史紀錄；找不到時再用公式估算器。價格中心與進階分析暫時凍結，但資料不會刪除。</p>
+        </div>
+        <div class="homeTaskActions">
+          <button class="button secondary" type="button" data-home-view="costRecords">我要查紀錄</button>
+          <button class="button secondary" type="button" data-home-view="quotationEntry">我要記一筆</button>
+          <button class="button primary" type="button" data-home-view="smartEstimate">我要估價</button>
+        </div>
+      </div>
+      <div class="panel homePricePanel">
+        <div class="panelHead">
+          <div>
+            <h2>歷史價格搜尋</h2>
+            <p class="muted">在右上方輸入材質、厚度、製程、品名或供應商，例如「壓克力 5mm 四色」。</p>
+          </div>
+        </div>
+        <div id="homePriceSearchResults" class="homePriceSearchResults"></div>
+      </div>
+
       <div class="cards dashboardCards">
         <div class="stat">
           <span>機台數量</span>
@@ -103,7 +118,7 @@
         <div class="panel">
           <div class="panelHead">
             <div>
-              <h2>最近更新機台</h2>
+              <h2>最近更新紀錄</h2>
               <p class="muted">依更新時間或建立時間顯示。</p>
             </div>
           </div>
@@ -113,7 +128,7 @@
         <div class="panel">
           <div class="panelHead">
             <div>
-              <h2>實際成本最高機台</h2>
+              <h2>歷史成本概況</h2>
               <p class="muted">依目前已有的實際費用排序。</p>
             </div>
           </div>
@@ -351,7 +366,7 @@
         <div>
           <span class="eyebrow">快速建立機台</span>
           <h2>先加入待送清單，確認後再批次寫入</h2>
-          <p>操作方式與開拌 ERP 相同：逐筆整理、集中檢查，最後一次寫入私人 Google Sheet。</p>
+          <p>操作方式與開辦 ERP 相同：逐筆整理、集中檢查，最後一次寫入私人 Google Sheet。</p>
         </div>
         <div class="apiBadge connected">批次寫入已連接</div>
       </div>
@@ -715,9 +730,12 @@
             <h2>2. 製程／印刷價格規則</h2>
             <p class="muted">智能估價會直接同步 Google Sheet「內部估價規則」中的印刷與加工價格；沒有規則的製程會顯示待補，不會算成 0 元。</p>
           </div>
-          <p id="processPriceRuleCount" class="muted">共 0 筆</p>
+          <div class="panelActions">
+            <label class="button secondary fileButton">匯入製程規則 CSV<input id="processRuleCsv" type="file" accept=".csv,text/csv" hidden></label>
+            <p id="processPriceRuleCount" class="muted">共 0 筆</p>
+          </div>
         </div>
-        <div class="tableWrap"><table class="v20Table"><thead><tr><th>製程／包價</th><th>尺寸級距</th><th>計價方式</th><th>原材 TWD</th><th>打樣 TWD</th><th>打樣 RMB</th><th>量產 RMB</th><th>日期</th><th>來源</th><th>認證</th></tr></thead><tbody id="processPriceRuleRows"></tbody></table></div>
+        <div class="tableWrap"><table class="v20Table"><thead><tr><th>製程／包價</th><th>尺寸級距</th><th>計價方式</th><th>原材 TWD</th><th>打樣 TWD</th><th>量產 TWD</th><th>打樣 RMB</th><th>量產 RMB</th><th>日期</th><th>來源</th><th>認證</th></tr></thead><tbody id="processPriceRuleRows"></tbody></table></div>
       </div>
 
       <div class="panel priceReviewPanel">
@@ -822,9 +840,9 @@
     <section id="smartEstimate" class="view">
       <div class="quickIntro estimateIntro">
         <div>
-          <span class="eyebrow">v3.2 · 原材＋印刷＋加工分級估價</span>
-          <h2>貼上品項明細或上傳文件，自動拆尺寸、製程並產生低中高估價</h2>
-          <p>加工外型會依 L1～L4 自動分級，並可人工調整；3D膜、折彎等特殊製程另外加價。</p>
+          <span class="eyebrow">v3.5 · 包價公式＋歷史校準</span>
+          <h2>輸入規格，以硬公式產生可追溯的低中高估價</h2>
+          <p>一般板材採「整才包價」，超過 10 才改用拆項估算；特殊製程另計，所有公式與歷史參考都會顯示。</p>
         </div>
         <div id="estimateStatusBadge" class="apiBadge">尚未建立估價</div>
       </div>
@@ -868,13 +886,37 @@
             <label>
               <span>內部估價基準</span>
               <select id="estimatePriceBasis">
-                <option value="sampleTwd">台灣歷史拆項 TWD（預設：精確面積＋加工分級）</option>
-                <option value="sampleTwdFloor">台灣函數最低價 TWD（100×100／300×300級距）</option>
-                <option value="sampleRmb">中國打樣 RMB → TWD（公司確認基準）</option>
-                <option value="productionRmb">中國量產 RMB → TWD（公司確認基準）</option>
-                <option value="rawTwd">原材料 TWD（只含原材，不含完整加工）</option>
+                <option value="sampleTwd">台灣打樣 TWD（統一包價公式）</option>
+                <option value="sampleTwdFloor">台灣打樣 TWD（相容舊選項）</option>
+                <option value="productionTwd">台灣量產 TWD（公司量產價）</option>
+                <option value="sampleRmb">中國打樣 RMB → TWD（經驗係數）</option>
+                <option value="productionRmb">中國量產 RMB → TWD（經驗係數）</option>
+                <option value="rawTwd">原材料 TWD（不套打樣倍率）</option>
               </select>
-              <small>台灣歷史拆項：材料與印刷用精確面積，加上 L1～L4 最低加工包價，較貼近已提供的台灣實際打樣；函數最低價模式則保留100×100與300×300級距。</small>
+              <small>一般板材每才一律 Math.ceil 無條件進位；包價已含材料、四色、白墨與基本切割，不再重複套倍率或印刷費。燈條仍按長度計價。</small>
+            </label>
+
+            <label>
+              <span>估價類型</span>
+              <select id="estimateOrderType">
+                <option value="auto">自動判斷</option>
+                <option value="prototype">打樣</option>
+                <option value="smallBatch">小批</option>
+                <option value="production">量產</option>
+                <option value="newProcess">新工藝</option>
+              </select>
+              <small>影響樂觀／基準／保守區間；打樣與新工藝的上緣較高。</small>
+            </label>
+
+            <label>
+              <span>打樣 TWD → 打樣 RMB 除數</span>
+              <input id="estimateSampleTwdRmbDivisor" type="number" min="0.01" step="0.01" value="4.5">
+            </label>
+
+            <label>
+              <span>打樣 RMB → 量產 RMB 除數</span>
+              <input id="estimateProductionRmbDivisor" type="number" min="0.01" step="0.01" value="3.3">
+              <small>為符合既有 200 TWD → 44 RMB → 13 RMB 的歷史基準，量產係數套在打樣 RMB 上。</small>
             </label>
 
             <div class="estimateProjectActions">
@@ -892,7 +934,7 @@
           </form>
         </div>
 
-        <div class="panel estimateAiPanel">
+        <div class="panel estimateAiPanel" hidden>
           <div class="panelHead">
             <div>
               <h2>2. AI 快速匯入</h2>
@@ -1010,7 +1052,7 @@
           </div>
           <div class="estimateSaveActions">
             <button id="saveEstimate" class="button primary" type="button">儲存估價版本</button>
-            <button id="saveEstimateAndOptimize" class="button secondary" type="button">儲存並進行美術降本</button>
+            <button id="saveEstimateAndOptimize" class="button secondary" type="button" hidden>儲存並進行美術降本</button>
           </div>
         </div>
       </div>

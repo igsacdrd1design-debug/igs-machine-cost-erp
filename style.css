@@ -1483,7 +1483,7 @@ td small { color: var(--muted); }
 .estimateWorkspaceHead{align-items:flex-start}
 .estimateQuickMetrics{
   display:grid;
-  grid-template-columns:repeat(3,minmax(0,160px));
+  grid-template-columns:repeat(4,minmax(0,160px));
   gap:10px;
   margin-bottom:14px;
 }
@@ -1617,7 +1617,7 @@ td small { color: var(--muted); }
   .estimatePriceState{justify-self:start}
   .estimateCardCost{justify-self:end}
   .estimateQuickCardHead .removeRow{grid-column:1/-1;justify-self:end}
-  .estimateQuickMetrics{grid-template-columns:repeat(3,minmax(0,1fr))}
+  .estimateQuickMetrics{grid-template-columns:repeat(2,minmax(0,1fr))}
   .estimateActionBar{position:static}
   .estimateSaveActions{flex-direction:column}
   .estimateSaveActions .button{width:100%}
@@ -2127,3 +2127,37 @@ td small { color: var(--muted); }
 }
 
 .fieldHint{margin:.35rem 0 .75rem;color:var(--muted,#6d7478);font-size:.82rem;line-height:1.5;}
+
+
+/* v3.5 Phase 1 任務導向首頁與公式透明化 */
+.phaseOneNav{gap:8px}
+.homeTaskPanel{
+  display:flex;align-items:center;justify-content:space-between;gap:22px;
+  margin-bottom:16px;padding:22px;border-radius:18px;color:#fff;
+  background:linear-gradient(135deg,var(--navy-dark),var(--navy));
+  box-shadow:0 12px 30px rgba(23,46,56,.16);
+}
+.homeTaskPanel h2{margin:5px 0 8px;font-size:27px}
+.homeTaskPanel p{margin:0;max-width:760px;opacity:.82}
+.homeTaskActions{display:flex;gap:9px;flex-wrap:wrap;justify-content:flex-end}
+.homeTaskActions .button.secondary{background:rgba(255,255,255,.12);border-color:rgba(255,255,255,.24);color:#fff}
+.estimateFormulaDetail{display:grid;gap:6px;padding:10px 12px;border-top:1px solid #e2e9e8;background:#f6faf9;font-size:12px;color:var(--navy-dark)}
+.estimateFormulaDetail>span{line-height:1.55}
+.estimateFormulaDetail details{border-top:1px dashed #cbd9d7;padding-top:7px}
+.estimateFormulaDetail summary{cursor:pointer;font-weight:700;color:var(--navy)}
+.similarHistoryList{display:grid;gap:5px;margin-top:7px}
+.similarHistoryList span{padding:6px 8px;border-radius:8px;background:#fff;border:1px solid #dde7e5}
+@media(max-width:760px){
+  .homeTaskPanel{align-items:stretch;flex-direction:column}
+  .homeTaskActions{justify-content:stretch}
+  .homeTaskActions .button{flex:1 1 100%}
+}
+
+.homePricePanel{margin-bottom:16px}
+.homePriceSearchResults{display:grid;gap:7px}
+.homePriceRow{display:flex;align-items:center;justify-content:space-between;gap:18px;padding:11px 13px;border:1px solid var(--line);border-radius:12px;background:#fbfdfd}
+.homePriceRow>div{display:grid;gap:3px}
+.homePriceRow small{color:var(--muted);font-size:12px}
+.homePriceMeta{text-align:right;white-space:nowrap}
+.homePriceMeta strong{color:var(--navy);font-size:18px}
+@media(max-width:640px){.homePriceRow{align-items:flex-start;flex-direction:column}.homePriceMeta{text-align:left;white-space:normal}}
