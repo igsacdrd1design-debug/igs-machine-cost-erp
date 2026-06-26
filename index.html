@@ -8,7 +8,7 @@
   <meta name="googlebot" content="noindex, nofollow, noarchive, nosnippet">
   <meta name="referrer" content="no-referrer">
   <title>IGS 機台材料成本 ERP｜快速估價</title>
-  <link rel="stylesheet" href="style.css?v=20260626-igs-v3-27-machine-media-manager">
+  <link rel="stylesheet" href="style.css?v=20260626-igs-v3-28-estimate-accuracy-export">
 </head>
 <body class="authLocked">
   <section id="authGate" class="authGate" aria-labelledby="loginTitle">
@@ -1012,9 +1012,9 @@
     <section id="smartEstimate" class="view">
       <div class="quickIntro estimateIntro">
         <div>
-          <span class="eyebrow">v3.25.2 · AI 附件區佈局修正</span>
+          <span class="eyebrow">v3.28 · 估價準確度與報價匯出</span>
           <h2>快速估價：掃描、貼文字或手動輸入都能立即試算</h2>
-          <p>小件採四段平滑計價，單位依材質自動判斷；AI 掃描、製程按鈕與缺漏警示皆可直接人工確認。</p>
+          <p>小件特殊加工費採 30%，1–5 才耗損率減半；已儲存估價可匯出 PDF／Excel，明細也可直接複製摘要。</p>
         </div>
         <div id="estimateStatusBadge" class="apiBadge">尚未建立估價</div>
       </div>
@@ -1205,6 +1205,7 @@
             <button id="addEstimateItem" class="button secondary" type="button">＋ 手動新增品項</button>
             <button id="estimateMissingPrices" class="button secondary" type="button" disabled>AI 依內部資料補估</button>
             <button id="recalculateEstimate" class="button ghost" type="button">重新計算</button>
+            <button id="copyEstimateSummary" class="button ghost" type="button">📋 複製摘要</button>
             <label class="estimateDeveloperToggle" title="顯示精確才數、長寬比與除錯欄位"><input id="estimateDeveloperMode" type="checkbox"> 開發者資料</label>
           </div>
         </div>
@@ -1233,8 +1234,8 @@
       </div>
 
       <div class="panel">
-        <div class="panelHead"><div><h2>已儲存估價</h2><p class="muted">可載入、修改、複製或刪除。</p></div></div>
-        <div class="tableWrap"><table class="v20Table"><thead><tr><th>日期</th><th>估價名稱</th><th>機台</th><th>版本</th><th>樂觀</th><th>基準</th><th>保守</th><th>信心</th><th>狀態</th><th></th></tr></thead><tbody id="estimateProjectRows"></tbody></table></div>
+        <div class="panelHead"><div><h2>已儲存估價</h2><p class="muted">可載入、複製、匯出 PDF／Excel 或刪除。</p></div></div>
+        <div class="tableWrap"><table class="v20Table"><thead><tr><th>日期</th><th>估價名稱</th><th>機台</th><th>版本</th><th>樂觀</th><th>基準</th><th>保守</th><th>信心</th><th>狀態</th><th>操作</th></tr></thead><tbody id="estimateProjectRows"></tbody></table></div>
       </div>
     </section>
 
@@ -1449,6 +1450,9 @@
   <datalist id="estimateWhiteInkOptions"></datalist>
   <datalist id="estimateSpecialEffectOptions"></datalist>
   <script src="data.js?v=20260624-igs-v2-4"></script>
-  <script src="app.js?v=20260626-igs-v3-27-machine-media-manager"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jspdf@4.2.1/dist/jspdf.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jspdf-autotable@5.0.8/dist/jspdf.plugin.autotable.min.js"></script>
+  <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
+  <script src="app.js?v=20260626-igs-v3-28-estimate-accuracy-export"></script>
 </body>
 </html>

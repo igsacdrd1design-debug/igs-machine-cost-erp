@@ -4816,6 +4816,7 @@ function setupV20() {
   $('estimateItemRows').addEventListener('click', handleEstimateItemClick);
   $('saveEstimate').addEventListener('click', saveCurrentEstimate);
   $('saveEstimateAndOptimize').addEventListener('click', saveEstimateAndOpenOptimization);
+  $('copyEstimateSummary')?.addEventListener('click', ()=>copyEstimateSummary(''));
   $('estimateProjectRows').addEventListener('click', handleEstimateProjectClick);
   $('estimateTargetType').addEventListener('change', updateEstimateTargetMode);
   $('estimatePriceBasis')?.addEventListener('change', () => { recalculateAllEstimateItems(); renderEstimateDraft(); });
@@ -6887,6 +6888,20 @@ function unifiedHasIrregularShape(processTags,item){
   return /異[型形](?:裁切|切割)|切割外型/.test(raw);
 }
 
+// 1–5 才同時有整才進位，耗損率減半，避免兩種加成疊加過高。
+function adjustedWasteRate(exactCai,baseRate){
+  const exact=Math.max(0,toNumber(exactCai));
+  const rate=Math.max(0,toNumber(baseRate));
+  if(exact<FOUR_STAGE_STANDARD_START_TSAI)return 0;
+  if(exact<5)return rate*0.5;
+  return rate;
+}
+
+// <0.85 才視為供應商小件一口價情境，特殊加工只取 30%。
+function smallPieceProcessFactor(exactCai){
+  return Math.max(0,toNumber(exactCai))<FOUR_STAGE_NEAR_ONE_START_TSAI?0.3:1;
+}
+
 function calculateSinglePieceMaterialCost(bundlePricePerCai,exactCai,wasteRate,basisKey='sampleTwd'){
   const exact=Math.max(0,toNumber(exactCai));
   const rate=Math.max(0,toNumber(bundlePricePerCai));
@@ -6896,6 +6911,7 @@ function calculateSinglePieceMaterialCost(bundlePricePerCai,exactCai,wasteRate,b
   let stage='';
   let expression='';
   let billingCai=0;
+  let appliedWasteRate=0;
 
   if(exact<FOUR_STAGE_SMALL_START_TSAI){
     cost=minimum;
@@ -6913,12 +6929,14 @@ function calculateSinglePieceMaterialCost(bundlePricePerCai,exactCai,wasteRate,b
     expression=`接近1才：1才包價 ${Math.round(rate*100)/100}（不加耗損）`;
   }else{
     billingCai=Math.max(1,Math.ceil(exact));
-    cost=billingCai*rate*(1+waste);
+    appliedWasteRate=adjustedWasteRate(exact,waste);
+    cost=billingCai*rate*(1+appliedWasteRate);
     stage='標準件';
-    expression=`${billingCai}才 × ${Math.round(rate*100)/100}/才 × ${Math.round((1+waste)*10000)/10000}(含耗損)`;
+    const wasteNote=appliedWasteRate<waste?'1–5才耗損減半':'含耗損';
+    expression=`${billingCai}才 × ${Math.round(rate*100)/100}/才 × ${Math.round((1+appliedWasteRate)*10000)/10000}(${wasteNote})`;
   }
 
-  return{cost,stage,expression,minimum,exactCai:exact,billingCai};
+  return{cost,stage,expression,minimum,exactCai:exact,billingCai,appliedWasteRate};
 }
 
 function unifiedFourStageBundleUnitCost({exactCai,bundleRate,qty,wasteRatio,basisKey}){
@@ -6937,6 +6955,7 @@ function unifiedFourStageBundleUnitCost({exactCai,bundleRate,qty,wasteRatio,basi
     minimum:single.minimum,
     exactCai:single.exactCai,
     billingCai:single.billingCai,
+    appliedWasteRate:single.appliedWasteRate,
   };
 }
 
@@ -7964,7 +7983,6 @@ function estimateByUnifiedPricingModel(item){
   const singleBilling=Math.max(1,context.totalBilling/qty);
   const singleExact=Math.max(0,context.totalExact/qty);
   const wasteRatio=resolvedWasteRatioForItem(item,material.name);
-  const resolvedWastePercent=Math.round(wasteRatio*10000)/100;
   const minimum=batchMinimumChargeForMaterial(material.name,basisKey);
 
   const breakdown=[];
@@ -7982,6 +8000,7 @@ function estimateByUnifiedPricingModel(item){
   let candidateMinimum=minimum;
   let materialFormulaManaged=false;
   let materialStageNote='';
+  let materialAppliedWasteRatio=0;
   const extraBaseBreakdown=[];
 
   const previewCandidateLineBase=(candidate)=>{
@@ -8019,6 +8038,7 @@ function estimateByUnifiedPricingModel(item){
       formulaManaged:true,
       minimumCharge:0,
       stageNote:fourStage.stage,
+      appliedWasteRate:fourStage.appliedWasteRate,
     };
     candidate.lineBase=previewCandidateLineBase(candidate);
     return candidate;
@@ -8059,6 +8079,7 @@ function estimateByUnifiedPricingModel(item){
     candidateMinimum=candidate.minimumCharge??minimum;
     materialFormulaManaged=Boolean(candidate.formulaManaged);
     materialStageNote=candidate.stageNote||'';
+    materialAppliedWasteRatio=Math.max(0,toNumber(candidate.appliedWasteRate));
   };
 
   if(material.descriptor.family==='貼紙'){
@@ -8142,8 +8163,9 @@ function estimateByUnifiedPricingModel(item){
   const finalBatchMaterial=materialBatch.finalBatchMaterial;
   const lineBase=finalBatchMaterial+batchBaseNonMaterial;
 
+  const managedWastePercent=Math.round(materialAppliedWasteRatio*10000)/100;
   const materialSuffix=[
-    materialFormulaManaged?(materialStageNote==='標準件'?`四段標準件｜耗損${resolvedWastePercent}%已計入`:`四段${materialStageNote}｜本區段不另加耗損`):(effectiveWasteRatio>0?`耗損${effectiveWastePercent}%`:'包價已含一般耗損'),
+    materialFormulaManaged?(materialStageNote==='標準件'?`四段標準件｜耗損${managedWastePercent}%已計入${materialAppliedWasteRatio<wasteRatio?'（1–5才減半）':''}`:`四段${materialStageNote}｜本區段不另加耗損`):(effectiveWasteRatio>0?`耗損${effectiveWastePercent}%`:'包價已含一般耗損'),
     materialBatch.minimumApplied?`整批最低消費${Math.round(candidateMinimum*100)/100}`:'',
   ].filter(Boolean).join('｜');
   breakdown.push({
@@ -8160,13 +8182,19 @@ function estimateByUnifiedPricingModel(item){
     covered.add('裁切外型');
   }
 
+  const processFactor=smallPieceProcessFactor(singleExact);
   processTags.forEach((tag)=>{
     if(covered.has(tag)||UNIFIED_INCLUDED_PROCESS_TAGS.has(tag))return;
     const result=unifiedProcessCost(item,tag,basisKey,context);
     if(!result||result.missing){missing.push(result?.label||tag);return;}
     if(result.amount>0){
-      lineProcess+=result.amount;
-      breakdown.push({label:result.label,amount:result.amount/qty,type:'特殊製程'});
+      const adjustedAmount=result.amount*processFactor;
+      lineProcess+=adjustedAmount;
+      breakdown.push({
+        label:processFactor<1?`${result.label}｜小件加工費30%`:result.label,
+        amount:adjustedAmount/qty,
+        type:'特殊製程'
+      });
       covered.add(tag);
     }else missing.push(tag);
   });
@@ -8405,7 +8433,9 @@ function recalculateEstimateItem(item){
   if(!internalEstimate)item.usage=estimateUsage(item,price);
   const wasteFactor=1+Math.max(0,toNumber(item.wasteRate))/100;
   const marketFactor=Math.max(0,1+toNumber(item.marketAdjustment)/100);
-  const manualExtras=(toNumber(item.processingFee)+toNumber(item.otherFee))*qty;
+  const manualProcessFactor=smallPieceProcessFactor(toNumber(item.singleExactTsai)||((toNumber(item.widthMm)*toNumber(item.heightMm))/90000));
+  const manualProcessingUnit=toNumber(item.processingFee)*manualProcessFactor;
+  const manualExtras=(manualProcessingUnit+toNumber(item.otherFee))*qty;
   const minimumFee=(item.historicalPriceApplied||item.productionReferenceApplied)?0:toNumber(price?.minimumFee);
   let costBeforeRange=0;
 
@@ -8422,6 +8452,14 @@ function recalculateEstimateItem(item){
     const materialLine=toNumber(item.usage)*toNumber(item.baseUnitPrice);
     costBeforeRange=materialLine*wasteFactor*marketFactor+manualExtras;
   }
+  if(toNumber(item.processingFee)>0){
+    item.costBreakdown.push({
+      label:manualProcessFactor<1?'人工加工調整｜小件加工費30%':'人工加工調整',
+      amount:manualProcessingUnit,
+      type:'人工加工'
+    });
+  }
+  if(toNumber(item.otherFee)>0)item.costBreakdown.push({label:'其他費用',amount:toNumber(item.otherFee),type:'其他'});
   costBeforeRange=Math.max(minimumFee,costBeforeRange);
 
   const confidence=useManualPrice?Math.max(20,Math.min(98,toNumber(item.manualPriceConfidence)||75))
@@ -9038,9 +9076,241 @@ async function saveEstimateAndOpenOptimization(){
   $('optimizationStatus').textContent=`已載入估價「${project.name}」，可直接產生美術降本方案。`;
 }
 
-function renderEstimateProjects(){if(!$('estimateProjectRows'))return;const rows=[...state.estimateProjects].sort((a,b)=>dateValue(b.date||b.updatedAt)-dateValue(a.date||a.updatedAt));$('estimateProjectRows').innerHTML=rows.length?rows.map((p)=>`<tr><td>${escapeHTML(p.date||'—')}</td><td><strong>${escapeHTML(p.name)}</strong></td><td>${escapeHTML(machineById(p.machineId)?.name||(p.machineId?'未找到機台':'新機台／未建主檔'))}</td><td>${escapeHTML(p.version)}</td><td>${money(p.optimisticTotal)}</td><td><strong>${money(p.baselineTotal)}</strong></td><td>${money(p.conservativeTotal)}</td><td>${Math.round(p.confidence)}%</td><td>${escapeHTML(p.status)}</td><td><div class="rowActions"><button class="linkButton" data-load-estimate="${escapeHTML(p.id)}">載入</button><button class="linkButton" data-copy-estimate="${escapeHTML(p.id)}">複製</button><button class="linkButton dangerText" data-delete-estimate="${escapeHTML(p.id)}">刪除</button></div></td></tr>`).join(''):'<tr><td colspan="10" class="empty">尚未儲存估價。</td></tr>';}
 
-async function handleEstimateProjectClick(event){const load=event.target.closest('[data-load-estimate]');if(load){loadEstimateProject(load.dataset.loadEstimate);return;}const copy=event.target.closest('[data-copy-estimate]');if(copy){loadEstimateProject(copy.dataset.copyEstimate);state.currentEstimateId='';$('estimateId').value='';$('estimateName').value += '（複製）';$('estimateVersion').value=nextEstimateVersionForContext($('estimateName').value,$('estimateMachine').value);renderEstimateDraft();return;}const del=event.target.closest('[data-delete-estimate]');if(!del)return;const id=del.dataset.deleteEstimate;if(!confirm('確定刪除這個估價版本及其明細嗎？'))return;try{await secureApiRequest({action:'deleteEstimate',estimateId:id},{timeoutMs:60000});state.estimateProjects=state.estimateProjects.filter((p)=>p.id!==id);state.estimateItems=state.estimateItems.filter((i)=>i.estimateId!==id);state.artRecommendations=state.artRecommendations.filter((r)=>r.estimateId!==id);if(state.currentEstimateId===id)resetEstimateEditor();renderEstimateProjects();renderOptimizationHistory();populateOptimizationEstimateOptions();showNotice('估價版本已刪除。','success');}catch(e){showNotice(`刪除失敗：${e.message}`,'error');}}
+function estimateExportItems(projectId){
+  if(projectId)return (state.estimateItems||[])
+    .filter((item)=>item.estimateId===projectId)
+    .sort((a,b)=>toNumber(a.index)-toNumber(b.index));
+  return (state.estimateDraftItems||[]).filter((item)=>String(item.name||'').trim());
+}
+
+function estimateExportProject(projectId){
+  if(projectId)return (state.estimateProjects||[]).find((project)=>project.id===projectId)||null;
+  return{
+    id:state.currentEstimateId||'',
+    machineId:$('estimateTargetType')?.value==='existing'?$('estimateMachine')?.value||'':'',
+    name:$('estimateName')?.value?.trim()||'未命名估價',
+    version:$('estimateVersion')?.value?.trim()||'v1',
+    date:$('estimateDate')?.value||todayValue(),
+    optimisticTotal:toNumber($('estimateOptimistic')?.textContent?.replace(/[^0-9.-]/g,'')),
+    baselineTotal:toNumber($('estimateBaseline')?.textContent?.replace(/[^0-9.-]/g,'')),
+    conservativeTotal:toNumber($('estimateConservative')?.textContent?.replace(/[^0-9.-]/g,'')),
+  };
+}
+
+function estimateExportDimension(item){
+  const width=toNumber(item.widthMm);
+  const height=toNumber(item.heightMm);
+  if(width>0&&height>0)return `${roundDisplay(width)}×${roundDisplay(height)}`;
+  return String(item.spec||item.originalSpec||'—').replace(/\s+/g,' ').trim()||'—';
+}
+
+function estimateExportProcess(item){
+  return normalizeProcessTags(item.processSummary||estimateProcessSummaryText(item)).join('、')||'—';
+}
+
+function estimateExportRows(projectId){
+  return estimateExportItems(projectId).map((item,index)=>{
+    const qty=Math.max(1,toNumber(item.qty)||1);
+    const subtotal=toNumber(item.baselineCost);
+    const unitPrice=subtotal/qty;
+    return{
+      index:index+1,
+      name:item.name||'未命名品項',
+      material:item.material||'—',
+      dimension:estimateExportDimension(item),
+      thickness:String(item.thickness||'—'),
+      process:estimateExportProcess(item),
+      qty,
+      unit:'件',
+      unitPrice,
+      subtotal,
+    };
+  });
+}
+
+function estimateExportContext(projectId){
+  const project=estimateExportProject(projectId);
+  const rows=estimateExportRows(projectId);
+  if(!project||!rows.length)throw new Error('找不到可匯出的估價資料。');
+  const machine=machineById(project.machineId);
+  return{
+    project,
+    rows,
+    machineName:machine?.name||(project.machineId?'未找到機台':'新機台／未建主檔'),
+  };
+}
+
+function safeExportFilename(value,fallback='IGS估價單'){
+  const cleaned=String(value||'').trim().replace(/[\\/:*?"<>|]+/g,'_').replace(/\s+/g,' ');
+  return cleaned||fallback;
+}
+
+function estimateSummaryText(projectId=''){
+  const {project,rows,machineName}=estimateExportContext(projectId);
+  const lines=[
+    '【IGS 機台材料報價單】',
+    `估價名稱：${project.name||'未命名估價'}（${project.version||'v1'}）`,
+    `日期：${project.date||todayValue()}`,
+    `機台：${machineName}`,
+    '',
+  ];
+  rows.forEach((row)=>{
+    lines.push(`${row.index}. ${row.name}｜${row.material}${row.thickness&&row.thickness!=='—'?` ${row.thickness}`:''}｜${row.dimension}mm｜${row.process}｜${roundDisplay(row.qty)}${row.unit}｜單價 ${money(row.unitPrice)}｜小計 ${money(row.subtotal)}`);
+  });
+  lines.push('',`基準估價：${money(project.baselineTotal)}`,`樂觀區間：${money(project.optimisticTotal)} ~ ${money(project.conservativeTotal)}`);
+  return lines.join('\n');
+}
+
+async function copyEstimateSummary(projectId=''){
+  try{
+    if(!projectId){recalculateAllEstimateItems();updateEstimateTotals();}
+    const text=estimateSummaryText(projectId);
+    if(navigator.clipboard?.writeText&&window.isSecureContext){
+      await navigator.clipboard.writeText(text);
+    }else{
+      const area=document.createElement('textarea');
+      area.value=text;area.setAttribute('readonly','');area.style.position='fixed';area.style.opacity='0';
+      document.body.appendChild(area);area.select();
+      if(!document.execCommand('copy'))throw new Error('瀏覽器不允許複製');
+      area.remove();
+    }
+    showNotice('估價摘要已複製，可直接貼到 LINE 或訊息中。','success');
+  }catch(error){
+    showNotice(`複製摘要失敗：${error.message}`,'error');
+  }
+}
+
+function canvasTextImage(text,widthMm,heightMm,{fontSize=3.1,bold=false,align='left',color='#17324d'}={}){
+  const scale=7;
+  const width=Math.max(1,Math.round(widthMm*scale));
+  const height=Math.max(1,Math.round(heightMm*scale));
+  const canvas=document.createElement('canvas');canvas.width=width;canvas.height=height;
+  const ctx=canvas.getContext('2d');
+  ctx.clearRect(0,0,width,height);
+  ctx.fillStyle=color;
+  ctx.textBaseline='middle';
+  ctx.textAlign=align;
+  let fontPx=Math.max(9,Math.round(fontSize*scale));
+  const fontFamily='Arial, "Microsoft JhengHei", "PingFang TC", sans-serif';
+  ctx.font=`${bold?'700':'400'} ${fontPx}px ${fontFamily}`;
+  const padding=2*scale;
+  const maxWidth=Math.max(1,width-padding*2);
+  let output=String(text??'');
+  const minimumFontPx=Math.max(8,Math.round(1.8*scale));
+  while(ctx.measureText(output).width>maxWidth&&fontPx>minimumFontPx){
+    fontPx-=1;
+    ctx.font=`${bold?'700':'400'} ${fontPx}px ${fontFamily}`;
+  }
+  if(ctx.measureText(output).width>maxWidth){
+    const ellipsis='…';
+    while(output.length>1&&ctx.measureText(output+ellipsis).width>maxWidth)output=output.slice(0,-1);
+    output+=ellipsis;
+  }
+  const x=align==='center'?width/2:align==='right'?width-padding:padding;
+  ctx.fillText(output,x,height/2,maxWidth);
+  return canvas.toDataURL('image/png');
+}
+
+function addPdfCanvasText(doc,text,x,y,width,height,options={}){
+  const image=canvasTextImage(text,width,height,options);
+  doc.addImage(image,'PNG',x,y,width,height,undefined,'FAST');
+}
+
+function exportEstimatePdf(projectId){
+  try{
+    const {project,rows,machineName}=estimateExportContext(projectId);
+    const JsPdf=window.jspdf?.jsPDF;
+    if(!JsPdf)throw new Error('PDF 元件尚未載入，請確認網路後重新整理。');
+    const doc=new JsPdf({orientation:'landscape',unit:'mm',format:'a4'});
+    const runAutoTable=typeof doc.autoTable==='function'
+      ?(options)=>doc.autoTable(options)
+      :(window.jspdfAutoTable?.autoTable?(options)=>window.jspdfAutoTable.autoTable(doc,options):null);
+    if(!runAutoTable)throw new Error('PDF 表格元件尚未載入。');
+
+    addPdfCanvasText(doc,'IGS 機台材料報價單',14,9,100,8,{fontSize:5.2,bold:true});
+    addPdfCanvasText(doc,`估價名稱：${project.name||'未命名估價'}｜版本：${project.version||'v1'}`,14,19,155,6,{fontSize:3.3});
+    addPdfCanvasText(doc,`日期：${project.date||todayValue()}｜機台：${machineName}`,174,19,108,6,{fontSize:3.3,align:'right'});
+
+    const headings=['#','品項','材質','規格mm','厚度','製程','數量','單價','小計'];
+    const widths=[10,42,33,31,18,55,19,29,29];
+    const bodyRows=rows.map((row)=>[
+      row.index,row.name,row.material,row.dimension,row.thickness,row.process,`${roundDisplay(row.qty)}${row.unit}`,money(row.unitPrice),money(row.subtotal)
+    ].map((value)=>({content:'',exportText:String(value)})));
+    const head=[headings.map((value)=>({content:'',exportText:value}))];
+    const columnStyles={};widths.forEach((width,index)=>{columnStyles[index]={cellWidth:width};});
+
+    runAutoTable({
+      startY:28,
+      head,
+      body:bodyRows,
+      margin:{left:14,right:14},
+      theme:'grid',
+      styles:{fontSize:8,minCellHeight:11,cellPadding:1.2,lineColor:[205,214,216],lineWidth:.2,textColor:[255,255,255]},
+      headStyles:{fillColor:[62,101,112],minCellHeight:11,textColor:[62,101,112]},
+      alternateRowStyles:{fillColor:[247,250,249]},
+      columnStyles,
+      didDrawCell(data){
+        const raw=data.cell.raw;
+        const value=raw&&typeof raw==='object'&&'exportText'in raw?raw.exportText:'';
+        const isHeader=data.section==='head';
+        addPdfCanvasText(doc,value,data.cell.x+0.8,data.cell.y+1,data.cell.width-1.6,data.cell.height-2,{
+          fontSize:isHeader?3.1:2.8,
+          bold:isHeader||data.column.index===8,
+          align:[0,6,7,8].includes(data.column.index)?'center':'left',
+          color:isHeader?'#ffffff':'#17324d'
+        });
+      }
+    });
+    const tableEnd=doc.lastAutoTable?.finalY||40;
+    const pageHeight=doc.internal.pageSize.getHeight();
+    let totalsY=tableEnd+6;
+    if(totalsY+10>pageHeight-8){doc.addPage();totalsY=14;}
+    addPdfCanvasText(doc,`基準估價：${money(project.baselineTotal)}`,14,totalsY,80,8,{fontSize:4.4,bold:true});
+    addPdfCanvasText(doc,`樂觀區間：${money(project.optimisticTotal)} ~ ${money(project.conservativeTotal)}`,105,totalsY,177,8,{fontSize:3.8,bold:true,align:'right'});
+    doc.save(`${safeExportFilename(`${project.name}_${project.version}`)}.pdf`);
+    showNotice('PDF 報價單已產生。','success');
+  }catch(error){
+    showNotice(`PDF 匯出失敗：${error.message}`,'error');
+  }
+}
+
+function exportEstimateExcel(projectId){
+  try{
+    const {project,rows,machineName}=estimateExportContext(projectId);
+    if(!window.XLSX)throw new Error('Excel 元件尚未載入，請確認網路後重新整理。');
+    const aoa=[
+      ['IGS 機台材料報價單'],
+      [`估價名稱：${project.name||'未命名估價'}｜版本：${project.version||'v1'}`],
+      [`日期：${project.date||todayValue()}｜機台：${machineName}`],
+      [],
+      ['#','品項','材質','規格mm','厚度','製程','數量','單價','小計'],
+      ...rows.map((row)=>[row.index,row.name,row.material,row.dimension,row.thickness,row.process,`${roundDisplay(row.qty)}${row.unit}`,Math.round(row.unitPrice*100)/100,Math.round(row.subtotal*100)/100]),
+      [],
+      ['基準估價','','','','','','','',Math.round(toNumber(project.baselineTotal)*100)/100],
+      ['樂觀區間','','','','','','',Math.round(toNumber(project.optimisticTotal)*100)/100,Math.round(toNumber(project.conservativeTotal)*100)/100],
+    ];
+    const sheet=window.XLSX.utils.aoa_to_sheet(aoa);
+    sheet['!merges']=[
+      {s:{r:0,c:0},e:{r:0,c:8}},
+      {s:{r:1,c:0},e:{r:1,c:8}},
+      {s:{r:2,c:0},e:{r:2,c:8}},
+      {s:{r:rows.length+6,c:0},e:{r:rows.length+6,c:7}},
+      {s:{r:rows.length+7,c:0},e:{r:rows.length+7,c:6}},
+    ];
+    sheet['!cols']=[{wch:6},{wch:28},{wch:22},{wch:18},{wch:12},{wch:36},{wch:12},{wch:14},{wch:14}];
+    const workbook=window.XLSX.utils.book_new();
+    window.XLSX.utils.book_append_sheet(workbook,sheet,'材料報價單');
+    window.XLSX.writeFile(workbook,`${safeExportFilename(`${project.name}_${project.version}`)}.xlsx`);
+    showNotice('Excel 報價單已產生。','success');
+  }catch(error){
+    showNotice(`Excel 匯出失敗：${error.message}`,'error');
+  }
+}
+
+function renderEstimateProjects(){if(!$('estimateProjectRows'))return;const rows=[...state.estimateProjects].sort((a,b)=>dateValue(b.date||b.updatedAt)-dateValue(a.date||a.updatedAt));$('estimateProjectRows').innerHTML=rows.length?rows.map((p)=>`<tr><td>${escapeHTML(p.date||'—')}</td><td><strong>${escapeHTML(p.name)}</strong></td><td>${escapeHTML(machineById(p.machineId)?.name||(p.machineId?'未找到機台':'新機台／未建主檔'))}</td><td>${escapeHTML(p.version)}</td><td>${money(p.optimisticTotal)}</td><td><strong>${money(p.baselineTotal)}</strong></td><td>${money(p.conservativeTotal)}</td><td>${Math.round(p.confidence)}%</td><td>${escapeHTML(p.status)}</td><td><div class="rowActions estimateExportActions"><button class="linkButton" data-load-estimate="${escapeHTML(p.id)}">載入</button><button class="linkButton" data-copy-estimate="${escapeHTML(p.id)}">複製</button><button class="linkButton exportLink" data-export-estimate-pdf="${escapeHTML(p.id)}">📄 PDF</button><button class="linkButton exportLink" data-export-estimate-excel="${escapeHTML(p.id)}">📊 Excel</button><button class="linkButton dangerText" data-delete-estimate="${escapeHTML(p.id)}">刪除</button></div></td></tr>`).join(''):'<tr><td colspan="10" class="empty">尚未儲存估價。</td></tr>';}
+
+async function handleEstimateProjectClick(event){const load=event.target.closest('[data-load-estimate]');if(load){loadEstimateProject(load.dataset.loadEstimate);return;}const copy=event.target.closest('[data-copy-estimate]');if(copy){loadEstimateProject(copy.dataset.copyEstimate);state.currentEstimateId='';$('estimateId').value='';$('estimateName').value += '（複製）';$('estimateVersion').value=nextEstimateVersionForContext($('estimateName').value,$('estimateMachine').value);renderEstimateDraft();return;}const pdf=event.target.closest('[data-export-estimate-pdf]');if(pdf){exportEstimatePdf(pdf.dataset.exportEstimatePdf);return;}const excel=event.target.closest('[data-export-estimate-excel]');if(excel){exportEstimateExcel(excel.dataset.exportEstimateExcel);return;}const del=event.target.closest('[data-delete-estimate]');if(!del)return;const id=del.dataset.deleteEstimate;if(!confirm('確定刪除這個估價版本及其明細嗎？'))return;try{await secureApiRequest({action:'deleteEstimate',estimateId:id},{timeoutMs:60000});state.estimateProjects=state.estimateProjects.filter((p)=>p.id!==id);state.estimateItems=state.estimateItems.filter((i)=>i.estimateId!==id);state.artRecommendations=state.artRecommendations.filter((r)=>r.estimateId!==id);if(state.currentEstimateId===id)resetEstimateEditor();renderEstimateProjects();renderOptimizationHistory();populateOptimizationEstimateOptions();showNotice('估價版本已刪除。','success');}catch(e){showNotice(`刪除失敗：${e.message}`,'error');}}
 
 function populateOptimizationEstimateOptions(){
   const select=$('optimizationEstimate');if(!select)return;

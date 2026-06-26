@@ -3488,3 +3488,26 @@ dialog .panelActions .button {
   .machineManageImagePreview { min-height: 175px; }
   .machineManageImagePreview img { height: 210px; }
 }
+
+/* ===== v3.28 估價匯出工具 ===== */
+.estimateExportActions {
+  min-width: 330px;
+  flex-wrap: wrap;
+  justify-content: flex-start;
+}
+
+.estimateExportActions .exportLink {
+  color: #2f6877;
+  font-weight: 800;
+}
+
+.estimateExportActions .exportLink:hover {
+  color: #173f4b;
+  text-decoration: underline;
+}
+
+@media (max-width: 760px) {
+  .estimateExportActions {
+    min-width: 260px;
+  }
+}
