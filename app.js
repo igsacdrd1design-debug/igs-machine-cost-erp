@@ -397,7 +397,7 @@ const UNIFIED_SPECIAL_PROCESS_PRICE = Object.freeze({
 });
 
 const UNIFIED_INCLUDED_PROCESS_TAGS = Object.freeze(new Set([
-  '背膠', '正面印刷', '背面印刷', '四色'
+  '背膠', '正面印刷', '背面印刷'
 ]));
 
 // 歷史價只可在高可信匹配時直接作為估價基線；低分紀錄僅供 UI 參考。
@@ -8294,7 +8294,7 @@ function estimateByUnifiedPricingModel(item) {
 
   const quantityDiscount = qty >= 10 ? 0.85 : qty >= 5 ? 0.90 : 1;
   const lineBeforeDiscount = singleFinalBeforeDiscount * qty;
-  const lineTotal = lineBeforeDiscount * quantityDiscount;
+  let lineTotal = lineBeforeDiscount * quantityDiscount;
   const discountPerUnit = singleFinalBeforeDiscount * (1 - quantityDiscount);
   if (quantityDiscount < 1) {
     breakdown.push({
@@ -8304,9 +8304,22 @@ function estimateByUnifiedPricingModel(item) {
     });
   }
 
+  let irregularShapeMultiplier = 1;
+  let irregularSurchargeTotal = 0;
+  if (unifiedHasIrregularShape(processTags, item)) {
+    irregularShapeMultiplier = IRREGULAR_SHAPE_MULTIPLIER;
+    irregularSurchargeTotal = lineTotal * (irregularShapeMultiplier - 1);
+    lineTotal *= irregularShapeMultiplier;
+    breakdown.push({
+      label: '異形切割加成 ×1.3',
+      amount: irregularSurchargeTotal / qty,
+      type: '異形加成'
+    });
+  }
+
   const materialShareBeforeDiscount = singleMaterialCost + minimumTopUp;
   const materialLineTotal = materialShareBeforeDiscount * qty * quantityDiscount;
-  const processLineTotal = singleProcessCost * qty * quantityDiscount;
+  const processLineTotal = singleProcessCost * qty * quantityDiscount + irregularSurchargeTotal;
   const unitPrice = lineTotal / qty;
   const formulaParts = [
     `材料 ${roundDisplay(singleMaterialCost)}`,
@@ -8315,6 +8328,7 @@ function estimateByUnifiedPricingModel(item) {
   if (minimumTopUp > 0) formulaParts.push(`最低消費補足 ${roundDisplay(minimumTopUp)}`);
   let formula = `(${formulaParts.join(' + ')}) × ${qty}件`;
   if (quantityDiscount < 1) formula += ` × ${quantityDiscount}`;
+  if (irregularShapeMultiplier > 1) formula += ` × ${irregularShapeMultiplier}`;
   formula += ` = ${roundDisplay(lineTotal)}`;
 
   const mode = '材質基價＋加工費逐項疊加';
@@ -8348,7 +8362,7 @@ function estimateByUnifiedPricingModel(item) {
     wasteRateRatio: appliedWasteRate,
     minimumCharge: minimumUnitPrice,
     minimumApplied: minimumTopUp > 0,
-    irregularShapeMultiplier: 1
+    irregularShapeMultiplier
   };
 }
 
