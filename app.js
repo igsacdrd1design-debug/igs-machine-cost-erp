@@ -302,14 +302,14 @@ const pageDescriptions = {
   quotationEntry: "上傳圖片或 PDF，將成本歸入既有機台並確認稅額與安裝區域。",
   quickMachine: "快速建立新的機台主檔。",
   suppliers: "查看供應商與成本單金額。",
-  machine360Setup: "上傳一至四張基準角度圖，使用 AI 補中間角度並建立可旋轉的主管成本頁。",
+  machine360Setup: "修改機台基本資料與代表圖片；多角度／360° 功能收在進階圖片設定中。",
   dataImport: "一次檢查並依序匯入材料、製程、歷史報價與量產參考四份資料。",
   priceCenter: "管理公司材料價格並查詢網路市場浮動。",
   smartEstimate: "快速估價：可用 AI 掃描、貼上文字或手動輸入，並套用公司公式與歷史資料。",
   artOptimization: "僅針對美術材料與印刷製程提出降本及視覺概念模擬。",
 };
 
-const ADVANCED_TOOL_VIEWS = new Set(["costRecords", "quotationEntry", "priceCenter"]);
+const ADVANCED_TOOL_VIEWS = new Set(["costRecords", "quotationEntry", "priceCenter", "machine360Setup"]);
 
 
 
@@ -564,6 +564,8 @@ let state = {
   currentOptimization: null,
   currentEstimateId: "",
   machine360Draft: {},
+  machineManageImagePayload: null,
+  machineManageRemoveImage: false,
   draftItems: [],
   stagedMachines: loadStagedMachines(),
   selectedMachineId: "",
@@ -1164,6 +1166,8 @@ function resetPrivateState() {
   state.currentOptimization = null;
   state.currentEstimateId = "";
   state.machine360Draft = {};
+  state.machineManageImagePayload = null;
+  state.machineManageRemoveImage = false;
   state.selectedMachineId = "";
   state.machineImagePayload = null;
   state.quotationDocumentPayload = null;
@@ -2361,16 +2365,240 @@ function createEmptyMachineMarkerDraft() {
   };
 }
 
+
+function selectedMachineForManagement() {
+  const machineId = $("machine360Machine")?.value || "";
+  return machineById(machineId) || null;
+}
+
+function setMachineManagementDisabled(disabled) {
+  const form = $("machineManageForm");
+  if (!form) return;
+  form.querySelectorAll("input, select, textarea, button").forEach((control) => {
+    control.disabled = Boolean(disabled);
+  });
+}
+
+async function renderMachineManageImagePreview() {
+  const machine = selectedMachineForManagement();
+  const wrap = $("machineManageImagePreviewWrap");
+  const image = $("machineManageImagePreview");
+  const empty = $("machineManageImageEmpty");
+  const name = $("machineManageImageName");
+  const clearButton = $("clearMachineManageImage");
+  const removeButton = $("removeMachineManageImage");
+  if (!wrap || !image || !empty || !name || !clearButton || !removeButton) return;
+
+  image.hidden = true;
+  image.removeAttribute("src");
+  delete image.dataset.secureFileId;
+  delete image.dataset.secureLoaded;
+  empty.hidden = false;
+  empty.textContent = machine ? `${String(machine.name || "機台").slice(0, 2).toUpperCase()}` : "尚無代表圖片";
+  clearButton.hidden = !state.machineManageImagePayload;
+  removeButton.disabled = !machine || (!machine.imageFileId && !machine.imageUrl && !state.machineManageRemoveImage);
+  removeButton.textContent = state.machineManageRemoveImage ? "取消移除主圖" : "移除目前主圖";
+
+  if (!machine) {
+    name.textContent = "請先選擇機台";
+    return;
+  }
+  if (state.machineManageImagePayload) {
+    image.src = state.machineManageImagePayload.dataUrl;
+    image.hidden = false;
+    empty.hidden = true;
+    name.textContent = `${state.machineManageImagePayload.name}（尚未儲存）`;
+    return;
+  }
+  if (state.machineManageRemoveImage) {
+    empty.textContent = "儲存後移除主圖";
+    name.textContent = "已標記移除目前主圖";
+    return;
+  }
+  if (machine.imageFileId) {
+    const selectedId = machine.id;
+    name.textContent = "目前使用私人 Google Drive 圖片";
+    try {
+      const dataUrl = await getPrivateImageDataUrl(machine.imageFileId);
+      if (selectedMachineForManagement()?.id !== selectedId || state.machineManageImagePayload || state.machineManageRemoveImage) return;
+      image.src = dataUrl;
+      image.hidden = false;
+      empty.hidden = true;
+    } catch (error) {
+      empty.textContent = "主圖讀取失敗，可重新選擇圖片";
+    }
+    return;
+  }
+  if (machine.imageUrl) {
+    image.src = machine.imageUrl;
+    image.hidden = false;
+    empty.hidden = true;
+    name.textContent = "目前使用外部圖片網址";
+    return;
+  }
+  name.textContent = "目前尚未設定代表圖片";
+}
+
+async function renderMachineManagementForm() {
+  const machine = selectedMachineForManagement();
+  const summary = $("machineManageSummary");
+  const status = $("machineManageStatus");
+  if (!$("machineManageForm")) return;
+
+  state.machineManageImagePayload = null;
+  state.machineManageRemoveImage = false;
+  if ($("machineManageImageFile")) $("machineManageImageFile").value = "";
+
+  if (!machine) {
+    $("machineManageCode").value = "";
+    $("machineManageName").value = "";
+    $("machineManageNote").value = "";
+    setMachineManagementDisabled(true);
+    if (summary) summary.textContent = "請先建立或選擇機台。";
+    if (status) status.textContent = "目前沒有可管理的機台。";
+    await renderMachineManageImagePreview();
+    return;
+  }
+
+  setMachineManagementDisabled(false);
+  $("machineManageCode").value = machine.code || "";
+  $("machineManageName").value = machine.name || "";
+  $("machineManageNote").value = machine.note || "";
+  if ($("machineManageCategory")) {
+    const categorySelect = $("machineManageCategory");
+    if (![...categorySelect.options].some((option) => option.value === machine.category)) {
+      categorySelect.insertAdjacentHTML("beforeend", `<option value="${escapeHTML(machine.category)}">${escapeHTML(machine.category)}</option>`);
+    }
+    categorySelect.value = machine.category || "";
+  }
+  if (summary) {
+    const orderCount = state.costOrders.filter((order) => order.machineId === machine.id).length;
+    summary.innerHTML = `<strong>${escapeHTML(machine.name)}</strong><span>${escapeHTML(machine.code || machine.id)}｜${escapeHTML(machine.category)}｜${orderCount} 張成本單</span>`;
+  }
+  if (status) status.textContent = "可修改基本資料或選擇新主圖；尚未按下儲存前不會變更正式資料。";
+  await renderMachineManageImagePreview();
+}
+
+async function handleMachineManageImageSelection(event) {
+  const file = event.target.files?.[0];
+  if (!file) return;
+  const status = $("machineManageStatus");
+  try {
+    if (status) status.textContent = "正在處理新主圖…";
+    state.machineManageImagePayload = await compressImageFile(file, 1400, 0.84);
+    state.machineManageRemoveImage = false;
+    await renderMachineManageImagePreview();
+    if (status) status.textContent = "新主圖已準備完成，按下「儲存機台資料」後才會正式替換。";
+  } catch (error) {
+    state.machineManageImagePayload = null;
+    event.target.value = "";
+    if (status) status.textContent = `圖片處理失敗：${error.message}`;
+    showNotice(`圖片處理失敗：${error.message}`, "error");
+  }
+}
+
+async function clearMachineManageImageSelection() {
+  state.machineManageImagePayload = null;
+  if ($("machineManageImageFile")) $("machineManageImageFile").value = "";
+  await renderMachineManageImagePreview();
+  if ($("machineManageStatus")) $("machineManageStatus").textContent = "已清除尚未儲存的新圖片，正式主圖未變更。";
+}
+
+async function toggleRemoveMachineManageImage() {
+  const machine = selectedMachineForManagement();
+  if (!machine) return;
+  state.machineManageImagePayload = null;
+  state.machineManageRemoveImage = !state.machineManageRemoveImage;
+  if ($("machineManageImageFile")) $("machineManageImageFile").value = "";
+  await renderMachineManageImagePreview();
+  if ($("machineManageStatus")) {
+    $("machineManageStatus").textContent = state.machineManageRemoveImage
+      ? "目前主圖已標記移除；按下儲存後才會生效。"
+      : "已取消移除主圖。";
+  }
+}
+
+async function saveMachineManagement(event) {
+  event.preventDefault();
+  const machine = selectedMachineForManagement();
+  if (!machine) { showNotice("請先選擇機台。", "warn"); return; }
+  const code = $("machineManageCode").value.trim();
+  const name = $("machineManageName").value.trim();
+  const category = $("machineManageCategory").value.trim();
+  if (!code || !name || !category) { showNotice("機台代碼、名稱與分類不可空白。", "warn"); return; }
+
+  const button = $("saveMachineManagement");
+  const oldFileId = machine.imageFileId || "";
+  if (button) { button.disabled = true; button.textContent = "儲存中…"; }
+  if ($("machineManageStatus")) $("machineManageStatus").textContent = "正在更新機台資料與圖片…";
+  try {
+    const response = await secureApiRequest({
+      action: "updateMachine",
+      machine: {
+        id: machine.id,
+        code,
+        name,
+        category,
+        note: $("machineManageNote").value.trim(),
+        image: state.machineManageImagePayload,
+        removeImage: state.machineManageRemoveImage,
+      },
+    }, { includeToken: true, timeoutMs: 90000 });
+    const updated = normalizeMachine(response.result?.machine || {});
+    const index = state.machines.findIndex((row) => row.id === machine.id);
+    if (index >= 0) state.machines[index] = updated;
+    if (oldFileId) secureImageCache.delete(oldFileId);
+    if (updated.imageFileId) secureImageCache.delete(updated.imageFileId);
+    state.machineManageImagePayload = null;
+    state.machineManageRemoveImage = false;
+    populateControls();
+    if ($("machine360Machine")) $("machine360Machine").value = updated.id;
+    renderAll();
+    await renderMachineManagementForm();
+    await renderMachine360Setup();
+    showNotice(`已更新「${updated.name}」的機台資料。`, "success");
+    if ($("machineManageStatus")) $("machineManageStatus").textContent = "機台資料已儲存並同步更新所有畫面。";
+  } catch (error) {
+    showNotice(`機台資料更新失敗：${error.message}`, "error");
+    if ($("machineManageStatus")) $("machineManageStatus").textContent = `儲存失敗：${error.message}`;
+  } finally {
+    if (button) { button.disabled = false; button.textContent = "儲存機台資料"; }
+  }
+}
+
+function openMachineManagement(machineId) {
+  if (!machineId || !machineById(machineId)) return;
+  if ($("machineDialog")?.open) $("machineDialog").close();
+  const select = $("machine360Machine");
+  if (select) select.value = machineId;
+  state.machine360Draft = {};
+  state.machineManageImagePayload = null;
+  state.machineManageRemoveImage = false;
+  state.machine360ViewerIndex = 0;
+  state.machineMarkerDraft = createEmptyMachineMarkerDraft();
+  activateView("machine360Setup", "機台資料與圖片管理");
+  renderMachineManagementForm();
+  renderMachine360Setup();
+}
+
 function setupMachine360() {
   const machineSelect = $("machine360Machine");
   if (!machineSelect) return;
   machineSelect.addEventListener("change", () => {
     stopMachine360AutoRotate();
     state.machine360Draft = {};
+    state.machineManageImagePayload = null;
+    state.machineManageRemoveImage = false;
     state.machine360ViewerIndex = 0;
     state.machineMarkerDraft = createEmptyMachineMarkerDraft();
+    renderMachineManagementForm();
     renderMachine360Setup();
   });
+  $("machineManageForm")?.addEventListener("submit", saveMachineManagement);
+  $("machineManageImageFile")?.addEventListener("change", handleMachineManageImageSelection);
+  $("clearMachineManageImage")?.addEventListener("click", clearMachineManageImageSelection);
+  $("removeMachineManageImage")?.addEventListener("click", toggleRemoveMachineManageImage);
+  $("resetMachineManagement")?.addEventListener("click", renderMachineManagementForm);
   document.querySelectorAll("[data-machine360-view]").forEach((input) => {
     input.addEventListener("change", handleMachine360FileSelection);
   });
@@ -2414,6 +2642,7 @@ function setupMachine360() {
   $("machineMarkerSavedList")?.addEventListener("click", handleMachineMarkerSavedListClick);
 
   setupAdaptiveMachine360Viewer();
+  renderMachineManagementForm();
   renderMachine360Setup();
 }
 
@@ -2943,15 +3172,11 @@ async function renderMachine360Setup() {
   $("machine360ProgressText").textContent = `${completed} / 4`;
   $("machine360ProgressBar").style.width = `${percent}%`;
   const badge = $("machine360CompletionBadge");
-  const modeLabel = completed >= 4
-    ? "完整四視圖模式"
-    : completed >= 2
-      ? "雙圖交叉偵測模式"
-      : completed === 1
-        ? "單圖偵測模式"
-        : "尚未選擇圖片";
-  badge.textContent = machineId ? `${modeLabel}｜${completed} / 4` : "尚未選擇機台";
-  badge.classList.toggle("connected", completed >= 1);
+  const selectedMachine = machineById(machineId);
+  badge.textContent = machineId
+    ? `${selectedMachine?.name || "已選擇機台"}｜多角度 ${completed} / 4`
+    : "尚未選擇機台";
+  badge.classList.toggle("connected", Boolean(machineId));
 
   let statusText = "請先選擇機台，再上傳至少一張基準圖。";
   if (machineId && completed === 1) {
@@ -3260,6 +3485,7 @@ function populateControls() {
 
   fillSelect("categoryFilter", categoryList, true, "全部分類");
   fillSelect("machineCategory", categoryList, false);
+  if ($("machineManageCategory")) fillSelect("machineManageCategory", categoryList, false);
   if ($("quotationQuickMachineCategory")) fillSelect("quotationQuickMachineCategory", categoryList, false);
 
   const machineOptions = state.machines.map((machine) => ({ value: machine.id, label: `${machine.name}${machine.code ? `（${machine.code}）` : ""}` }));
@@ -3285,6 +3511,7 @@ function populateControls() {
       ? machineOptions.map((item) => `<option value="${escapeHTML(item.value)}">${escapeHTML(item.label)}</option>`).join("")
       : '<option value="">請先建立機台</option>';
     if ([...machine360Machine.options].some((option) => option.value === current360)) machine360Machine.value = current360;
+    renderMachineManagementForm();
     renderMachine360Setup();
   }
 
@@ -3475,7 +3702,10 @@ function renderMachineCards() {
             <div><span>測試台</span><strong>${money(totals.test)}</strong></div>
             <div class="actual"><span>實際費用</span><strong>${money(totals.actual)}</strong></div>
           </div>
-          <button class="button secondary fullButton" type="button" data-open-machine="${escapeHTML(machine.id)}">查看所有品項</button>
+          <div class="machineCardActions">
+            <button class="button secondary" type="button" data-open-machine="${escapeHTML(machine.id)}">查看所有品項</button>
+            <button class="button ghost" type="button" data-edit-machine="${escapeHTML(machine.id)}">⚙ 編輯機台</button>
+          </div>
         </div>
       </article>`;
     }).join("")
@@ -3483,6 +3713,9 @@ function renderMachineCards() {
 
   $("machineCards").querySelectorAll("[data-open-machine]").forEach((button) => {
     button.addEventListener("click", () => openMachineDialog(button.dataset.openMachine));
+  });
+  $("machineCards").querySelectorAll("[data-edit-machine]").forEach((button) => {
+    button.addEventListener("click", () => openMachineManagement(button.dataset.editMachine));
   });
   hydrateSecureImages($("machineCards"));
 }
@@ -3626,10 +3859,11 @@ function openMachineDialog(machineId) {
   $("machineDialogContent").innerHTML = `
     <div class="dialogHeader">
       <div class="dialogMachineImage ${(machine.imageFileId || machine.imageUrl) ? "hasImage" : ""}">${headerImageMarkup}</div>
-      <div>
+      <div class="dialogMachineInfo">
         <span class="tag">${escapeHTML(machine.category)}</span>
         <h2>${escapeHTML(machine.name)}</h2>
         <p>${escapeHTML(machine.code || machine.id)}${machine.note ? `｜${escapeHTML(machine.note)}` : ""}</p>
+        <button class="button ghost compact dialogEditMachineButton" type="button" data-edit-machine="${escapeHTML(machine.id)}">⚙ 編輯機台資料／換圖</button>
       </div>
     </div>
     <div class="dialogCostCards">
@@ -3668,7 +3902,7 @@ function openMachineDialog(machineId) {
             <div id="dialogMachine360Dots" class="viewerDots" aria-label="角度選擇"></div>
           </div>
           <div id="machineAreaCostPanel" class="machineAreaCostPanel">
-            尚未選擇成本位置。若圖上沒有標記，請到「360° 機台建置」建立成本位置並綁定品項。
+            尚未選擇成本位置。若圖上沒有標記，請到「機台資料與圖片管理」的進階圖片設定建立成本位置並綁定品項。
           </div>
         </div>
       </section>` : `
@@ -3837,7 +4071,7 @@ function renderDialogMachineHotspots(machineId, viewKey) {
   if (panel && !state.selectedMachineArea) {
     panel.innerHTML = areas.length
       ? "點擊機台圖上的成本標記，查看目前費用階段的區域金額與品項。"
-      : "此角度尚未建立成本位置標記。請到「360° 機台建置」新增標記並綁定品項。";
+      : "此角度尚未建立成本位置標記。請到「機台資料與圖片管理」的進階圖片設定新增標記並綁定品項。";
   }
 }
 
@@ -3908,6 +4142,11 @@ function renderDialogStage(machineId, type) {
 
 
 function handleMachineDialogContentClick(event) {
+  const editMachineButton = event.target.closest('[data-edit-machine]');
+  if (editMachineButton) {
+    openMachineManagement(editMachineButton.dataset.editMachine);
+    return;
+  }
   const editButton = event.target.closest('[data-edit-cost-item]');
   if (editButton) {
     const item = state.costItems.find((row) => row.id === editButton.dataset.editCostItem);

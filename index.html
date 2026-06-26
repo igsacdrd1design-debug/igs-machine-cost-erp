@@ -8,7 +8,7 @@
   <meta name="googlebot" content="noindex, nofollow, noarchive, nosnippet">
   <meta name="referrer" content="no-referrer">
   <title>IGS 機台材料成本 ERP｜快速估價</title>
-  <link rel="stylesheet" href="style.css?v=20260626-igs-v3-26-certify-cost-actions">
+  <link rel="stylesheet" href="style.css?v=20260626-igs-v3-27-machine-media-manager">
 </head>
 <body class="authLocked">
   <section id="authGate" class="authGate" aria-labelledby="loginTitle">
@@ -49,6 +49,7 @@
       <button class="sideToolAction" type="button" data-open-view="costRecords" data-open-title="成本紀錄">成本紀錄</button>
       <button class="sideToolAction" type="button" data-open-view="quotationEntry" data-open-title="估價單建檔">估價單建檔</button>
       <button class="sideToolAction" type="button" data-open-view="priceCenter" data-open-title="進階價格中心">進階價格中心</button>
+      <button class="sideToolAction" type="button" data-open-view="machine360Setup" data-open-title="機台資料與圖片管理">機台資料與圖片管理</button>
     </details>
 
     <div class="sidebarFoot">
@@ -469,218 +470,272 @@
 
 
     <section id="machine360Setup" class="view">
-      <div class="quickIntro view360Intro">
+      <div class="quickIntro machineManageIntro">
         <div>
-          <span class="eyebrow">v2.0 · 少量圖片建立 360° 視覺</span>
-          <h2>提供一至四張基準角度圖，由 AI 補中間角度並建立可旋轉的主管成本頁</h2>
-          <p>不需要提供原始 3D 模型。上傳 1 張即可生成 AI 草稿，2～4 張可提升多視角一致性；所有 AI 影格都需人工審核。</p>
+          <span class="eyebrow">v3.27 · 機台資料與圖片管理</span>
+          <h2>修改機台資料、替換主圖，並視需要管理多角度圖片</h2>
+          <p>日常只需在這裡修改機台名稱、代碼、分類、備註或主圖；原本的多角度／360° 功能保留在下方進階圖片設定。</p>
         </div>
         <div id="machine360CompletionBadge" class="apiBadge">尚未選擇機台</div>
       </div>
 
-      <div class="panel machine360SelectorPanel">
+      <div class="panel machineManageSelectPanel">
         <div class="panelHead">
           <div>
-            <h2>1. 選擇機台</h2>
-            <p class="muted">基準角度圖會儲存在私人 Google Drive，並綁定到這台機台。</p>
+            <h2>1. 選擇要管理的機台</h2>
+            <p class="muted">也可以從「機台總覽」按下「⚙ 編輯機台」直接帶入。</p>
           </div>
+          <button class="button ghost" type="button" data-open-view="machines" data-open-title="機台總覽">返回機台總覽</button>
         </div>
-        <div class="machine360SelectorRow">
+        <div class="machineManageSelectorRow">
           <label>
             <span>機台 *</span>
             <select id="machine360Machine"></select>
           </label>
-          <div class="machine360Progress">
-            <span>基準圖完成度</span>
-            <strong id="machine360ProgressText">0 / 4</strong>
-            <div class="progressTrack"><div id="machine360ProgressBar" class="progressFill" style="width:0%"></div></div>
-          </div>
+          <div id="machineManageSummary" class="machineManageSummary">請先選擇機台。</div>
         </div>
       </div>
 
-      <div class="panel">
+      <div class="panel machineManagePanel">
         <div class="panelHead">
           <div>
-            <h2>2. 上傳一至四張基準角度圖</h2>
-            <p class="muted">可分次儲存，不必一次備齊。格式支援 JPG、PNG、WebP；建議所有圖片尺寸與機台中心一致。</p>
+            <h2>2. 基本資料與主圖</h2>
+            <p class="muted">儲存後會立即更新首頁、機台總覽及機台成本對話框中的名稱與代表圖片。</p>
           </div>
         </div>
-        <div id="machine360UploadGrid" class="machine360UploadGrid">
-          <article class="viewUploadCard" data-view-key="FRONT">
-            <div class="viewUploadHead"><span class="angleBadge">0°</span><div><strong>正面</strong><small>FRONT</small></div></div>
-            <label class="viewImageDrop" for="machine360FrontFile">
-              <input id="machine360FrontFile" data-machine360-view="FRONT" type="file" accept="image/jpeg,image/png,image/webp" hidden>
-              <img id="machine360FrontPreview" alt="正面圖預覽" hidden>
-              <span class="viewDropPlaceholder">＋ 上傳正面圖</span>
-            </label>
-            <div class="viewUploadMeta">
-              <span id="machine360FrontName">尚未上傳</span>
-              <div class="viewUploadButtons">
-                <button type="button" class="linkButton" data-replace-360="FRONT" hidden>更換圖片</button>
-                <button type="button" class="linkButton" data-clear-360="FRONT" hidden>清除新選擇</button>
-                <button type="button" class="linkButton dangerText" data-delete-360="FRONT" hidden>刪除已存圖片</button>
-              </div>
-            </div>
-          </article>
-
-          <article class="viewUploadCard" data-view-key="RIGHT45">
-            <div class="viewUploadHead"><span class="angleBadge">45°</span><div><strong>右 45°</strong><small>RIGHT 45</small></div></div>
-            <label class="viewImageDrop" for="machine360Right45File">
-              <input id="machine360Right45File" data-machine360-view="RIGHT45" type="file" accept="image/jpeg,image/png,image/webp" hidden>
-              <img id="machine360Right45Preview" alt="右 45 度圖預覽" hidden>
-              <span class="viewDropPlaceholder">＋ 上傳右 45° 圖</span>
-            </label>
-            <div class="viewUploadMeta">
-              <span id="machine360Right45Name">尚未上傳</span>
-              <div class="viewUploadButtons">
-                <button type="button" class="linkButton" data-replace-360="RIGHT45" hidden>更換圖片</button>
-                <button type="button" class="linkButton" data-clear-360="RIGHT45" hidden>清除新選擇</button>
-                <button type="button" class="linkButton dangerText" data-delete-360="RIGHT45" hidden>刪除已存圖片</button>
-              </div>
-            </div>
-          </article>
-
-          <article class="viewUploadCard" data-view-key="BACK">
-            <div class="viewUploadHead"><span class="angleBadge">180°</span><div><strong>背面</strong><small>BACK</small></div></div>
-            <label class="viewImageDrop" for="machine360BackFile">
-              <input id="machine360BackFile" data-machine360-view="BACK" type="file" accept="image/jpeg,image/png,image/webp" hidden>
-              <img id="machine360BackPreview" alt="背面圖預覽" hidden>
-              <span class="viewDropPlaceholder">＋ 上傳背面圖</span>
-            </label>
-            <div class="viewUploadMeta">
-              <span id="machine360BackName">尚未上傳</span>
-              <div class="viewUploadButtons">
-                <button type="button" class="linkButton" data-replace-360="BACK" hidden>更換圖片</button>
-                <button type="button" class="linkButton" data-clear-360="BACK" hidden>清除新選擇</button>
-                <button type="button" class="linkButton dangerText" data-delete-360="BACK" hidden>刪除已存圖片</button>
-              </div>
-            </div>
-          </article>
-
-          <article class="viewUploadCard" data-view-key="LEFT45">
-            <div class="viewUploadHead"><span class="angleBadge">315°</span><div><strong>左 45°</strong><small>LEFT 45</small></div></div>
-            <label class="viewImageDrop" for="machine360Left45File">
-              <input id="machine360Left45File" data-machine360-view="LEFT45" type="file" accept="image/jpeg,image/png,image/webp" hidden>
-              <img id="machine360Left45Preview" alt="左 45 度圖預覽" hidden>
-              <span class="viewDropPlaceholder">＋ 上傳左 45° 圖</span>
-            </label>
-            <div class="viewUploadMeta">
-              <span id="machine360Left45Name">尚未上傳</span>
-              <div class="viewUploadButtons">
-                <button type="button" class="linkButton" data-replace-360="LEFT45" hidden>更換圖片</button>
-                <button type="button" class="linkButton" data-clear-360="LEFT45" hidden>清除新選擇</button>
-                <button type="button" class="linkButton dangerText" data-delete-360="LEFT45" hidden>刪除已存圖片</button>
-              </div>
-            </div>
-          </article>
-        </div>
-        <div class="machine360Actions">
-          <div>
-            <strong>可分次完成</strong>
-            <p class="muted">上傳 1 張即可使用單圖偵測；2 張可使用雙圖交叉偵測。其餘角度可之後補上。</p>
+        <form id="machineManageForm" class="machineManageForm">
+          <div class="machineManageFields">
+            <label><span>機台代碼 *</span><input id="machineManageCode" type="text" required autocomplete="off"></label>
+            <label><span>機台名稱 *</span><input id="machineManageName" type="text" required autocomplete="off"></label>
+            <label><span>機台分類 *</span><select id="machineManageCategory" required></select></label>
+            <label class="wide"><span>備註</span><textarea id="machineManageNote" rows="5" placeholder="機台說明或版本資訊"></textarea></label>
           </div>
-          <button id="saveMachine360Views" class="button primary" type="button">儲存基準角度圖</button>
-        </div>
-        <p id="machine360Status" class="photoStatus muted">請先選擇機台，再上傳至少一張基準圖。</p>
-      </div>
-
-      <div class="panel machine360ViewerPanel">
-        <div class="panelHead">
-          <div>
-            <h2>3. 多角度旋轉預覽</h2>
-            <p class="muted">顯示目前已儲存的基準角度圖。1 張為單圖檢視，2 張以上可左右拖曳切換。</p>
-          </div>
-          <div class="viewerHeadActions">
-            <span id="machine360ViewerBadge" class="apiBadge">尚無可預覽圖片</span>
-            <button id="machine360AutoRotate" class="button secondary viewerAutoButton" type="button" disabled>自動旋轉</button>
-          </div>
-        </div>
-        <div id="machine360Viewer" class="machine360Viewer empty" tabindex="0" aria-label="機台多角度預覽">
-          <img id="machine360ViewerImage" alt="機台角度預覽" hidden>
-          <div id="machine360ViewerEmpty" class="viewerEmpty">請先選擇機台</div>
-          <button id="machine360Prev" class="viewerArrow prev" type="button" aria-label="上一個角度" hidden>‹</button>
-          <button id="machine360Next" class="viewerArrow next" type="button" aria-label="下一個角度" hidden>›</button>
-          <div class="viewerOverlay">
-            <strong id="machine360ViewerAngle">—</strong>
-            <span id="machine360ViewerHint">先儲存至少一張圖片</span>
-          </div>
-        </div>
-        <div id="machine360ViewerDots" class="viewerDots" aria-label="角度選擇"></div>
-      </div>
-
-      <div class="panel machine360NextPanel">
-        <div class="panelHead">
-          <div>
-            <h2>4. AI 自動補中間角度</h2>
-            <p class="muted">使用目前已存的 1～4 張基準圖，由 Gemini 產生缺少角度的草稿。AI 影格必須人工核准後，才會出現在主管查看頁。</p>
-          </div>
-          <span class="analysisBadge">Gemini 3.1 Flash Image</span>
-        </div>
-        <div class="ai360Toolbar">
-          <label>
-            <span>旋轉影格數</span>
-            <select id="machine360FrameCount">
-              <option value="8">8 個角度｜每 45°（建議先測試）</option>
-              <option value="16">16 個角度｜每 22.5°（較順暢、耗用較多）</option>
-            </select>
-          </label>
-          <div class="ai360ToolbarActions">
-            <button id="generateMachine360Frames" class="button primary" type="button">AI 產生缺少角度</button>
-            <button id="approveAllMachine360Frames" class="button secondary" type="button" disabled>全部核准</button>
-          </div>
-        </div>
-        <p id="machine360AiProgress" class="photoStatus muted">尚未產生 AI 影格</p>
-        <div class="ai360Warning">
-          AI 只產生視覺旋轉草稿，可能誤改 Logo、左右方向、角色細節或看不到的背面。請逐張確認後再核准；不作為工程、尺寸或印刷定位依據。
-        </div>
-        <div id="machine360AiFrameGrid" class="aiFrameGrid">
-          <div class="empty fullSpan">尚無 AI 中間角度。</div>
-        </div>
-      </div>
-
-      <div class="panel machineMarkerPanel">
-        <div class="panelHead">
-          <div>
-            <h2>5. 建立可點擊成本位置</h2>
-            <p class="muted">選擇已核准的角度圖，點擊圖片建立區域，並綁定該費用階段的材料品項。</p>
-          </div>
-        </div>
-        <div class="machineMarkerLayout">
-          <div class="machineMarkerEditor">
-            <div class="markerControlGrid">
-              <label><span>視角</span><select id="machineMarkerView"></select></label>
-              <label><span>費用階段</span><select id="machineMarkerStage"><option>打樣版費用</option><option>測試台費用</option><option>實際費用</option></select></label>
-              <label class="wide"><span>區域名稱</span><input id="machineMarkerAreaName" list="machineMarkerAreaOptions" placeholder="例如：頭部招牌、操作台中央"></label>
-              <label><span>標記寬度 %</span><input id="machineMarkerWidth" type="number" min="4" max="40" value="12"></label>
-              <label><span>標記高度 %</span><input id="machineMarkerHeight" type="number" min="4" max="40" value="10"></label>
-            </div>
-            <datalist id="machineMarkerAreaOptions"></datalist>
-            <div id="machineMarkerCanvas" class="machineMarkerCanvas">
-              <div id="machineMarkerMediaFrame" class="viewerMediaFrame" hidden>
-                <img id="machineMarkerImage" alt="成本位置標記底圖">
-                <div id="machineMarkerOverlay" class="viewerHotspots"></div>
-              </div>
-              <div id="machineMarkerEmpty" class="viewerEmpty">請先選擇機台</div>
-            </div>
-            <p id="machineMarkerStatus" class="photoStatus muted">先輸入區域名稱，再點擊圖片放置標記。</p>
-          </div>
-          <div class="machineMarkerSidebar">
+          <div class="machineManageImageEditor">
             <div>
-              <h3>綁定成本品項</h3>
-              <div id="machineMarkerItemList" class="machineMarkerItemList"><div class="empty">尚無材料明細。</div></div>
+              <strong>機台代表圖片</strong>
+              <p class="muted">這張圖片會顯示在機台總覽卡片與機台成本頁。支援 JPG、PNG、WebP。</p>
             </div>
-            <div class="markerActionRow">
-              <button id="saveMachineMarker" class="button primary" type="button">儲存位置標記</button>
-              <button id="resetMachineMarker" class="button secondary" type="button">清除編輯</button>
-              <button id="deleteMachineMarker" class="button secondary dangerText" type="button" hidden>刪除標記</button>
+            <div id="machineManageImagePreviewWrap" class="machineManageImagePreview">
+              <img id="machineManageImagePreview" alt="機台代表圖片預覽" hidden>
+              <div id="machineManageImageEmpty" class="machineManageImageEmpty">尚無代表圖片</div>
             </div>
+            <strong id="machineManageImageName" class="machineManageImageName">尚未選擇新圖片</strong>
+            <div class="machineManageImageActions">
+              <label class="button secondary">選擇新主圖<input id="machineManageImageFile" type="file" accept="image/jpeg,image/png,image/webp" hidden></label>
+              <button id="clearMachineManageImage" class="button ghost" type="button" hidden>清除新選擇</button>
+              <button id="removeMachineManageImage" class="button ghost dangerText" type="button">移除目前主圖</button>
+            </div>
+          </div>
+          <div class="formActions machineManageActions">
+            <button id="saveMachineManagement" class="button primary" type="submit">儲存機台資料</button>
+            <button id="resetMachineManagement" class="button ghost" type="button">還原未儲存修改</button>
+          </div>
+          <p id="machineManageStatus" class="photoStatus muted">選擇機台後即可修改。</p>
+        </form>
+      </div>
+
+      <details id="machineAdvancedImageSettings" class="machineAdvancedImageSettings">
+        <summary>
+          <span><strong>進階圖片設定</strong><small>多角度／360°、AI 補角度與成本位置標記</small></span>
+          <span class="machineAdvancedToggleText">展開設定</span>
+        </summary>
+        <div class="panel machine360SelectorPanel machineAdvancedProgressPanel">
+          <div class="machine360SelectorRow">
             <div>
-              <h3>已建立標記</h3>
-              <div id="machineMarkerSavedList" class="machineMarkerSavedList"><div class="empty">尚未建立標記。</div></div>
+              <strong>多角度圖片完成度</strong>
+              <p class="muted">可只保留一張正面圖，也能逐步補齊其他角度。</p>
+            </div>
+            <div class="machine360Progress">
+              <span>基準圖完成度</span>
+              <strong id="machine360ProgressText">0 / 4</strong>
+              <div class="progressTrack"><div id="machine360ProgressBar" class="progressFill" style="width:0%"></div></div>
             </div>
           </div>
         </div>
-      </div>
+            <div class="panel">
+              <div class="panelHead">
+                <div>
+                  <h2>A. 上傳一至四張基準角度圖</h2>
+                  <p class="muted">可分次儲存，不必一次備齊。格式支援 JPG、PNG、WebP；建議所有圖片尺寸與機台中心一致。</p>
+                </div>
+              </div>
+              <div id="machine360UploadGrid" class="machine360UploadGrid">
+                <article class="viewUploadCard" data-view-key="FRONT">
+                  <div class="viewUploadHead"><span class="angleBadge">0°</span><div><strong>正面</strong><small>FRONT</small></div></div>
+                  <label class="viewImageDrop" for="machine360FrontFile">
+                    <input id="machine360FrontFile" data-machine360-view="FRONT" type="file" accept="image/jpeg,image/png,image/webp" hidden>
+                    <img id="machine360FrontPreview" alt="正面圖預覽" hidden>
+                    <span class="viewDropPlaceholder">＋ 上傳正面圖</span>
+                  </label>
+                  <div class="viewUploadMeta">
+                    <span id="machine360FrontName">尚未上傳</span>
+                    <div class="viewUploadButtons">
+                      <button type="button" class="linkButton" data-replace-360="FRONT" hidden>更換圖片</button>
+                      <button type="button" class="linkButton" data-clear-360="FRONT" hidden>清除新選擇</button>
+                      <button type="button" class="linkButton dangerText" data-delete-360="FRONT" hidden>刪除已存圖片</button>
+                    </div>
+                  </div>
+                </article>
+
+                <article class="viewUploadCard" data-view-key="RIGHT45">
+                  <div class="viewUploadHead"><span class="angleBadge">45°</span><div><strong>右 45°</strong><small>RIGHT 45</small></div></div>
+                  <label class="viewImageDrop" for="machine360Right45File">
+                    <input id="machine360Right45File" data-machine360-view="RIGHT45" type="file" accept="image/jpeg,image/png,image/webp" hidden>
+                    <img id="machine360Right45Preview" alt="右 45 度圖預覽" hidden>
+                    <span class="viewDropPlaceholder">＋ 上傳右 45° 圖</span>
+                  </label>
+                  <div class="viewUploadMeta">
+                    <span id="machine360Right45Name">尚未上傳</span>
+                    <div class="viewUploadButtons">
+                      <button type="button" class="linkButton" data-replace-360="RIGHT45" hidden>更換圖片</button>
+                      <button type="button" class="linkButton" data-clear-360="RIGHT45" hidden>清除新選擇</button>
+                      <button type="button" class="linkButton dangerText" data-delete-360="RIGHT45" hidden>刪除已存圖片</button>
+                    </div>
+                  </div>
+                </article>
+
+                <article class="viewUploadCard" data-view-key="BACK">
+                  <div class="viewUploadHead"><span class="angleBadge">180°</span><div><strong>背面</strong><small>BACK</small></div></div>
+                  <label class="viewImageDrop" for="machine360BackFile">
+                    <input id="machine360BackFile" data-machine360-view="BACK" type="file" accept="image/jpeg,image/png,image/webp" hidden>
+                    <img id="machine360BackPreview" alt="背面圖預覽" hidden>
+                    <span class="viewDropPlaceholder">＋ 上傳背面圖</span>
+                  </label>
+                  <div class="viewUploadMeta">
+                    <span id="machine360BackName">尚未上傳</span>
+                    <div class="viewUploadButtons">
+                      <button type="button" class="linkButton" data-replace-360="BACK" hidden>更換圖片</button>
+                      <button type="button" class="linkButton" data-clear-360="BACK" hidden>清除新選擇</button>
+                      <button type="button" class="linkButton dangerText" data-delete-360="BACK" hidden>刪除已存圖片</button>
+                    </div>
+                  </div>
+                </article>
+
+                <article class="viewUploadCard" data-view-key="LEFT45">
+                  <div class="viewUploadHead"><span class="angleBadge">315°</span><div><strong>左 45°</strong><small>LEFT 45</small></div></div>
+                  <label class="viewImageDrop" for="machine360Left45File">
+                    <input id="machine360Left45File" data-machine360-view="LEFT45" type="file" accept="image/jpeg,image/png,image/webp" hidden>
+                    <img id="machine360Left45Preview" alt="左 45 度圖預覽" hidden>
+                    <span class="viewDropPlaceholder">＋ 上傳左 45° 圖</span>
+                  </label>
+                  <div class="viewUploadMeta">
+                    <span id="machine360Left45Name">尚未上傳</span>
+                    <div class="viewUploadButtons">
+                      <button type="button" class="linkButton" data-replace-360="LEFT45" hidden>更換圖片</button>
+                      <button type="button" class="linkButton" data-clear-360="LEFT45" hidden>清除新選擇</button>
+                      <button type="button" class="linkButton dangerText" data-delete-360="LEFT45" hidden>刪除已存圖片</button>
+                    </div>
+                  </div>
+                </article>
+              </div>
+              <div class="machine360Actions">
+                <div>
+                  <strong>可分次完成</strong>
+                  <p class="muted">上傳 1 張即可使用單圖偵測；2 張可使用雙圖交叉偵測。其餘角度可之後補上。</p>
+                </div>
+                <button id="saveMachine360Views" class="button primary" type="button">儲存基準角度圖</button>
+              </div>
+              <p id="machine360Status" class="photoStatus muted">請先選擇機台，再上傳至少一張基準圖。</p>
+            </div>
+
+            <div class="panel machine360ViewerPanel">
+              <div class="panelHead">
+                <div>
+                  <h2>B. 多角度旋轉預覽</h2>
+                  <p class="muted">顯示目前已儲存的基準角度圖。1 張為單圖檢視，2 張以上可左右拖曳切換。</p>
+                </div>
+                <div class="viewerHeadActions">
+                  <span id="machine360ViewerBadge" class="apiBadge">尚無可預覽圖片</span>
+                  <button id="machine360AutoRotate" class="button secondary viewerAutoButton" type="button" disabled>自動旋轉</button>
+                </div>
+              </div>
+              <div id="machine360Viewer" class="machine360Viewer empty" tabindex="0" aria-label="機台多角度預覽">
+                <img id="machine360ViewerImage" alt="機台角度預覽" hidden>
+                <div id="machine360ViewerEmpty" class="viewerEmpty">請先選擇機台</div>
+                <button id="machine360Prev" class="viewerArrow prev" type="button" aria-label="上一個角度" hidden>‹</button>
+                <button id="machine360Next" class="viewerArrow next" type="button" aria-label="下一個角度" hidden>›</button>
+                <div class="viewerOverlay">
+                  <strong id="machine360ViewerAngle">—</strong>
+                  <span id="machine360ViewerHint">先儲存至少一張圖片</span>
+                </div>
+              </div>
+              <div id="machine360ViewerDots" class="viewerDots" aria-label="角度選擇"></div>
+            </div>
+
+            <div class="panel machine360NextPanel">
+              <div class="panelHead">
+                <div>
+                  <h2>C. AI 自動補中間角度</h2>
+                  <p class="muted">使用目前已存的 1～4 張基準圖，由 Gemini 產生缺少角度的草稿。AI 影格必須人工核准後，才會出現在主管查看頁。</p>
+                </div>
+                <span class="analysisBadge">Gemini 3.1 Flash Image</span>
+              </div>
+              <div class="ai360Toolbar">
+                <label>
+                  <span>旋轉影格數</span>
+                  <select id="machine360FrameCount">
+                    <option value="8">8 個角度｜每 45°（建議先測試）</option>
+                    <option value="16">16 個角度｜每 22.5°（較順暢、耗用較多）</option>
+                  </select>
+                </label>
+                <div class="ai360ToolbarActions">
+                  <button id="generateMachine360Frames" class="button primary" type="button">AI 產生缺少角度</button>
+                  <button id="approveAllMachine360Frames" class="button secondary" type="button" disabled>全部核准</button>
+                </div>
+              </div>
+              <p id="machine360AiProgress" class="photoStatus muted">尚未產生 AI 影格</p>
+              <div class="ai360Warning">
+                AI 只產生視覺旋轉草稿，可能誤改 Logo、左右方向、角色細節或看不到的背面。請逐張確認後再核准；不作為工程、尺寸或印刷定位依據。
+              </div>
+              <div id="machine360AiFrameGrid" class="aiFrameGrid">
+                <div class="empty fullSpan">尚無 AI 中間角度。</div>
+              </div>
+            </div>
+
+            <div class="panel machineMarkerPanel">
+              <div class="panelHead">
+                <div>
+                  <h2>D. 建立可點擊成本位置</h2>
+                  <p class="muted">選擇已核准的角度圖，點擊圖片建立區域，並綁定該費用階段的材料品項。</p>
+                </div>
+              </div>
+              <div class="machineMarkerLayout">
+                <div class="machineMarkerEditor">
+                  <div class="markerControlGrid">
+                    <label><span>視角</span><select id="machineMarkerView"></select></label>
+                    <label><span>費用階段</span><select id="machineMarkerStage"><option>打樣版費用</option><option>測試台費用</option><option>實際費用</option></select></label>
+                    <label class="wide"><span>區域名稱</span><input id="machineMarkerAreaName" list="machineMarkerAreaOptions" placeholder="例如：頭部招牌、操作台中央"></label>
+                    <label><span>標記寬度 %</span><input id="machineMarkerWidth" type="number" min="4" max="40" value="12"></label>
+                    <label><span>標記高度 %</span><input id="machineMarkerHeight" type="number" min="4" max="40" value="10"></label>
+                  </div>
+                  <datalist id="machineMarkerAreaOptions"></datalist>
+                  <div id="machineMarkerCanvas" class="machineMarkerCanvas">
+                    <div id="machineMarkerMediaFrame" class="viewerMediaFrame" hidden>
+                      <img id="machineMarkerImage" alt="成本位置標記底圖">
+                      <div id="machineMarkerOverlay" class="viewerHotspots"></div>
+                    </div>
+                    <div id="machineMarkerEmpty" class="viewerEmpty">請先選擇機台</div>
+                  </div>
+                  <p id="machineMarkerStatus" class="photoStatus muted">先輸入區域名稱，再點擊圖片放置標記。</p>
+                </div>
+                <div class="machineMarkerSidebar">
+                  <div>
+                    <h3>綁定成本品項</h3>
+                    <div id="machineMarkerItemList" class="machineMarkerItemList"><div class="empty">尚無材料明細。</div></div>
+                  </div>
+                  <div class="markerActionRow">
+                    <button id="saveMachineMarker" class="button primary" type="button">儲存位置標記</button>
+                    <button id="resetMachineMarker" class="button secondary" type="button">清除編輯</button>
+                    <button id="deleteMachineMarker" class="button secondary dangerText" type="button" hidden>刪除標記</button>
+                  </div>
+                  <div>
+                    <h3>已建立標記</h3>
+                    <div id="machineMarkerSavedList" class="machineMarkerSavedList"><div class="empty">尚未建立標記。</div></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+      </details>
     </section>
 
 
@@ -1394,6 +1449,6 @@
   <datalist id="estimateWhiteInkOptions"></datalist>
   <datalist id="estimateSpecialEffectOptions"></datalist>
   <script src="data.js?v=20260624-igs-v2-4"></script>
-  <script src="app.js?v=20260626-igs-v3-26-certify-cost-actions"></script>
+  <script src="app.js?v=20260626-igs-v3-27-machine-media-manager"></script>
 </body>
 </html>

@@ -3289,3 +3289,202 @@ dialog .panelActions .button {
   .costItemRowActions { flex-direction: column; align-items: stretch; }
   .costItemRowActions .button { width: 100%; }
 }
+
+/* ===== v3.27 機台資料與圖片管理 ===== */
+.machineManageIntro {
+  background: linear-gradient(135deg, #173f52 0%, #315f69 55%, #2f7d73 100%);
+}
+.machineCardActions {
+  display: grid;
+  grid-template-columns: minmax(150px, 1fr) auto;
+  gap: 8px;
+}
+.machineCardActions .button { min-width: 0; }
+.dialogMachineInfo { min-width: 0; }
+.dialogEditMachineButton { margin-top: 10px; }
+
+.machineManageSelectPanel,
+.machineManagePanel { margin-bottom: 18px; }
+.machineManageSelectorRow {
+  display: grid;
+  grid-template-columns: minmax(240px, 420px) minmax(260px, 1fr);
+  gap: 18px;
+  align-items: stretch;
+}
+.machineManageSelectorRow > label {
+  display: grid;
+  gap: 7px;
+  align-content: center;
+}
+.machineManageSelectorRow > label > span,
+.machineManageFields label > span {
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 800;
+}
+.machineManageSelectorRow select,
+.machineManageFields input:not([type="checkbox"]):not([type="radio"]):not([type="file"]),
+.machineManageFields select,
+.machineManageFields textarea {
+  width: 100%;
+  min-height: 44px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 11px;
+  background: #fff;
+}
+.machineManageFields textarea { min-height: 120px; resize: vertical; }
+.machineManageSummary {
+  min-height: 76px;
+  display: grid;
+  align-content: center;
+  gap: 4px;
+  padding: 14px 16px;
+  border: 1px solid #d8e2e1;
+  border-radius: 14px;
+  background: #f5f9f8;
+  color: var(--muted);
+}
+.machineManageSummary strong { color: var(--deep); font-size: 17px; }
+.machineManageSummary span { overflow-wrap: anywhere; }
+
+.machineManageForm {
+  display: grid;
+  grid-template-columns: minmax(320px, 1fr) minmax(280px, 360px);
+  gap: 20px;
+  align-items: start;
+}
+.machineManageFields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(180px, 1fr));
+  gap: 13px;
+}
+.machineManageFields label { display: grid; gap: 6px; }
+.machineManageFields .wide { grid-column: 1 / -1; }
+.machineManageImageEditor {
+  display: grid;
+  gap: 11px;
+  padding: 15px;
+  border: 1px solid #d7e1e0;
+  border-radius: 16px;
+  background: #f7faf9;
+}
+.machineManageImageEditor p { margin: 4px 0 0; line-height: 1.5; }
+.machineManageImagePreview {
+  min-height: 210px;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  border: 2px dashed #b8cccf;
+  border-radius: 15px;
+  background: #eef4f4;
+}
+.machineManageImagePreview img {
+  width: 100%;
+  height: 240px;
+  object-fit: contain;
+  background: #fff;
+}
+.machineManageImageEmpty {
+  display: grid;
+  place-items: center;
+  width: 92px;
+  height: 92px;
+  border-radius: 24px;
+  color: #fff;
+  background: linear-gradient(135deg, var(--navy), #77949b);
+  font-size: 25px;
+  font-weight: 900;
+  text-align: center;
+}
+.machineManageImageName {
+  min-width: 0;
+  color: #4f6268;
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+.machineManageImageActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.machineManageImageActions .button { flex: 0 0 auto; }
+.machineManageActions,
+.machineManageForm > .photoStatus { grid-column: 1 / -1; }
+.machineManageActions { margin-top: 0; }
+
+.machineAdvancedImageSettings {
+  margin-top: 18px;
+  border: 1px solid #cad8d8;
+  border-radius: 18px;
+  background: #f8fbfa;
+  overflow: clip;
+}
+.machineAdvancedImageSettings > summary {
+  min-height: 72px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 16px 18px;
+  cursor: pointer;
+  list-style: none;
+  color: #294d57;
+  background: #edf5f3;
+}
+.machineAdvancedImageSettings > summary::-webkit-details-marker { display: none; }
+.machineAdvancedImageSettings > summary::before {
+  content: "＋";
+  flex: 0 0 auto;
+  font-size: 23px;
+  font-weight: 900;
+}
+.machineAdvancedImageSettings[open] > summary::before { content: "－"; }
+.machineAdvancedImageSettings > summary > span:first-of-type {
+  display: grid;
+  gap: 3px;
+  margin-right: auto;
+}
+.machineAdvancedImageSettings > summary strong { font-size: 17px; }
+.machineAdvancedImageSettings > summary small { color: var(--muted); font-size: 12px; }
+.machineAdvancedToggleText {
+  white-space: nowrap;
+  color: var(--blue);
+  font-size: 12px;
+  font-weight: 800;
+}
+.machineAdvancedImageSettings[open] .machineAdvancedToggleText { font-size: 0; }
+.machineAdvancedImageSettings[open] .machineAdvancedToggleText::after { content: "收合設定"; font-size: 12px; }
+.machineAdvancedImageSettings > .panel {
+  margin: 16px;
+}
+.machineAdvancedProgressPanel { background: #fff; }
+.machineAdvancedProgressPanel .machine360SelectorRow > div:first-child {
+  align-self: center;
+}
+.machineAdvancedProgressPanel p { margin: 5px 0 0; }
+
+@media (max-width: 900px) {
+  .machineManageForm { grid-template-columns: 1fr; }
+  .machineManageImageEditor { grid-column: 1; }
+  .machineManageActions,
+  .machineManageForm > .photoStatus { grid-column: 1; }
+  .machineManageImagePreview img { height: min(48vw, 320px); }
+}
+
+@media (max-width: 760px) {
+  .machineManageSelectorRow { grid-template-columns: 1fr; }
+  .machineManageFields { grid-template-columns: 1fr; }
+  .machineManageFields .wide { grid-column: 1; }
+  .machineCardActions { grid-template-columns: 1fr; }
+  .machineManageImageActions { display: grid; grid-template-columns: 1fr; }
+  .machineManageImageActions .button { width: 100%; }
+  .machineAdvancedImageSettings > .panel { margin: 10px; }
+  .machineAdvancedImageSettings > summary { align-items: flex-start; }
+}
+
+@media (max-width: 430px) {
+  .machineAdvancedToggleText { display: none; }
+  .machineManageImagePreview { min-height: 175px; }
+  .machineManageImagePreview img { height: 210px; }
+}
