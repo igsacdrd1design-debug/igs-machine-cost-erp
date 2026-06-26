@@ -2040,11 +2040,13 @@ td small { color: var(--muted); }
 .processTagGroup > div { display: flex; flex-wrap: wrap; gap: 7px; }
 .processTagButton {
   min-width: 44px;
-  min-height: 44px;
+  min-height: 48px;
   display: inline-flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 9px 13px;
+  gap: 2px;
+  padding: 7px 13px;
   border: 1px solid #c9d5d4;
   border-radius: 999px;
   color: #35545e;
@@ -2062,6 +2064,9 @@ td small { color: var(--muted); }
 .processTagButton:focus-visible { outline: 3px solid rgba(47,125,115,.24); outline-offset: 2px; }
 .processTagButton:active { transform: scale(.97); }
 .processTagButton.selected { border-color: #2f7d73; color: #fff; background: #2f7d73; box-shadow: 0 2px 8px rgba(47,125,115,.2); }
+.processTagButtonLabel { display: block; white-space: nowrap; }
+.processTagFee { display: block; color: #7b6a4a; font-size: 10px; font-weight: 850; line-height: 1.15; white-space: nowrap; }
+.processTagButton.selected .processTagFee { color: rgba(255,255,255,.82); }
 .processTagSummary { display: block; margin-top: 6px; color: #6d766f; line-height: 1.45; }
 .compactTags { width: 580px; max-width: 64vw; padding: 8px; }
 .compactTags .processTagGroup { grid-template-columns: 70px minmax(140px, 1fr); }
@@ -2469,6 +2474,16 @@ td small { color: var(--muted); }
 }
 .estimateWarningBanner.process,.estimateWarningBanner.missing{background:#fff3cf;color:#765100;border-bottom:1px solid #ead59a}
 .estimateWarningBanner.confidence{background:#ffe9e5;color:#93382e;border-bottom:1px solid #e7b5ac}
+.pricingModeChangeNotice{
+  padding:10px 14px;
+  border-bottom:1px solid #e2b38b;
+  background:#fff0e3;
+  color:#923f19;
+  font-size:13px;
+  font-weight:900;
+  line-height:1.5;
+}
+.pricingModeChangeNotice[hidden]{display:none}
 .estimateWarningBanner button{min-height:36px;padding:6px 11px;border:1px solid currentColor;border-radius:999px;background:rgba(255,255,255,.7);color:inherit;font-weight:850;cursor:pointer;white-space:nowrap}
 .estimateSummaryLayer{
   display:grid;grid-template-columns:minmax(180px,1fr) auto auto;gap:14px;align-items:center;
