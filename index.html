@@ -8,7 +8,7 @@
   <meta name="googlebot" content="noindex, nofollow, noarchive, nosnippet">
   <meta name="referrer" content="no-referrer">
   <title>IGS 機台材料成本 ERP｜快速估價</title>
-  <link rel="stylesheet" href="style.css?v=20260625-igs-v3-25-1-ui-cleanup">
+  <link rel="stylesheet" href="style.css?v=20260626-igs-v3-26-certify-cost-actions">
 </head>
 <body class="authLocked">
   <section id="authGate" class="authGate" aria-labelledby="loginTitle">
@@ -944,8 +944,7 @@
           </div>
           <label class="wide"><span>來源文件名稱</span><input id="priceReviewSourceFile" type="text" placeholder="選擇檔案後自動帶入，也可手動記錄來源"></label>
           <label class="wide"><span>來源備註</span><textarea id="priceReviewNote" rows="3"></textarea></label>
-          <label class="checkboxField wide"><input id="priceReviewIncludeBaseline" type="checkbox"><span>納入智能估價與歷史價格基準</span></label>
-          <label class="checkboxField wide syncMachineCostField"><input id="priceReviewSyncCost" type="checkbox"><span>認證時同步機台成本</span><small id="priceReviewSyncStatus">新認證會自動檢查機台與重複資料；勾選可讓已認證但尚未同步的資料再次執行同步。</small></label>
+          <div class="wide autoSyncNotice" id="priceReviewSyncStatus"><strong>認證後自動完成</strong><span>按下「認證並納入」後，系統會自動標記已認證、納入智能估價基準、寫入對應機台成本，並一併帶入來源圖片／檔案；若偵測到重複品項，會先詢問要跳過或更新。</span></div>
         </div>
         <div class="formActions">
           <button id="savePriceReviewDialog" class="button primary" type="submit">儲存認證資料</button>
@@ -958,7 +957,7 @@
     <section id="smartEstimate" class="view">
       <div class="quickIntro estimateIntro">
         <div>
-          <span class="eyebrow">v3.25.1 · 全站 UI 修正</span>
+          <span class="eyebrow">v3.25.2 · AI 附件區佈局修正</span>
           <h2>快速估價：掃描、貼文字或手動輸入都能立即試算</h2>
           <p>小件採四段平滑計價，單位依材質自動判斷；AI 掃描、製程按鈕與缺漏警示皆可直接人工確認。</p>
         </div>
@@ -1271,7 +1270,7 @@
 
   <dialog id="certifyMachineDialog" class="compactDecisionDialog">
     <div class="compactDecisionContent">
-      <div class="dialogHead"><div><span class="eyebrow">認證同步</span><h2>選擇歸屬機台</h2><p>「<strong id="certifyMachineItemName"></strong>」尚未對應機台。可選擇機台，或只納入價格基準。</p></div></div>
+      <div class="dialogHead"><div><span class="eyebrow">認證同步</span><h2>選擇歸屬機台</h2><p>「<strong id="certifyMachineItemName"></strong>」尚未對應機台。認證會直接建立機台成本，請先選擇歸屬機台。</p></div></div>
       <label><span>歸屬機台</span><select id="certifyMachineSelect"></select></label>
       <div class="formActions"><button class="button primary" type="button" data-certify-machine-action="confirm">確認</button><button class="button ghost" type="button" data-certify-machine-action="cancel">取消</button></div>
     </div>
@@ -1282,6 +1281,42 @@
       <div class="dialogHead"><div><span class="eyebrow">防重複檢查</span><h2 id="priceConflictTitle">發現價格衝突</h2><p id="priceConflictMessage"></p></div></div>
       <div id="priceConflictActions" class="formActions conflictActions"></div>
     </div>
+  </dialog>
+
+  <dialog id="costItemEditDialog" class="costItemEditDialog">
+    <form id="costItemEditForm" class="costItemEditForm">
+      <div class="dialogHead">
+        <div>
+          <span class="eyebrow">機台成本明細</span>
+          <h2>編輯成本品項</h2>
+          <p>修改後會重新計算該成本單的小計、稅額與階段總成本。</p>
+        </div>
+        <button id="closeCostItemEditDialog" class="dialogClose" type="button" aria-label="關閉">×</button>
+      </div>
+      <input id="costItemEditId" type="hidden">
+      <input id="costItemEditOrderId" type="hidden">
+      <div class="costItemEditGrid">
+        <label class="wide"><span>品項名稱 *</span><input id="costItemEditName" type="text" required></label>
+        <label><span>材質</span><select id="costItemEditMaterial"></select></label>
+        <label><span>厚度</span><input id="costItemEditThickness" type="text" placeholder="例如：3mm"></label>
+        <label class="wide"><span>規格／尺寸</span><input id="costItemEditSpec" type="text" placeholder="例如：300×500mm"></label>
+        <label><span>數量</span><input id="costItemEditQty" type="number" min="0.01" step="0.01" required></label>
+        <label><span>單位</span><input id="costItemEditUnit" type="text" placeholder="件／才／公尺"></label>
+        <label><span>單價 TWD</span><input id="costItemEditPrice" type="number" min="0" step="0.01" required></label>
+        <label><span>檔案名稱</span><input id="costItemEditFileName" type="text"></label>
+        <div class="wide costItemProcessField">
+          <span>製程標籤（可複選）</span>
+          <input id="costItemEditProcessTags" type="hidden">
+          <div id="costItemEditProcessButtons" class="processTagButtons" role="group" aria-label="成本品項製程標籤"></div>
+          <small id="costItemEditProcessSummary" class="processTagSummary">尚未選擇製程</small>
+        </div>
+        <label class="wide"><span>備註</span><textarea id="costItemEditNote" rows="3"></textarea></label>
+      </div>
+      <div class="formActions stickyDialogActions">
+        <button id="saveCostItemEdit" class="button primary" type="submit">儲存修改</button>
+        <button id="cancelCostItemEdit" class="button ghost" type="button">取消</button>
+      </div>
+    </form>
   </dialog>
 
   <dialog id="machineLinkDialog" class="machineLinkDialog">
@@ -1359,6 +1394,6 @@
   <datalist id="estimateWhiteInkOptions"></datalist>
   <datalist id="estimateSpecialEffectOptions"></datalist>
   <script src="data.js?v=20260624-igs-v2-4"></script>
-  <script src="app.js?v=20260625-igs-v3-25-nav-process-cleanup"></script>
+  <script src="app.js?v=20260626-igs-v3-26-certify-cost-actions"></script>
 </body>
 </html>

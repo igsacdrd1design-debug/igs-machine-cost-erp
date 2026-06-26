@@ -1948,8 +1948,8 @@ td small { color: var(--muted); }
   gap: 5px;
 }
 
-.priceReviewFormGrid label.wide {
-  grid-column: span 4;
+.priceReviewFormGrid > .wide {
+  grid-column: 1 / -1;
 }
 
 .priceReviewFormGrid input:not([type="checkbox"]):not([type="radio"]):not([type="file"]),
@@ -2071,14 +2071,14 @@ td small { color: var(--muted); }
 .tableProcessPicker[open] .compactTags { position: absolute; left: 0; top: 28px; z-index: 20; box-shadow: 0 18px 45px rgba(18,37,46,.18); }
 .itemImageActions { display: flex; justify-content: center; gap: 5px; }
 .miniAi { border: 0; border-radius: 7px; padding: 3px 6px; color: #fff; background: var(--blue); cursor: pointer; font-size: 11px; font-weight: 700; }
-.priceReviewAiPanel { display: grid; grid-template-columns: minmax(260px, 1fr) minmax(150px, max-content); gap: 10px 16px; align-items: center; padding: 14px; border: 1px dashed #b7c9cd; border-radius: 14px; background: #f4f8f8; }
+.priceReviewAiPanel { width: 100%; min-width: 0; display: grid; grid-template-columns: minmax(0, 1fr) 160px; gap: 12px 20px; align-items: center; padding: 16px; border: 1px dashed #b7c9cd; border-radius: 14px; background: #f4f8f8; }
 .priceReviewAiPanel strong { color: var(--deep); }
 .priceReviewAiPanel p { margin: 4px 0 0; color: var(--muted); font-size: 12px; }
 .priceReviewAiControls { display: flex; flex-direction: column; align-items: stretch; justify-content: center; gap: 7px; min-width: 150px; }
-.priceReviewAiPreview { grid-column: span 2; display: flex; align-items: center; gap: 12px; padding: 9px; border-radius: 12px; background: #fff; }
+.priceReviewAiPreview { grid-column: 1 / -1; display: flex; align-items: center; gap: 12px; padding: 9px; border-radius: 12px; background: #fff; }
 .priceReviewAiPreview[hidden] { display: none; }
 .priceReviewAiPreview img { width: 150px; height: 100px; object-fit: contain; border: 1px solid var(--line); border-radius: 10px; background: #fff; }
-.priceReviewAiPanel .photoStatus { grid-column: span 2; margin: 0; }
+.priceReviewAiPanel .photoStatus { grid-column: 1 / -1; margin: 0; }
 @media (max-width: 760px) {
   .processTagGroup { grid-template-columns: 1fr; }
   .priceReviewAiPanel { grid-template-columns: 1fr; }
@@ -3105,7 +3105,7 @@ dialog .panelActions .button {
     grid-template-columns: repeat(3, minmax(80px, 1fr));
   }
   .priceReviewAiPanel {
-    grid-template-columns: minmax(240px, 1fr) minmax(150px, max-content);
+    grid-template-columns: minmax(0, 1fr) 160px;
   }
 }
 
@@ -3151,3 +3151,141 @@ dialog .panelActions .button {
   .nav { min-width: 70px; }
 }
 
+
+
+/* =====================================================
+ * v3.25.2 — 價格認證 AI 附件區完整跨欄修正
+ * .wide 不再只限 label，避免 div.priceReviewAiPanel 被塞在單一欄位。
+ * ===================================================== */
+.priceReviewFormGrid > .wide {
+  grid-column: 1 / -1;
+  min-width: 0;
+}
+.priceReviewAiPanel > div:first-child {
+  min-width: 0;
+  align-self: center;
+}
+.priceReviewAiControls {
+  width: 160px;
+  justify-self: end;
+}
+.priceReviewAiPreview,
+.priceReviewAiPanel .photoStatus {
+  grid-column: 1 / -1;
+}
+@media (max-width: 760px) {
+  .priceReviewAiControls {
+    width: 100%;
+    justify-self: stretch;
+  }
+}
+
+/* ===== v3.26 認證即同步、來源附件與成本明細操作 ===== */
+.autoSyncNotice {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px 14px;
+  border: 1px solid #bcd8cf;
+  border-radius: 12px;
+  background: #eef8f4;
+  color: #315e52;
+}
+.autoSyncNotice strong { flex: 0 0 auto; color: #245b4d; }
+.autoSyncNotice span { color: #55736b; font-size: 12px; line-height: 1.55; }
+.certificationSyncBadge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: #e5f4e9;
+  color: #23613c;
+  font-size: 11px;
+  font-weight: 850;
+  white-space: nowrap;
+}
+.secureFileThumb {
+  width: 64px;
+  min-width: 64px;
+  height: 46px;
+  display: inline-grid;
+  place-items: center;
+  border: 1px solid #c8d5d6;
+  border-radius: 9px;
+  background: #f4f8f8;
+  color: #3e6570;
+  cursor: pointer;
+  font-size: 10px;
+  font-weight: 900;
+  white-space: nowrap;
+}
+.secureFileThumb:hover { border-color: var(--blue); background: var(--blue-soft); }
+.dialogItemThumbFile { width: 64px; min-width: 64px; height: 46px; }
+.costItemTableWrap { position: relative; }
+.costItemDialogTable { min-width: 1660px; }
+.costItemDialogTable .costItemActionsColumn {
+  position: sticky;
+  right: 0;
+  min-width: 178px;
+  width: 178px;
+  background: #fff;
+  box-shadow: -8px 0 14px rgba(25, 53, 61, .08);
+  z-index: 2;
+}
+.costItemDialogTable thead .costItemActionsColumn {
+  background: #edf4f5;
+  z-index: 5;
+}
+.costItemDialogTable tbody tr:hover .costItemActionsColumn { background: #f8fbfb; }
+.costItemRowActions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+}
+.costItemRowActions .button { flex: 0 0 auto; }
+.costItemEditDialog {
+  width: min(860px, calc(100vw - 32px));
+  max-height: calc(100vh - 36px);
+  padding: 0;
+  border: 0;
+  border-radius: 18px;
+  overflow: hidden;
+}
+.costItemEditForm {
+  max-height: calc(100vh - 36px);
+  overflow: auto;
+  padding: 22px;
+  background: #fffdf8;
+}
+.costItemEditGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(180px, 1fr));
+  gap: 12px;
+}
+.costItemEditGrid > label,
+.costItemProcessField { display: grid; gap: 6px; }
+.costItemEditGrid > .wide { grid-column: 1 / -1; }
+.costItemEditGrid label > span,
+.costItemProcessField > span { color: var(--muted); font-size: 12px; font-weight: 750; }
+.costItemEditGrid input:not([type="checkbox"]):not([type="radio"]):not([type="file"]),
+.costItemEditGrid select,
+.costItemEditGrid textarea {
+  width: 100%;
+  min-height: 42px;
+  padding: 9px 11px;
+  border: 1px solid #d8d2c4;
+  border-radius: 11px;
+  background: #fff;
+}
+.costItemEditGrid textarea { min-height: 82px; resize: vertical; }
+@media (max-width: 620px) {
+  .autoSyncNotice { flex-direction: column; }
+  .costItemEditForm { padding: 16px; }
+  .costItemEditGrid { grid-template-columns: 1fr; }
+  .costItemEditGrid > .wide { grid-column: 1; }
+  .costItemDialogTable .costItemActionsColumn { min-width: 154px; width: 154px; }
+  .costItemRowActions { flex-direction: column; align-items: stretch; }
+  .costItemRowActions .button { width: 100%; }
+}

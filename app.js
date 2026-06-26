@@ -1,6 +1,6 @@
-/* IGS ERP app.js — v3.25.1 全站 UI 修正版 */
+/* IGS ERP app.js — v3.25.2 AI 附件區佈局修正版 */
 // =====================================================
-// IGS 機台材料成本 ERP — 前端 v3.25.1 全站 UI 修正版
+// IGS 機台材料成本 ERP — 前端 v3.25.2 AI 附件區佈局修正版
 // 1. ERP 密碼登入
 // 2. 工作階段驗證
 // 3. 私人 Google Sheet 安全讀取
@@ -1410,6 +1410,14 @@ function setupDialog() {
     }
   });
   $("machineDialog").addEventListener("close", stopDialogMachine360AutoRotate);
+  $("machineDialogContent")?.addEventListener("click", handleMachineDialogContentClick);
+  $("costItemEditForm")?.addEventListener("submit", saveCostItemEdit);
+  $("closeCostItemEditDialog")?.addEventListener("click", closeCostItemEditDialog);
+  $("cancelCostItemEdit")?.addEventListener("click", closeCostItemEditDialog);
+  $("costItemEditProcessButtons")?.addEventListener("click", handleCostItemProcessTagClick);
+  $("costItemEditDialog")?.addEventListener("click", (event) => {
+    if (event.target === $("costItemEditDialog")) closeCostItemEditDialog();
+  });
 }
 
 function setupForms() {
@@ -2274,9 +2282,21 @@ async function hydrateSecureImages(root = document) {
     if (!fileId || img.dataset.secureLoaded === "1") return;
     img.dataset.secureLoaded = "1";
     try {
-      img.src = await getPrivateImageDataUrl(fileId);
+      const file = await getPrivateFileData(fileId);
+      if (file.mimeType.startsWith("image/")) {
+        img.src = file.dataUrl;
+        return;
+      }
+      const fileButton = document.createElement("button");
+      fileButton.type = "button";
+      fileButton.className = `secureFileThumb ${img.classList.contains("dialogItemThumb") ? "dialogItemThumbFile" : ""}`.trim();
+      fileButton.dataset.viewFile = fileId;
+      fileButton.dataset.fileName = file.name || img.alt || "來源檔案";
+      fileButton.title = `開啟 ${file.name || "來源檔案"}`;
+      fileButton.innerHTML = `<span aria-hidden="true">${file.mimeType === "application/pdf" ? "PDF" : "檔案"}</span>`;
+      img.replaceWith(fileButton);
     } catch (error) {
-      img.alt = "圖片讀取失敗";
+      img.alt = "檔案讀取失敗";
     }
   }));
 }
@@ -3572,7 +3592,7 @@ function renderMachineLinkedPriceReviews(machineId) {
   }
   return `<section class="machineReviewSection">
     <div class="machineReviewHead">
-      <div><h3>歷史報價／待認證</h3><p>從價格中心連結的紀錄；未同步成成本單前，不會計入機台成本總額。</p></div>
+      <div><h3>歷史報價／待認證</h3><p>認證後會直接寫入機台成本；來源圖片或報價檔也會一併關聯。</p></div>
       <span class="apiBadge">${rows.length} 筆</span>
     </div>
     <div class="machineReviewList">${rows.map((row) => `
@@ -3861,9 +3881,9 @@ function renderDialogStage(machineId, type) {
       <span>${escapeHTML(type)}共 ${orders.length} 張成本單、${items.length} 筆明細</span>
       <strong>${money(total)}</strong>
     </div>
-    <div class="tableWrap">
-      <table class="dialogTable">
-        <thead><tr><th>類型</th><th>圖片</th><th>品項</th><th>規格／包裝</th><th>數量</th><th>單位</th><th>單價</th><th>材質</th><th>厚度</th><th>製程標籤</th><th>檔案名稱</th><th>安裝區域</th><th>小計</th><th>備註</th></tr></thead>
+    <div class="tableWrap costItemTableWrap">
+      <table class="dialogTable costItemDialogTable">
+        <thead><tr><th>類型</th><th>圖片</th><th>品項</th><th>規格／包裝</th><th>數量</th><th>單位</th><th>單價</th><th>材質</th><th>厚度</th><th>製程標籤</th><th>檔案名稱</th><th>安裝區域</th><th>小計</th><th>備註</th><th class="costItemActionsColumn">操作</th></tr></thead>
         <tbody>${items.length ? items.map((item) => `<tr>
           <td><span class="tag">${escapeHTML(item.itemType || "材料")}</span></td>
           <td>${item.imageFileId ? `<img class="dialogItemThumb" data-secure-file-id="${escapeHTML(item.imageFileId)}" alt="${escapeHTML(item.name)}">` : item.imageUrl ? `<img class="dialogItemThumb" src="${escapeHTML(item.imageUrl)}" alt="${escapeHTML(item.name)}">` : "—"}</td>
@@ -3879,10 +3899,129 @@ function renderDialogStage(machineId, type) {
           <td>${escapeHTML(item.areaName || "未指定")}<br><small>${escapeHTML(item.areaStatus || "未指定")}</small></td>
           <td><strong>${money(item.subtotal)}</strong></td>
           <td>${escapeHTML(item.note || "—")}</td>
-        </tr>`).join("") : '<tr><td colspan="14" class="empty">成本單已建立，但尚無明細</td></tr>'}</tbody>
+          <td class="costItemActionsColumn"><div class="costItemRowActions"><button class="button secondary compact" type="button" data-edit-cost-item="${escapeHTML(item.id)}">✏️ 編輯</button><button class="button ghost compact dangerText" type="button" data-delete-cost-item="${escapeHTML(item.id)}">🗑️ 刪除</button></div></td>
+        </tr>`).join("") : '<tr><td colspan="15" class="empty">成本單已建立，但尚無明細</td></tr>'}</tbody>
       </table>
     </div>`;
   hydrateSecureImages(content);
+}
+
+
+function handleMachineDialogContentClick(event) {
+  const editButton = event.target.closest('[data-edit-cost-item]');
+  if (editButton) {
+    const item = state.costItems.find((row) => row.id === editButton.dataset.editCostItem);
+    if (item) openCostItemEditDialog(item);
+    return;
+  }
+  const deleteButton = event.target.closest('[data-delete-cost-item]');
+  if (deleteButton) {
+    const item = state.costItems.find((row) => row.id === deleteButton.dataset.deleteCostItem);
+    if (item) deleteCostItemFromMachine(item);
+  }
+}
+
+function renderCostItemEditProcessTags() {
+  const input = $('costItemEditProcessTags');
+  const container = $('costItemEditProcessButtons');
+  if (!input || !container) return;
+  const tags = normalizeProcessTags(input.value);
+  input.value = tags.join('、');
+  container.innerHTML = processTagButtonsHtml(tags, 'data-toggle-cost-item-process', '1');
+  syncProcessTagButtonGroup(container, tags);
+  if ($('costItemEditProcessSummary')) $('costItemEditProcessSummary').textContent = tags.length ? `已選擇：${processTagsDisplayText(tags)}` : '尚未選擇製程';
+}
+
+function handleCostItemProcessTagClick(event) {
+  const button = event.target.closest('[data-toggle-cost-item-process]');
+  if (!button) return;
+  const result = toggleProcessTagSelection($('costItemEditProcessTags').value, button.dataset.processTag);
+  $('costItemEditProcessTags').value = result.text;
+  syncProcessTagButtonGroup($('costItemEditProcessButtons'), result.tags);
+  if ($('costItemEditProcessSummary')) $('costItemEditProcessSummary').textContent = result.tags.length ? `已選擇：${processTagsDisplayText(result.tags)}` : '尚未選擇製程';
+}
+
+function openCostItemEditDialog(item) {
+  if (!item || !$('costItemEditDialog')) return;
+  $('costItemEditId').value = item.id || '';
+  $('costItemEditOrderId').value = item.costOrderId || '';
+  $('costItemEditName').value = item.name || '';
+  $('costItemEditMaterial').innerHTML = standardMaterialOptionsHtml(item.material || '');
+  $('costItemEditThickness').value = item.thickness || '';
+  $('costItemEditSpec').value = item.spec || '';
+  $('costItemEditQty').value = item.qty || 1;
+  $('costItemEditUnit').value = item.unit || '件';
+  $('costItemEditPrice').value = roundDisplay(item.price);
+  $('costItemEditFileName').value = item.fileName || '';
+  $('costItemEditProcessTags').value = item.processTags || '';
+  $('costItemEditNote').value = item.note || '';
+  renderCostItemEditProcessTags();
+  $('costItemEditDialog').showModal();
+}
+
+function closeCostItemEditDialog() {
+  $('costItemEditDialog')?.close();
+}
+
+async function refreshMachineDialogAfterCostChange(machineId, stageType) {
+  await loadData();
+  if ($('machineDialog')?.open) $('machineDialog').close();
+  openMachineDialog(machineId);
+  if (stageType && stageType !== COST_TYPES[0]) {
+    const button = [...$('machineDialogContent').querySelectorAll('[data-stage]')].find((entry) => entry.dataset.stage === stageType);
+    button?.click();
+  }
+}
+
+async function saveCostItemEdit(event) {
+  event.preventDefault();
+  const itemId = $('costItemEditId').value;
+  const original = state.costItems.find((row) => row.id === itemId);
+  if (!original) { showNotice('找不到要修改的成本品項。', 'error'); return; }
+  const order = state.costOrders.find((row) => row.id === original.costOrderId);
+  const payload = {
+    id: itemId,
+    itemType: original.itemType || '材料',
+    name: $('costItemEditName').value.trim(),
+    material: $('costItemEditMaterial').value.trim(),
+    thickness: $('costItemEditThickness').value.trim(),
+    spec: $('costItemEditSpec').value.trim(),
+    qty: toNumber($('costItemEditQty').value),
+    unit: $('costItemEditUnit').value.trim(),
+    price: toNumber($('costItemEditPrice').value),
+    fileName: $('costItemEditFileName').value.trim(),
+    processTags: $('costItemEditProcessTags').value.trim(),
+    note: $('costItemEditNote').value.trim(),
+  };
+  if (!payload.name) { showNotice('請輸入品項名稱。', 'warn'); return; }
+  if (!(payload.qty > 0)) { showNotice('數量必須大於 0。', 'warn'); return; }
+  const button = $('saveCostItemEdit');
+  button.disabled = true;
+  button.textContent = '儲存中…';
+  try {
+    await secureApiRequest({ action: 'updateCostItem', item: payload }, { timeoutMs: 60000 });
+    closeCostItemEditDialog();
+    await refreshMachineDialogAfterCostChange(order?.machineId || state.selectedMachineId, order?.type || state.selectedMachineStage);
+    showNotice('成本品項已更新，成本單總額已重新計算。', 'success');
+  } catch (error) {
+    showNotice(`修改失敗：${error.message}`, 'error');
+  } finally {
+    button.disabled = false;
+    button.textContent = '儲存修改';
+  }
+}
+
+async function deleteCostItemFromMachine(item) {
+  if (!item) return;
+  const order = state.costOrders.find((row) => row.id === item.costOrderId);
+  if (!confirm(`確定刪除「${item.name}」？\n刪除後會重新計算成本單總額。`)) return;
+  try {
+    await secureApiRequest({ action: 'deleteCostItem', itemId: item.id }, { timeoutMs: 60000 });
+    await refreshMachineDialogAfterCostChange(order?.machineId || state.selectedMachineId, order?.type || state.selectedMachineStage);
+    showNotice('成本品項已刪除。', 'success');
+  } catch (error) {
+    showNotice(`刪除失敗：${error.message}`, 'error');
+  }
 }
 
 
@@ -4646,6 +4785,7 @@ function priceReviewToRecord(review) {
     sourceFileId: review.sourceFileId || '',
     sourceFileName: review.sourceFileName || review.sourceFile || '',
     sourceFileUrl: review.sourceFileUrl || '',
+    sourceDocument: review.sourceDocument || null,
     syncedCostOrderId: review.syncedCostOrderId || '',
     aiStatus: review.aiStatus || '',
     aiRawText: review.aiRawText || '',
@@ -4779,6 +4919,7 @@ function renderPriceReviews() {
       <div class="priceReviewMain">
         <div class="priceReviewTitle">
           <span class="priceReviewStatus ${priceReviewStatusClass(row.status)}">${escapeHTML(row.status)}</span>
+          ${row.status==='已認證'&&row.syncedCostOrderId?`<span class="certificationSyncBadge">✓ 已同步 ${escapeHTML(row.syncedCostOrderId)}</span>`:''}
           <strong>${escapeHTML(row.itemName || '未命名品項')}</strong>
           <small>${escapeHTML([row.itemCode,linkedMachine?.name || row.project].filter(Boolean).join('｜') || row.sourceFile || '—')}</small>
         </div>
@@ -4964,11 +5105,11 @@ function openPriceReviewDialog(review) {
   const matchedMachine = review.machineId || state.machines.find((machine) => norm(machine.name) === norm(review.project) || norm(machine.code) === norm(review.project))?.id || '';
   if ($('priceReviewMachine')) $('priceReviewMachine').value = matchedMachine;
   if ($('priceReviewCostType')) $('priceReviewCostType').value = review.costType || '打樣版費用';
-  if ($('priceReviewSyncCost')) {
-    $('priceReviewSyncCost').checked = false;
-    $('priceReviewSyncCost').disabled = Boolean(review.syncedCostOrderId);
+  if ($('priceReviewSyncStatus')) {
+    $('priceReviewSyncStatus').innerHTML = review.syncedCostOrderId
+      ? `<strong>已認證並同步</strong><span>目前關聯成本單：${escapeHTML(review.syncedCostOrderId)}</span>`
+      : '<strong>認證後自動完成</strong><span>按下「認證並納入」後，系統會自動標記已認證、納入智能估價基準、寫入對應機台成本，並一併帶入來源圖片／檔案；若偵測到重複品項，會先詢問要跳過或更新。</span>';
   }
-  if ($('priceReviewSyncStatus')) $('priceReviewSyncStatus').textContent = review.syncedCostOrderId ? `已同步成本單：${review.syncedCostOrderId}` : '連結機台後會顯示於機台總覽；勾選後可另建立成本單。';
   $('priceReviewSupplier').value = review.supplier || '';
   $('priceReviewQuoteDate').value = review.quoteDate || '';
   $('priceReviewTaxType').value = review.taxType || '';
@@ -4976,7 +5117,6 @@ function openPriceReviewDialog(review) {
   renderPriceReviewProcessTags();
   clearPriceReviewProcessImage();
   $('priceReviewStatus').value = review.status || '待認證';
-  $('priceReviewIncludeBaseline').checked = review.includeBaseline === '是';
   $('priceReviewSourceFile').value = review.sourceFileName || review.sourceFile || '';
   if (review.sourceFileId) {
     $('priceReviewProcessAiStatus').textContent = `已保存來源檔案：${review.sourceFileName || review.sourceFile || '檔案'}`;
@@ -5009,7 +5149,7 @@ function priceReviewFromDialog() {
     project: $('priceReviewProject').value.trim() || machineById($('priceReviewMachine')?.value)?.name || '',
     machineId: $('priceReviewMachine')?.value || '',
     costType: $('priceReviewCostType')?.value || '打樣版費用',
-    syncCost: Boolean($('priceReviewSyncCost')?.checked),
+    syncCost: false,
     sourceDocument: state.priceReviewProcessImagePayload ? stripDataUrl(state.priceReviewProcessImagePayload) : null,
     sourceFileId: existing.sourceFileId || '',
     sourceFileName: existing.sourceFileName || existing.sourceFile || '',
@@ -5022,7 +5162,7 @@ function priceReviewFromDialog() {
     taxType: $('priceReviewTaxType').value.trim(),
     processTags: $('priceReviewProcessTags').value.trim(),
     status,
-    includeBaseline: $('priceReviewIncludeBaseline').checked || status === '已認證' ? '是' : '否',
+    includeBaseline: status === '已認證' ? '是' : '否',
     sourceFile: $('priceReviewSourceFile').value.trim(),
     note: $('priceReviewNote').value.trim(),
   };
@@ -5056,12 +5196,12 @@ async function savePriceReviewFromDialog(event) {
   try {
     const existing=state.priceReviews.find((row)=>row.id===record.id)||record;
     const shouldRunCertificationFlow = record.status === '已認證' && (
-      record.syncCost || existing.status !== '已認證' || !existing.syncedCostOrderId
+      existing.status !== '已認證' || !existing.syncedCostOrderId
     );
     if(shouldRunCertificationFlow){
       const result=await certifyPriceReviewWithSync({...existing,...record},{interactive:true,machineId:record.machineId});
       if(result.cancelled)return;
-      closePriceReviewDialog();populateControls();showNotice(result.synced?'價格已認證並同步為機台成本紀錄。':'價格已認證並納入估價基準。','success');
+      closePriceReviewDialog();populateControls();showNotice(`價格已認證並完成成本同步${result.costOrderId?`：${result.costOrderId}`:''}。`,'success');
     }else{
       record.syncCost=false;
       await savePriceReviewRecords([record], '');
@@ -5201,10 +5341,10 @@ function findPriceReviewCostConflicts(review, machineId = review?.machineId) {
 let certificationMachineResolver = null;
 function requestCertificationMachine(review) {
   const dialog=$('certifyMachineDialog');
-  if (!dialog) return Promise.resolve({cancelled:false,machineId:'',certifyOnly:true});
+  if (!dialog) return Promise.resolve({cancelled:true,machineId:''});
   $('certifyMachineItemName').textContent=review.itemName||'未命名品項';
   const select=$('certifyMachineSelect');
-  select.innerHTML='<option value="">僅認證，不歸入機台</option>'+state.machines.map((machine)=>`<option value="${escapeHTML(machine.id)}">${escapeHTML(machine.name)}${machine.code?`（${escapeHTML(machine.code)}）`:''}</option>`).join('');
+  select.innerHTML='<option value="">請選擇歸屬機台</option>'+state.machines.map((machine)=>`<option value="${escapeHTML(machine.id)}">${escapeHTML(machine.name)}${machine.code?`（${escapeHTML(machine.code)}）`:''}</option>`).join('');
   dialog.showModal();
   return new Promise((resolve)=>{certificationMachineResolver=resolve;});
 }
@@ -5218,7 +5358,8 @@ function handleCertificationMachineDialogClick(event) {
   if(!action)return;
   if(action==='cancel'){closeCertificationMachineDialog({cancelled:true});return;}
   const machineId=$('certifyMachineSelect')?.value||'';
-  closeCertificationMachineDialog({cancelled:false,machineId,certifyOnly:!machineId});
+  if(!machineId){showNotice('請先選擇要寫入成本紀錄的機台。','warn');return;}
+  closeCertificationMachineDialog({cancelled:false,machineId});
 }
 
 let priceConflictResolver = null;
@@ -5233,8 +5374,8 @@ function resolvePriceConflict(review, conflicts) {
     : `機台內已有「<strong>${escapeHTML(conflict.item.name)}</strong>」單價 <strong>${money(conflict.item.price)}</strong>，新價格為 <strong>${money(review.unitPrice)}</strong>。請選擇處理方式。`;
   const actions=$('priceConflictActions');
   actions.innerHTML=same
-    ? `<button class="button primary" type="button" data-conflict-action="skip">跳過重複成本（建議）</button><button class="button secondary" type="button" data-conflict-action="add">兩筆都保留</button><button class="button ghost" type="button" data-conflict-action="cancel">取消</button>`
-    : `<button class="button secondary" type="button" data-conflict-action="keep">保留既有價格</button><button class="button primary" type="button" data-conflict-action="update" data-conflict-item-id="${escapeHTML(conflict.item.id)}">更新既有成本</button><button class="button secondary" type="button" data-conflict-action="add">兩筆都保留</button><button class="button ghost" type="button" data-conflict-action="cancel">取消</button>`;
+    ? `<button class="button primary" type="button" data-conflict-action="skip">跳過同步，沿用既有成本</button><button class="button secondary" type="button" data-conflict-action="update" data-conflict-item-id="${escapeHTML(conflict.item.id)}">更新既有成本</button><button class="button ghost" type="button" data-conflict-action="cancel">取消</button>`
+    : `<button class="button secondary" type="button" data-conflict-action="skip">跳過同步，保留既有成本</button><button class="button primary" type="button" data-conflict-action="update" data-conflict-item-id="${escapeHTML(conflict.item.id)}">用新價格更新</button><button class="button ghost" type="button" data-conflict-action="cancel">取消</button>`;
   dialog.showModal();
   return new Promise((resolve)=>{priceConflictResolver=resolve;});
 }
@@ -5254,44 +5395,36 @@ async function certifyPriceReviewWithSync(review, options={}) {
     return{cancelled:true,reason:'missing'};
   }
   let machineId=options.machineId||review.machineId||bestMachineMatchForReview(review)?.machine?.id||'';
-  let certifyOnly=Boolean(options.certifyOnly);
-  if(!machineId&&!certifyOnly){
-    if(options.interactive===false)certifyOnly=true;
-    else{
-      const choice=await requestCertificationMachine(review);
-      if(choice.cancelled)return{cancelled:true};
-      machineId=choice.machineId||'';certifyOnly=choice.certifyOnly;
-    }
+  if(!machineId){
+    if(options.interactive===false)return{cancelled:true,reason:'machine'};
+    const choice=await requestCertificationMachine(review);
+    if(choice.cancelled)return{cancelled:true};
+    machineId=choice.machineId||'';
   }
+  if(!machineId){showNotice('認證前必須選擇歸屬機台。','warn');return{cancelled:true,reason:'machine'};}
   const record={...priceReviewToRecord(review),machineId,project:review.project||machineById(machineId)?.name||'',status:'已認證',includeBaseline:'是'};
   let resolution=options.resolution||'';
   let conflictItemId=options.conflictItemId||'';
-  let conflicts=[];
-  if(machineId&&!certifyOnly){
-    conflicts=findPriceReviewCostConflicts({...review,machineId},machineId);
-    if(conflicts.length&&!resolution){
-      if(options.interactive===false)resolution=conflicts.every((entry)=>entry.sameAmount)?'skip':'keep';
-      else{
-        const choice=await resolvePriceConflict(review,conflicts);
-        if(choice.action==='cancel')return{cancelled:true};
-        resolution=choice.action;conflictItemId=choice.itemId||conflicts[0].item.id;
-      }
+  const conflicts=findPriceReviewCostConflicts({...review,machineId},machineId);
+  if(conflicts.length&&!resolution){
+    if(options.interactive===false)resolution='skip';
+    else{
+      const choice=await resolvePriceConflict(review,conflicts);
+      if(choice.action==='cancel')return{cancelled:true};
+      resolution=choice.action;
+      conflictItemId=choice.itemId||conflicts[0].item.id;
     }
-    if(!conflicts.length&&!resolution)resolution='add';
   }
-  if(certifyOnly||resolution==='skip'||resolution==='keep'){
-    record.syncCost=false;
-    record.syncResolution=resolution||'certifyOnly';
-  }else{
-    record.syncCost=true;
-    record.syncResolution=resolution||'add';
-    record.conflictItemId=conflictItemId;
-  }
+  if(!conflicts.length&&!resolution)resolution='add';
+  record.syncCost=true;
+  record.syncResolution=resolution||'add';
+  record.conflictItemId=conflictItemId;
   const result=await savePriceReviewRecords([record],'',{silent:true});
   state.priceReviewSelectedIds.delete(review.id);
-  if(record.syncCost&&options.reload!==false)await loadData();
+  if(options.reload!==false)await loadData();
   else{syncStateAliases();renderPriceReviews();renderMachineCards();renderEstimateDraft();}
-  return{cancelled:false,synced:Boolean(record.syncCost),resolution:record.syncResolution,result};
+  const savedReview=result.saved?.[0]||{};
+  return{cancelled:false,synced:true,resolution:record.syncResolution,costOrderId:savedReview.syncedCostOrderId||'',result};
 }
 
 function renderBatchCertificationRows() {
@@ -5300,17 +5433,15 @@ function renderBatchCertificationRows() {
   body.innerHTML=(state.batchCertificationDraft||[]).map((entry,index)=>{
     const review=entry.review;
     const conflict=entry.conflicts?.[0];
-    const conflictText=!entry.machineId?'未指定機台｜只納入價格基準':!conflict?'無衝突｜將建立機台成本':conflict.sameAmount?`相同價格已存在 ${money(conflict.item.price)}`:`既有 ${money(conflict.item.price)}／新 ${money(review.unitPrice)}`;
+    const conflictText=!entry.machineId?'尚未指定機台':!conflict?'無衝突｜將直接建立機台成本':conflict.sameAmount?`相同品項已存在 ${money(conflict.item.price)}`:`既有 ${money(conflict.item.price)}／新 ${money(review.unitPrice)}`;
     const options=!entry.machineId
-      ? '<option value="certifyOnly">僅認證不歸入</option>'
+      ? '<option value="">請先選擇機台</option>'
       : !conflict
-        ? '<option value="add">建立機台成本</option>'
-        : conflict.sameAmount
-          ? '<option value="skip">跳過重複成本（建議）</option><option value="add">兩筆都留</option>'
-          : '<option value="keep">保留既有</option><option value="update">更新既有</option><option value="add">兩筆都留</option>';
+        ? '<option value="add">直接建立機台成本</option>'
+        : '<option value="skip">跳過同步，沿用既有</option><option value="update">更新既有成本</option>';
     return `<div class="batchCertificationRow" data-batch-cert-index="${index}">
       <label class="batchCertificationInclude"><input type="checkbox" data-batch-cert-field="include" ${entry.include?'checked':''}> <span>${escapeHTML(review.itemName)}</span></label>
-      <select data-batch-cert-field="machineId"><option value="">不歸入機台</option>${state.machines.map((machine)=>`<option value="${escapeHTML(machine.id)}" ${entry.machineId===machine.id?'selected':''}>${escapeHTML(machine.name)}</option>`).join('')}</select>
+      <select data-batch-cert-field="machineId"><option value="">請選擇機台</option>${state.machines.map((machine)=>`<option value="${escapeHTML(machine.id)}" ${entry.machineId===machine.id?'selected':''}>${escapeHTML(machine.name)}</option>`).join('')}</select>
       <span class="batchConflictText ${conflict?'hasConflict':'clear'}">${escapeHTML(conflictText)}</span>
       <select data-batch-cert-field="resolution">${options}</select>
     </div>`;
@@ -5327,7 +5458,7 @@ function openBatchCertificationDialog() {
   state.batchCertificationDraft=reviews.map((review)=>{
     const machineId=review.machineId||bestMachineMatchForReview(review)?.machine?.id||'';
     const conflicts=machineId?findPriceReviewCostConflicts({...review,machineId},machineId):[];
-    return{review,machineId,conflicts,include:true,resolution:!machineId?'certifyOnly':!conflicts.length?'add':conflicts.every((entry)=>entry.sameAmount)?'skip':'keep'};
+    return{review,machineId,conflicts,include:true,resolution:!machineId?'':!conflicts.length?'add':'skip'};
   });
   renderBatchCertificationRows();
   $('batchCertificationSummary').textContent=`共 ${reviews.length} 筆；衝突會集中列出，系統不會靜默覆蓋。`;
@@ -5344,7 +5475,7 @@ function handleBatchCertificationChange(event){
   if(field==='machineId'){
     entry.machineId=event.target.value;
     entry.conflicts=entry.machineId?findPriceReviewCostConflicts({...entry.review,machineId:entry.machineId},entry.machineId):[];
-    entry.resolution=!entry.machineId?'certifyOnly':!entry.conflicts.length?'add':entry.conflicts.every((item)=>item.sameAmount)?'skip':'keep';
+    entry.resolution=!entry.machineId?'':!entry.conflicts.length?'add':'skip';
     renderBatchCertificationRows();
   }
 }
@@ -5357,7 +5488,8 @@ async function executeBatchCertification(event){
   try{
     for(const entry of entries){
       try{
-        const result=await certifyPriceReviewWithSync(entry.review,{interactive:false,machineId:entry.machineId,certifyOnly:entry.resolution==='certifyOnly',resolution:entry.resolution,conflictItemId:entry.conflicts?.[0]?.item?.id||'',reload:false});
+        if(!entry.machineId)throw new Error('請先選擇歸屬機台');
+        const result=await certifyPriceReviewWithSync(entry.review,{interactive:false,machineId:entry.machineId,resolution:entry.resolution,conflictItemId:entry.conflicts?.[0]?.item?.id||'',reload:false});
         if(!result.cancelled){success+=1;if(result.synced)synced+=1;}else failures.push(`${entry.review.itemName}：資料不完整`);
       }catch(error){failures.push(`${entry.review.itemName}：${error.message}`);}
     }
@@ -5375,7 +5507,7 @@ async function handlePriceReviewRowsClick(event) {
     const review=state.priceReviews.find((row)=>row.id===certify.dataset.certifyReview);
     try{
       const result=await certifyPriceReviewWithSync(review,{interactive:true});
-      if(!result.cancelled)showNotice(result.synced?'價格已認證並同步至機台成本。':'價格已認證並納入估價基準。','success');
+      if(!result.cancelled)showNotice(`價格已認證並完成成本同步${result.costOrderId?`：${result.costOrderId}`:''}。`,'success');
     }catch(error){showNotice(`認證失敗：${error.message}`,'error');}
     return;
   }
