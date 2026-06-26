@@ -1,6 +1,6 @@
-/* IGS ERP app.js — v3.31.1 AI 掃描歷史價修正版 */
+/* IGS ERP app.js — 導頁與行動版操作修正版 */
 // =====================================================
-// IGS 機台材料成本 ERP — 前端 v3.31.1 AI 掃描歷史價修正版
+// IGS 機台材料成本 ERP — 前端導頁與行動版操作修正版
 // 1. ERP 密碼登入
 // 2. 工作階段驗證
 // 3. 私人 Google Sheet 安全讀取
@@ -295,7 +295,7 @@ const PROCESS_TAG_ALIASES = Object.freeze({
 });
 
 const pageDescriptions = {
-  dashboard: "搜尋歷史價格，或直接進入快速估價。",
+  dashboard: "選擇今天要執行的工作。",
   machines: "未輸入關鍵字時顯示全部機台，也可依名稱、代碼、分類或材料搜尋。",
   costRecords: "查看各機台的成本單與原始估價單。",
   machineTotals: "彙整每台機台的個別成本總和。",
@@ -1042,7 +1042,8 @@ async function restoreAuthentication() {
     );
     updateAiCredentialUi(response.result?.aiCredential);
     unlockErp();
-    await loadData();
+    activateView('dashboard', '首頁');
+    loadData();
   } catch (error) {
     clearAuthentication();
     showLoginError("登入已失效，請重新輸入密碼。");
@@ -1074,7 +1075,8 @@ async function handleLoginSubmit(event) {
     $("loginPassword").value = "";
     $("loginGeminiApiKey").value = "";
     unlockErp();
-    await loadData();
+    activateView('dashboard', '首頁');
+    loadData();
   } catch (error) {
     clearAuthentication();
     showLoginError(error.message || "登入失敗");
@@ -1364,14 +1366,32 @@ function setupNavigation() {
     button.addEventListener("click", () => activateView(button.dataset.view, button.dataset.title || button.textContent.trim()));
   });
   document.querySelectorAll('[data-home-view]').forEach((button)=>{
-    button.addEventListener('click',()=>activateView(button.dataset.homeView));
+    button.addEventListener('click',()=>{
+      activateView(button.dataset.homeView);
+      const targetId=button.dataset.homeTarget;
+      if(!targetId)return;
+      setTimeout(()=>{
+        const target=$(targetId);
+        target?.scrollIntoView({behavior:'smooth',block:'start'});
+        const focusTarget=target?.querySelector('select:not([disabled]), input:not([type="hidden"]):not([disabled]), textarea:not([disabled]), button:not([disabled])');
+        focusTarget?.focus({preventScroll:true});
+      },100);
+    });
   });
   document.querySelectorAll('[data-home-action="search"]').forEach((button)=>{
     button.addEventListener('click',()=>{
-      activateView('dashboard','首頁查價');
+      activateView('dashboard','首頁');
       const searchInput=$("globalSearch");
+      const resultSection=$("homePriceResultsSection");
+      const resultBox=$("homePriceSearchResults");
       searchInput.style.display='block';
-      setTimeout(()=>{ searchInput.focus(); searchInput.select(); },80);
+      if(resultSection) resultSection.hidden=false;
+      if(resultBox && !searchInput.value.trim()) resultBox.innerHTML='<div class="empty homeSearchPrompt">請在上方搜尋框輸入品名、材質、製程或供應商。</div>';
+      setTimeout(()=>{
+        searchInput.focus();
+        searchInput.select();
+        resultSection?.scrollIntoView({behavior:'smooth',block:'start'});
+      },80);
     });
   });
   document.querySelectorAll('[data-open-view]').forEach((button)=>{
@@ -3417,8 +3437,8 @@ function setupExport() {
 async function loadData() {
   if (!authenticationReady || !authToken) return;
 
-  setDataStatus("私人資料讀取中", "");
-  showNotice("正在安全讀取 Google Sheet…");
+  setDataStatus("載入中...", "loading");
+  hideNotice();
 
   try {
     const response = await secureApiRequest(
@@ -3451,14 +3471,14 @@ async function loadData() {
 
     populateControls();
     renderAll();
-    setDataStatus("私人 Google Sheet 已同步", "ok");
+    setDataStatus("✓ 已連線", "ok");
     hideNotice();
   } catch (error) {
     if (!authenticationReady) return;
     console.error(error);
     resetPrivateState();
     populateControls();
-    setDataStatus("資料讀取失敗", "error");
+    setDataStatus("連線失敗", "error");
     showNotice(`私人 Google Sheet 讀取失敗：${error.message}`, "error");
   }
 }
@@ -3602,8 +3622,15 @@ function filteredCostOrders() {
 
 function renderHomePriceSearchResults(){
   const box=$("homePriceSearchResults");
+  const section=$("homePriceResultsSection");
   if(!box)return;
   const keyword=searchKeyword();
+  if(!keyword){
+    if(section)section.hidden=true;
+    box.innerHTML='';
+    return;
+  }
+  if(section)section.hidden=false;
   const rows=(state.priceReviews||[])
     .filter((row)=>toNumber(row.unitPrice)>0)
     .filter((row)=>{
@@ -3617,7 +3644,7 @@ function renderHomePriceSearchResults(){
     })
     .slice(0,20);
   if(!rows.length){
-    box.innerHTML=`<div class="empty">${keyword?'找不到符合的歷史價格，可改用快速估價。':'尚無可搜尋的歷史報價。'}</div>`;
+    box.innerHTML=`<div class="empty">${keyword?'找不到符合的紀錄。請確認關鍵字或嘗試不同搜尋條件。':'尚無可搜尋的歷史報價。'}</div>`;
     return;
   }
   box.innerHTML=rows.map((row)=>`<article class="homePriceRow">
@@ -3720,42 +3747,6 @@ async function handleHomePriceSearchClick(event){
 
 function renderDashboard() {
   renderHomePriceSearchResults();
-  $("statMachines").textContent = state.machines.length.toLocaleString("zh-TW");
-  $("statCostOrders").textContent = state.costOrders.length.toLocaleString("zh-TW");
-  $("statItems").textContent = unique(state.costItems.map((item) => item.name).filter(Boolean)).length.toLocaleString("zh-TW");
-  $("statSuppliers").textContent = unique([...state.suppliers.map((supplier) => supplier.name), ...state.costOrders.map((order) => order.supplier)].filter(Boolean)).length.toLocaleString("zh-TW");
-  const actualTotal = state.costOrders.filter((order) => order.type === "實際費用").reduce((sum, order) => sum + orderTotal(order), 0);
-  $("statActualTotal").textContent = money(actualTotal);
-
-  const recent = [...state.machines]
-    .sort((a, b) => dateValue(b.updatedAt || b.createdAt) - dateValue(a.updatedAt || a.createdAt))
-    .slice(0, 8);
-  $("recentMachines").innerHTML = recent.length
-    ? recent.map((machine) => {
-      const totals = totalsForMachine(machine.id);
-      return `<button class="item itemButton" type="button" data-open-machine="${escapeHTML(machine.id)}">
-        <div class="itemMain">
-          <strong>${escapeHTML(machine.name)}</strong>
-          <small>${escapeHTML(machine.code || "未填代碼")}｜${escapeHTML(machine.category)}</small>
-        </div>
-        <div class="itemAmount">
-          <strong>${money(totals.actual)}</strong>
-          <small>實際費用</small>
-        </div>
-      </button>`;
-    }).join("")
-    : '<div class="empty">尚無機台資料</div>';
-
-  $("recentMachines").querySelectorAll("[data-open-machine]").forEach((button) => {
-    button.addEventListener("click", () => openMachineDialog(button.dataset.openMachine));
-  });
-
-  const actualRows = state.machines
-    .map((machine) => ({ label: machine.name, total: totalsForMachine(machine.id).actual }))
-    .filter((row) => row.total > 0)
-    .sort((a, b) => b.total - a.total)
-    .slice(0, 8);
-  renderBars($("actualCostBars"), actualRows);
 }
 
 function renderMachineCards() {
@@ -4490,8 +4481,16 @@ function renderBars(container, rows) {
 }
 
 function setDataStatus(text, type = "") {
-  $("dataStatus").textContent = text;
-  $("dataStatus").className = `statusDot ${type}`.trim();
+  const status=$("dataStatus");
+  if(status){
+    status.textContent = text;
+    status.className = `statusDot ${type}`.trim();
+  }
+  const retry=$("reloadData");
+  if(retry){
+    retry.hidden = type !== "error";
+    retry.textContent = "重試";
+  }
 }
 
 function showNotice(message, type = "") {
@@ -4922,7 +4921,6 @@ function setupV20() {
   $('estimateProductionRmbDivisor')?.addEventListener('input', () => { recalculateAllEstimateItems(); renderEstimateDraft(); });
   $('estimateMachine').addEventListener('change', () => { if ($('estimateTargetType').value === 'existing' && !$('estimateName').value) { const m = machineById($('estimateMachine').value); if (m) $('estimateName').value = `${m.name} 美術材料估價`; } });
   $('parseEstimateText')?.addEventListener('click', parseEstimateTextIntoDraft);
-  $('loadEstimateTextExample')?.addEventListener('click', loadEstimateTextExample);
   $('clearEstimateText')?.addEventListener('click', clearEstimateTextInput);
   $('estimateCnyRate')?.addEventListener('input', () => { recalculateAllEstimateItems(); renderEstimateDraft(); });
 
@@ -6570,21 +6568,6 @@ async function enableWeeklyMarketUpdate(){const button=$('enableMarketAutoUpdate
 
 
 
-function estimateTextExampleValue(){
-  return [
-    'B01_立體字（發光字），674.1mm × 207.3mm，需裁切，不透光銀底印刷，四色直噴',
-    'B02_透明壓克力，719.7mm × 307.3mm，厚度5mm，需裁切，四色直噴，白色直噴',
-    'B03_安迪板，1081mm × 708.2mm，厚度5mm，需裁切，四色直噴，裱亮膜',
-    'B04_PVC，892.1mm × 671.2mm，厚度1mm，需裁切，四色直噴，白色直噴'
-  ].join('\n');
-}
-
-function loadEstimateTextExample(){
-  if($('estimateTextInput'))$('estimateTextInput').value=estimateTextExampleValue();
-  if($('estimateTextBadge'))$('estimateTextBadge').textContent='已載入範例';
-  if($('estimateTextStatus'))$('estimateTextStatus').textContent='已載入 B01～B04，可直接按「解析文字並估價」。';
-}
-
 function clearEstimateTextInput(){
   if($('estimateTextInput'))$('estimateTextInput').value='';
   if($('estimateTextBadge'))$('estimateTextBadge').textContent='尚未解析';
@@ -6988,12 +6971,9 @@ function unifiedQuantityDiscount(qty){
 }
 
 function unifiedHasIrregularShape(processTags,item){
-  const tags=Array.isArray(processTags)?processTags:[];
-  if(tags.some((tag)=>['異型切割','異形切割','異形裁切','裁切外型'].includes(standardizeErpText(tag))))return true;
-  const raw=standardizeErpText([
-    item?.processSummary,item?.specialEffect,item?.spec,item?.originalSpec,item?.constraints
-  ].filter(Boolean).join(' '));
-  return /異[型形](?:裁切|切割)|切割外型/.test(raw);
+  const irregularTags=new Set(['異形切割','異型切割','異形裁切']);
+  const tags=Array.isArray(processTags)?processTags:normalizeProcessTags(processTags||item?.processTags||item?.processes||'');
+  return tags.some((tag)=>irregularTags.has(standardizeErpText(tag)));
 }
 
 // 1–5 才同時有整才進位，耗損率減半，避免兩種加成疊加過高。
@@ -9317,8 +9297,10 @@ function resetEstimateEditor(){state.currentEstimateId='';state.estimateDraftIte
 function loadEstimateProject(id){const project=state.estimateProjects.find((p)=>p.id===id);if(!project)return;state.currentEstimateId=id;$('estimateId').value=id;$('estimateTargetType').value=project.machineId?'existing':'new';$('estimateMachine').value=project.machineId;$('estimateName').value=project.name;$('estimateVersion').value=project.version;$('estimateDate').value=project.date;$('estimateStatus').value=project.status;$('estimateNote').value=project.note;if($('estimateSyncCost'))$('estimateSyncCost').checked=false;state.estimateDraftItems=state.estimateItems.filter((i)=>i.estimateId===id).map((i)=>({...i,usageManuallySet:true,marketManuallySet:true}));updateEstimateTargetMode();renderEstimateDraft();activateView('smartEstimate', '快速估價');}
 
 async function saveCurrentEstimate(){
-  const name=$('estimateName').value.trim();
-  if(!name){showNotice('請填寫估價名稱。','warn');return null;}
+  const estimateDate=$('estimateDate').value||todayValue();
+  if(!$('estimateDate').value)$('estimateDate').value=estimateDate;
+  const name=$('estimateName').value.trim()||`${estimateDate} 估價`;
+  if(!$('estimateName').value.trim())$('estimateName').value=name;
   recalculateAllEstimateItems();
   const valid=state.estimateDraftItems.filter((i)=>i.name.trim());
   if(!valid.length){showNotice('至少需要一筆有品項名稱的估價明細。','warn');return null;}

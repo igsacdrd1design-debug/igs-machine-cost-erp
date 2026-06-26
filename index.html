@@ -9,7 +9,7 @@
   <meta name="googlebot" content="noindex, nofollow, noarchive, nosnippet">
   <meta name="referrer" content="no-referrer">
   <title>IGS 機台材料成本 ERP｜快速估價</title>
-  <link rel="stylesheet" href="style.css?v=20260626-igs-v3-30-pricing-mode-stability">
+  <link rel="stylesheet" href="style.css?v=20260626-igs-v3-33-ui-flow-fix">
 </head>
 <body class="authLocked">
   <section id="authGate" class="authGate" aria-labelledby="loginTitle">
@@ -40,7 +40,7 @@
     </div>
 
     <nav class="navList phaseOneNav" aria-label="主要功能">
-      <button class="nav active" data-view="dashboard" data-title="首頁查價">首頁查價</button>
+      <button class="nav active" data-view="dashboard" data-title="首頁">首頁</button>
       <button class="nav" data-view="machines" data-title="機台總覽">機台總覽</button>
       <button class="nav navEstimate" data-view="smartEstimate" data-title="快速估價">快速估價</button>
     </nav>
@@ -54,8 +54,8 @@
     </details>
 
     <div class="sidebarFoot">
-      <span id="dataStatus" class="statusDot">資料準備中</span>
-      <button id="reloadData" class="sideAction" type="button">重新讀取資料</button>
+      <span id="dataStatus" class="statusDot loading">載入中...</span>
+      <button id="reloadData" class="sideAction retryDataButton" type="button" hidden>重試</button>
       <button id="logoutButton" class="sideAction logoutAction" type="button">登出</button>
     </div>
   </aside>
@@ -63,8 +63,8 @@
   <main>
     <section class="topbar">
       <div>
-        <h1 id="pageTitle">首頁查價</h1>
-        <p id="pageDescription">搜尋歷史價格，或直接進入快速估價。</p>
+        <h1 id="pageTitle">首頁</h1>
+        <p id="pageDescription">選擇今天要執行的工作。</p>
       </div>
       <div class="topbarActions">
         <button id="aiAccountButton" class="aiAccountButton missing" type="button">AI 額度：檢查中</button>
@@ -77,85 +77,47 @@
     <div id="notice" class="notice" hidden></div>
     <div id="saveSuccessToast" class="saveSuccessToast" role="status" aria-live="polite" aria-atomic="true" hidden></div>
 
-    <section id="dashboard" class="view active">
-      <div class="homeTaskPanel">
-        <div>
-          <span class="eyebrow">PHASE 1｜任務導向</span>
-          <h2>查價、記一筆、做估價</h2>
-          <p>先查歷史紀錄或瀏覽全部機台；找不到價格時再用快速估價。四份基礎資料請從「進階價格中心」內開啟資料匯入。</p>
-        </div>
-        <div class="homeTaskActions">
-          <button class="button secondary homeTaskButton" type="button" data-home-action="search">
-            <strong>🔍 查價</strong>
-            <span>搜尋歷史報價</span>
-          </button>
-          <button class="button secondary homeTaskButton" type="button" data-home-view="costRecords">
-            <strong>✏️ 記一筆</strong>
-            <span>錄入新報價</span>
-          </button>
-          <button class="button primary homeTaskButton" type="button" data-home-view="smartEstimate">
-            <strong>💰 估價</strong>
-            <span>輸入規格算價</span>
-          </button>
-          <p class="homeImportHint">
-            <a href="#" data-open-view="dataImport" data-open-title="資料匯入">📂 首次使用？點此匯入基礎資料</a>
-          </p>
-        </div>
+    <section id="dashboard" class="view active taskLauncherDashboard">
+      <div class="homeTaskLauncher" aria-label="任務啟動器">
+        <button class="homeLaunchCard estimate" type="button" data-home-view="smartEstimate">
+          <span class="homeLaunchIcon" aria-hidden="true">💰</span>
+          <span class="homeLaunchContent">
+            <strong>估價</strong>
+            <small>輸入規格，快速算出材料成本</small>
+          </span>
+          <span class="homeLaunchArrow" aria-hidden="true">→</span>
+        </button>
+
+        <button class="homeLaunchCard record" type="button" data-home-view="quotationEntry" data-home-target="quotationForm">
+          <span class="homeLaunchIcon" aria-hidden="true">✏️</span>
+          <span class="homeLaunchContent">
+            <strong>記一筆</strong>
+            <small>上傳報價單或手動記錄費用</small>
+          </span>
+          <span class="homeLaunchArrow" aria-hidden="true">→</span>
+        </button>
+
+        <button class="homeLaunchCard search" type="button" data-home-action="search">
+          <span class="homeLaunchIcon" aria-hidden="true">🔍</span>
+          <span class="homeLaunchContent">
+            <strong>查價</strong>
+            <small>搜尋歷史報價紀錄</small>
+          </span>
+          <span class="homeLaunchArrow" aria-hidden="true">→</span>
+        </button>
       </div>
-      <div class="panel homePricePanel">
-        <div class="panelHead">
-          <div>
-            <h2>歷史價格搜尋</h2>
-            <p class="muted">在右上方輸入材質、厚度、製程、品名或供應商，例如「壓克力 5mm 四色」。</p>
-          </div>
+
+      <div class="homeFirstUseRow">
+        <button class="homeFirstUseLink" type="button" data-home-view="dataImport">📂 首次使用？點此匯入基礎資料</button>
+      </div>
+
+      <section id="homePriceResultsSection" class="homePriceResultsSection" aria-live="polite" hidden>
+        <div class="homePriceResultsHead">
+          <h2>查價結果</h2>
+          <p class="muted">結果會依認證狀態與報價日期排序。</p>
         </div>
         <div id="homePriceSearchResults" class="homePriceSearchResults"></div>
-      </div>
-
-      <div class="cards dashboardCards">
-        <div class="stat">
-          <span>機台數量</span>
-          <strong id="statMachines">0</strong>
-        </div>
-        <div class="stat">
-          <span>成本單數量</span>
-          <strong id="statCostOrders">0</strong>
-        </div>
-        <div class="stat highlight">
-          <span>實際費用合計</span>
-          <strong id="statActualTotal">$0</strong>
-        </div>
-        <div class="stat">
-          <span>材料品項數</span>
-          <strong id="statItems">0</strong>
-        </div>
-        <div class="stat">
-          <span>供應商數量</span>
-          <strong id="statSuppliers">0</strong>
-        </div>
-      </div>
-
-      <div class="dashboardGrid">
-        <div class="panel">
-          <div class="panelHead">
-            <div>
-              <h2>最近更新紀錄</h2>
-              <p class="muted">依更新時間或建立時間顯示。</p>
-            </div>
-          </div>
-          <div id="recentMachines" class="list"></div>
-        </div>
-
-        <div class="panel">
-          <div class="panelHead">
-            <div>
-              <h2>歷史成本概況</h2>
-              <p class="muted">依目前已有的實際費用排序。</p>
-            </div>
-          </div>
-          <div id="actualCostBars" class="barList"></div>
-        </div>
-      </div>
+      </section>
     </section>
 
     <section id="machines" class="view">
@@ -473,7 +435,7 @@
     <section id="machine360Setup" class="view">
       <div class="quickIntro machineManageIntro">
         <div>
-          <span class="eyebrow">v3.27 · 機台資料與圖片管理</span>
+          <span class="eyebrow">機台資料與圖片管理</span>
           <h2>修改機台資料、替換主圖，並視需要管理多角度圖片</h2>
           <p>日常只需在這裡修改機台名稱、代碼、分類、備註或主圖；原本的多角度／360° 功能保留在下方進階圖片設定。</p>
         </div>
@@ -743,7 +705,7 @@
     <section id="dataImport" class="view">
       <div class="quickIntro dataImportIntro">
         <div>
-          <span class="eyebrow">v3.6 · 四份資料安全匯入</span>
+          <span class="eyebrow">資料安全匯入</span>
           <h2>先檢查四份 CSV，再依固定順序一次匯入</h2>
           <p>系統會先驗證欄位與資料列，再依「材料主檔 → 製程規則 → 歷史報價 → 量產參考」寫入。重複匯入相同資料時會更新原紀錄，不會建立第二筆。</p>
         </div>
@@ -820,7 +782,7 @@
     <section id="priceCenter" class="view">
       <div class="quickIntro priceIntro">
         <div>
-          <span class="eyebrow">v2.6 · 精準配對＋製程價格同步＋免費 AI 補估</span>
+          <span class="eyebrow">進階價格中心</span>
           <h2>建立正式價格主檔，認證近期歷史報價並監看市場浮動</h2>
           <p>新報價先進入待認證區；補齊供應商、正式日期與稅別並人工認證後，才會影響智能估價基準。</p>
         </div>
@@ -1013,7 +975,7 @@
     <section id="smartEstimate" class="view">
       <div class="quickIntro estimateIntro">
         <div>
-          <span class="eyebrow">v3.31.1 · 材質基價＋加工費疊加</span>
+          <span class="eyebrow">快速估價</span>
           <h2>快速估價：掃描、貼文字或手動輸入都能立即試算</h2>
           <p>小件特殊加工費採 30%，1–5 才耗損率減半；已儲存估價可匯出 PDF／Excel，明細也可直接複製摘要。</p>
         </div>
@@ -1047,8 +1009,8 @@
             </label>
 
             <label class="estimateNameField">
-              <span>估價名稱 *</span>
-              <input id="estimateName" type="text" required placeholder="例如：蟹霸量產版美術件估價">
+              <span>估價名稱（選填）</span>
+              <input id="estimateName" type="text" placeholder="未填時自動使用 YYYY-MM-DD 估價">
             </label>
 
             <label>
@@ -1077,7 +1039,7 @@
                 <option value="productionRmb">中國量產 RMB → TWD（經驗係數）</option>
                 <option value="rawTwd">原材料 TWD（不套打樣倍率）</option>
               </select>
-              <small>一般板材每才一律 Math.ceil 無條件進位；包價已含材料、四色、白墨與基本切割，不再重複套倍率或印刷費。燈條仍按長度計價。</small>
+              <small>材料以才數計價，印刷與加工費逐項獨立計算。</small>
             </label>
             <label>
               <span>估價類型</span>
@@ -1108,6 +1070,7 @@
         </div>
 
         <div class="panel estimateAiPanel">
+          <p class="estimateMethodHint">以下三種方式擇一使用，不需要全部填寫。</p>
           <div class="panelHead">
             <div>
               <h2>2. AI 掃描匯入</h2>
@@ -1157,6 +1120,7 @@
         </div>
 
         <div class="panel estimateTextPanel">
+          <p class="estimateMethodHint">以下三種方式擇一使用，不需要全部填寫。</p>
           <div class="panelHead">
             <div>
               <h2>3. 貼上文字匯入</h2>
@@ -1187,7 +1151,6 @@
 
           <div class="formActions estimateTextActions">
             <button id="parseEstimateText" class="button primary" type="button">解析文字並估價</button>
-            <button id="loadEstimateTextExample" class="button secondary" type="button">載入 B01～B04 範例</button>
             <button id="clearEstimateText" class="button ghost" type="button">清除文字</button>
           </div>
           <p id="estimateTextStatus" class="photoStatus muted">可一次貼入多筆，每筆以編號開頭；換行內容會自動接到上一筆。</p>
@@ -1246,7 +1209,7 @@
 
     <section id="artOptimization" class="view">
       <div class="quickIntro optimizeIntro">
-        <div><span class="eyebrow">v2.0 · 僅限美術端</span><h2>AI 材質與印刷降本，不修改機構、工設、運送或包裝</h2><p>AI 只分析美術材料、印刷方式、白墨、特殊效果、併版與板材利用率；所有方案均需美術打樣確認。</p></div>
+        <div><span class="eyebrow">AI 美術降本</span><h2>AI 材質與印刷降本，不修改機構、工設、運送或包裝</h2><p>AI 只分析美術材料、印刷方式、白墨、特殊效果、併版與板材利用率；所有方案均需美術打樣確認。</p></div>
         <div class="apiBadge connected">Gemini 3.5 Flash＋Gemini 3.1 Flash Image</div>
       </div>
       <div class="v20Grid twoCol">
@@ -1507,6 +1470,6 @@
   <script src="https://cdn.jsdelivr.net/npm/jspdf@4.2.1/dist/jspdf.umd.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/jspdf-autotable@5.0.8/dist/jspdf.plugin.autotable.min.js"></script>
   <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
-  <script src="app.js?v=20260626-igs-v3-30-pricing-mode-stability"></script>
+  <script src="app.js?v=20260626-igs-v3-33-ui-flow-fix"></script>
 </body>
 </html>
