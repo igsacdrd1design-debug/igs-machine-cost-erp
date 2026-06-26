@@ -400,6 +400,9 @@ const UNIFIED_INCLUDED_PROCESS_TAGS = Object.freeze(new Set([
   '背膠', '正面印刷', '背面印刷', '四色'
 ]));
 
+// 歷史價只可在高可信匹配時直接作為估價基線；低分紀錄僅供 UI 參考。
+const HISTORICAL_PRICE_MIN_MATCH_SCORE = 200;
+
 
 // v3.17 第一階段：一般板材採四段式單件包價，避免小件價格硬斷層。
 const FOUR_STAGE_MIN_CHARGE_TWD = 180;
@@ -6123,7 +6126,7 @@ function bestProductionReferenceForItem(item){
 function bestApprovedHistoricalPriceForItem(item) {
   const candidates = approvedPriceReviews()
     .map((row)=>({row,score:reviewSimilarityScore(row,item)}))
-    .filter((entry)=>entry.score>=70)
+    .filter((entry)=>entry.score>=HISTORICAL_PRICE_MIN_MATCH_SCORE)
     .sort((a,b)=>b.score-a.score);
   if (!candidates.length) return null;
   const best = candidates[0];
@@ -6201,7 +6204,7 @@ function exactHistoricalQuoteScore(review,item){
 function bestExactHistoricalQuoteForItem(item){
   const candidates=(state.priceReviews||[])
     .map((row)=>({row,score:exactHistoricalQuoteScore(row,item)}))
-    .filter((entry)=>entry.score>=210)
+    .filter((entry)=>entry.score>=Math.max(210,HISTORICAL_PRICE_MIN_MATCH_SCORE))
     .sort((a,b)=>b.score-a.score||dateValue(b.row.quoteDate)-dateValue(a.row.quoteDate));
   if(!candidates.length)return null;
   const best=candidates[0];
@@ -8134,14 +8137,18 @@ function estimateProcessFeeLabels(item) {
   return labels;
 }
 
+function canonicalHistoricalProcessTags(value) {
+  return unique(normalizeProcessTags(value).map((tag)=>canonicalProcessTag(tag)).filter(Boolean));
+}
+
 function historicalReferenceProcessTags(match) {
-  if (Array.isArray(match?.referenceProcessTags)) return normalizeProcessTags(match.referenceProcessTags);
-  return normalizeProcessTags(match?.records?.[0]?.processTags || '');
+  if (Array.isArray(match?.referenceProcessTags)) return canonicalHistoricalProcessTags(match.referenceProcessTags);
+  return canonicalHistoricalProcessTags(match?.records?.[0]?.processTags || '');
 }
 
 function historicalProcessAdjustment(item, match, historicalUnitPrice) {
   if (!match) return { lineTotal: 0, breakdown: [], added: [], removed: [], missing: [] };
-  const targetTags = unifiedEstimateProcessTags(item);
+  const targetTags = canonicalHistoricalProcessTags(unifiedEstimateProcessTags(item));
   const referenceTags = historicalReferenceProcessTags(match);
   const targetSet = new Set(targetTags);
   const referenceSet = new Set(referenceTags);
@@ -8177,6 +8184,31 @@ function historicalProcessAdjustment(item, match, historicalUnitPrice) {
     breakdown.push({ label: `移除製程：${result.label}`, amount: -result.unitAmount, type: '歷史價製程調整' });
   });
   return { lineTotal, breakdown, added, removed, missing };
+}
+
+function historicalMaterialFloorForItem(item) {
+  applyEstimateDimensionNormalization(item);
+  const material = unifiedMaterialKey(item);
+  const rawMaterialTwd = UNIFIED_RAW_MATERIAL_PER_TSAI[material.key];
+  const exactCai = Math.max(0, (toNumber(item.widthMm) * toNumber(item.heightMm)) / ESTIMATE_PRICING_CONFIG.TSAI_AREA_MM2);
+  if (!(rawMaterialTwd > 0) || !(exactCai > 0)) return 0;
+  const materialRate = unifiedStageRate(rawMaterialTwd, internalPriceBasisKey());
+  const wasteRate = exactCai < 1 ? 0 : resolvedWasteRatioForItem(item, material.name);
+  return exactCai * materialRate * (1 + wasteRate);
+}
+
+function validateHistoricalMatchMaterialFloor(item, match) {
+  if (!match || !(toNumber(match.unitPrice) > 0)) return { valid: false, adjustedUnitPrice: 0, materialFloor: 0 };
+  const qty = Math.max(1, toNumber(item.qty) || 1);
+  const adjustment = historicalProcessAdjustment(item, match, match.unitPrice);
+  const adjustedUnitPrice = toNumber(match.unitPrice) + toNumber(adjustment.lineTotal) / qty;
+  const materialFloor = historicalMaterialFloorForItem(item);
+  return {
+    valid: !(materialFloor > 0 && adjustedUnitPrice + 0.01 < materialFloor),
+    adjustedUnitPrice,
+    materialFloor,
+    adjustment
+  };
 }
 
 function estimatePricingModeMeta(item) {
@@ -8417,8 +8449,10 @@ function recalculateEstimateItem(item){
   const useManualPrice=Boolean(item.manualPrice&&toNumber(item.baseUnitPrice)>0);
   const productionBasis=['productionTwd','productionRmb'].includes(internalPriceBasisKey());
   const productionMatch=useManualPrice||!productionBasis?null:bestProductionReferenceForItem(item);
-  const exactHistoricalMatch=useManualPrice||productionBasis?null:bestExactHistoricalQuoteForItem(item);
-  const historicalMatch=useManualPrice||productionBasis||exactHistoricalMatch?null:bestApprovedHistoricalPriceForItem(item);
+  let exactHistoricalMatch=useManualPrice||productionBasis?null:bestExactHistoricalQuoteForItem(item);
+  if(exactHistoricalMatch&&!validateHistoricalMatchMaterialFloor(item,exactHistoricalMatch).valid)exactHistoricalMatch=null;
+  let historicalMatch=useManualPrice||productionBasis||exactHistoricalMatch?null:bestApprovedHistoricalPriceForItem(item);
+  if(historicalMatch&&!validateHistoricalMatchMaterialFloor(item,historicalMatch).valid)historicalMatch=null;
   let selectedPrice=useManualPrice?null:state.materialPrices.find((p)=>p.id===item.priceId);
   if(selectedPrice&&materialPriceCompatibilityScore(item,selectedPrice)<0&&!item.priceManuallySelected){item.priceId='';selectedPrice=null;}
   const manuallySelectedPrice=Boolean(selectedPrice&&item.priceManuallySelected);
@@ -8452,7 +8486,7 @@ function recalculateEstimateItem(item){
     item.calculationFormula=`${qty}件 × ${Math.round(productionMatch.unitPrice*100)/100}/件 = ${Math.round(productionMatch.unitPrice*qty*100)/100}`;
     item.confidenceSource=`${productionMatch.count}筆相似量產參考中位數`;
     item.similarHistoryRecords=(productionMatch.records||[]).map((row)=>({itemName:row.itemName,material:row.material,thicknessMm:numericThickness(row.thickness),widthMm:row.widthMm,heightMm:row.heightMm,unitPrice:internalPriceBasisKey()==='productionRmb'?toNumber(row.unitPriceRmb)*currentEstimateCnyRate():toNumber(row.unitPriceTwd)}));
-  }else if(historicalMatch&&historicalMatch.score>=82){
+  }else if(historicalMatch&&historicalMatch.score>=HISTORICAL_PRICE_MIN_MATCH_SCORE){
     activeHistoricalMatch=historicalMatch;
     item.priceId='';item.manualPrice=false;item.historicalPriceApplied=true;
     item.baseUnitPrice=historicalMatch.unitPrice;
