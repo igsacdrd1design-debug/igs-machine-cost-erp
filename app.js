@@ -1,6 +1,6 @@
-/* IGS ERP app.js — v3.25.2 AI 附件區佈局修正版 */
+/* IGS ERP app.js — v3.29 估價工作流程補齊版 */
 // =====================================================
-// IGS 機台材料成本 ERP — 前端 v3.25.2 AI 附件區佈局修正版
+// IGS 機台材料成本 ERP — 前端 v3.29 估價工作流程補齊版
 // 1. ERP 密碼登入
 // 2. 工作階段驗證
 // 3. 私人 Google Sheet 安全讀取
@@ -1396,6 +1396,7 @@ function setupNavigation() {
 
 function setupSearch() {
   $("globalSearch").addEventListener("input", renderAll);
+  $("homePriceSearchResults")?.addEventListener("click", handleHomePriceSearchClick);
 }
 
 function setupFilters() {
@@ -3632,9 +3633,101 @@ function renderHomePriceSearchResults(){
     return;
   }
   box.innerHTML=rows.map((row)=>`<article class="homePriceRow">
-    <div><strong>${escapeHTML(row.itemName||'未命名品項')}</strong><small>${escapeHTML([row.project,row.material,row.thicknessMm?`${row.thicknessMm}mm`:'',row.processTags].filter(Boolean).join('｜'))}</small></div>
+    <div class="homePriceMain"><strong>${escapeHTML(row.itemName||'未命名品項')}</strong><small>${escapeHTML([row.project,row.material,row.thicknessMm?`${row.thicknessMm}mm`:'',row.processTags].filter(Boolean).join('｜'))}</small></div>
     <div class="homePriceMeta"><strong>${money(row.unitPrice)}</strong><small>${escapeHTML(row.status||'待認證')}｜${escapeHTML(row.supplier||'未填供應商')}｜${escapeHTML(row.quoteDate||'未填日期')}</small></div>
+    <button class="button secondary compact homePriceEstimateButton" type="button" data-add-price-review-estimate="${escapeHTML(row.id)}">➕ 帶入估價</button>
   </article>`).join('');
+}
+
+let estimateImportChoiceResolver=null;
+function requestEstimateImportChoice(review){
+  const dialog=$('estimateImportChoiceDialog');
+  if(!dialog)return Promise.resolve('current');
+  const currentName=$('estimateName')?.value.trim()||'未命名估價';
+  const message=$('estimateImportChoiceMessage');
+  if(message)message.textContent=`目前正在編輯「${currentName}」，要把「${review.itemName||'這筆品項'}」加入目前估價，還是另開新估價？`;
+  dialog.showModal();
+  return new Promise((resolve)=>{estimateImportChoiceResolver=resolve;});
+}
+function closeEstimateImportChoice(choice='cancel'){
+  const dialog=$('estimateImportChoiceDialog');
+  if(dialog?.open)dialog.close();
+  const resolve=estimateImportChoiceResolver;estimateImportChoiceResolver=null;
+  if(resolve)resolve(choice);
+}
+function handleEstimateImportChoiceClick(event){
+  const button=event.target.closest('[data-estimate-import-choice]');
+  if(!button)return;
+  closeEstimateImportChoice(button.dataset.estimateImportChoice||'cancel');
+}
+function priceReviewToEstimateItem(review){
+  const widthMm=toNumber(review.widthMm);
+  const heightMm=toNumber(review.heightMm);
+  const thickness=toNumber(review.thicknessMm)>0?String(review.thicknessMm):'';
+  const spec=[widthMm&&heightMm?`${widthMm}×${heightMm}mm`:'',thickness?`${thickness}mm`:''].filter(Boolean).join('，');
+  const item=applyEstimateDimensionNormalization({
+    ...emptyEstimateItem(),
+    code:review.itemCode||'',
+    originalName:review.itemName||'',
+    normalizedName:standardizeErpText(review.itemName||''),
+    name:standardizeErpText(review.itemName||''),
+    originalMaterial:review.material||'',
+    normalizedMaterial:standardizeErpText(review.material||''),
+    material:standardizeErpText(review.material||''),
+    originalSpec:spec,
+    spec,
+    thickness,
+    qty:Math.max(1,toNumber(review.qty)||1),
+    unit:review.unit||'件',
+    widthMm,
+    heightMm,
+    baseUnitPrice:toNumber(review.unitPrice),
+    manualPrice:true,
+    manualPriceConfidence:review.status==='已認證'?95:82,
+    priceManuallySelected:false,
+    wasteRate:0,
+    wasteRateManuallySet:true,
+    marketAdjustment:0,
+    marketManuallySet:true,
+    processSummary:normalizeProcessTags(review.processTags).join('、'),
+    priceSource:`歷史報價｜${review.supplier||'未填供應商'}｜${review.quoteDate||'未填日期'}`,
+    confidenceScore:review.status==='已認證'?95:82,
+    historicalPriceApplied:false,
+    sourcePriceReviewId:review.id||''
+  });
+  recalculateEstimateItem(item);
+  return item;
+}
+async function handleHomePriceSearchClick(event){
+  const button=event.target.closest('[data-add-price-review-estimate]');
+  if(!button)return;
+  const review=state.priceReviews.find((row)=>row.id===button.dataset.addPriceReviewEstimate);
+  if(!review)return;
+  const hasCurrent=Boolean(state.estimateDraftItems.length||state.currentEstimateId||$('estimateName')?.value.trim());
+  let choice='current';
+  if(hasCurrent){
+    choice=await requestEstimateImportChoice(review);
+    if(choice==='cancel')return;
+  }
+  if(choice==='new')resetEstimateEditor();
+  if(choice==='new'||!hasCurrent){
+    if(review.machineId&&machineById(review.machineId)){
+      $('estimateTargetType').value='existing';
+      updateEstimateTargetMode();
+      $('estimateMachine').value=review.machineId;
+    }
+    if(!$('estimateName').value.trim())$('estimateName').value=`${review.project||review.itemName||'歷史報價'} 估價`;
+  }
+  const item=priceReviewToEstimateItem(review);
+  state.estimateDraftItems.push(item);
+  activateView('smartEstimate','快速估價');
+  renderEstimateDraft();
+  requestAnimationFrame(()=>{
+    const index=state.estimateDraftItems.length-1;
+    const card=$('estimateItemRows')?.querySelector(`[data-estimate-index="${index}"]`);
+    card?.scrollIntoView({behavior:'smooth',block:'center'});
+  });
+  showNotice(`已將「${review.itemName||'品項'}」帶入快速估價。`,'success');
 }
 
 function renderDashboard() {
@@ -4780,7 +4873,11 @@ function setupV20() {
   $('batchCertificationRows')?.addEventListener('change', handleBatchCertificationChange);
   $('closeBatchCertificationDialog')?.addEventListener('click', closeBatchCertificationDialog);
   $('cancelBatchCertification')?.addEventListener('click', closeBatchCertificationDialog);
-  $('priceConflictDialog')?.addEventListener('click', handlePriceConflictDialogClick);
+  $('priceConflictDialog')?.addEventListener('click', (event)=>{
+    if(event.target===$('priceConflictDialog'))cancelPriceConflictDecision();
+    else handlePriceConflictDialogClick(event);
+  });
+  $('priceConflictDialog')?.addEventListener('cancel', (event)=>{event.preventDefault();cancelPriceConflictDecision();});
   $('machineLinkDialog')?.addEventListener('click', handleMachineLinkDialogClick);
   $('certifyMachineDialog')?.addEventListener('click', handleCertificationMachineDialogClick);
   $('priceReviewForm')?.addEventListener('submit', savePriceReviewFromDialog);
@@ -4818,6 +4915,18 @@ function setupV20() {
   $('saveEstimateAndOptimize').addEventListener('click', saveEstimateAndOpenOptimization);
   $('copyEstimateSummary')?.addEventListener('click', ()=>copyEstimateSummary(''));
   $('estimateProjectRows').addEventListener('click', handleEstimateProjectClick);
+  $('estimateImportChoiceDialog')?.addEventListener('click', (event)=>{
+    if(event.target===$('estimateImportChoiceDialog'))closeEstimateImportChoice('cancel');
+    else handleEstimateImportChoiceClick(event);
+  });
+  $('estimateImportChoiceDialog')?.addEventListener('cancel', (event)=>{event.preventDefault();closeEstimateImportChoice('cancel');});
+  $('estimateQuickCreateMachineForm')?.addEventListener('submit', handleEstimateQuickCreateMachine);
+  $('closeEstimateQuickCreateMachine')?.addEventListener('click', ()=>closeEstimateQuickCreateMachineDialog({cancelled:true}));
+  $('cancelEstimateQuickCreateMachine')?.addEventListener('click', ()=>closeEstimateQuickCreateMachineDialog({cancelled:true}));
+  $('estimateQuickCreateMachineDialog')?.addEventListener('click', (event)=>{
+    if(event.target===$('estimateQuickCreateMachineDialog'))closeEstimateQuickCreateMachineDialog({cancelled:true});
+  });
+  $('estimateQuickCreateMachineDialog')?.addEventListener('cancel', (event)=>{event.preventDefault();closeEstimateQuickCreateMachineDialog({cancelled:true});});
   $('estimateTargetType').addEventListener('change', updateEstimateTargetMode);
   $('estimatePriceBasis')?.addEventListener('change', () => { recalculateAllEstimateItems(); renderEstimateDraft(); });
   $('estimateOrderType')?.addEventListener('change', () => { recalculateAllEstimateItems(); renderEstimateDraft(); });
@@ -5626,6 +5735,12 @@ function handlePriceConflictDialogClick(event) {
   $('priceConflictDialog')?.close();
   const resolve=priceConflictResolver;priceConflictResolver=null;
   if(resolve)resolve(result);
+}
+function cancelPriceConflictDecision(){
+  const dialog=$('priceConflictDialog');
+  if(dialog?.open)dialog.close();
+  const resolve=priceConflictResolver;priceConflictResolver=null;
+  if(resolve)resolve({action:'cancel',itemId:''});
 }
 
 async function certifyPriceReviewWithSync(review, options={}) {
@@ -8550,7 +8665,10 @@ function renderEstimateDraft(){
           <strong>${money(item.baselineCost)}</strong>
           <small>${confidence.label} · ${confidence.score}%</small>
         </div>
-        <button class="removeRow" type="button" data-remove-estimate="${index}">刪除</button>
+        <div class="estimateSummaryActions">
+          <button class="button ghost compact" type="button" data-copy-estimate-item="${index}">📋 複製</button>
+          <button class="removeRow" type="button" data-remove-estimate="${index}">刪除</button>
+        </div>
       </header>
 
       <details class="estimateEditLayer" data-estimate-edit-details ${editOpen?'open':''}>
@@ -8938,10 +9056,142 @@ function handleEstimateItemClick(event){
     return;
   }
 
+  const copyButton=event.target.closest('[data-copy-estimate-item]');
+  if(copyButton){
+    const sourceIndex=Number(copyButton.dataset.copyEstimateItem);
+    const source=state.estimateDraftItems[sourceIndex];
+    if(!source)return;
+    const clone=JSON.parse(JSON.stringify(source));
+    delete clone.id;
+    delete clone.estimateId;
+    clone.name=`${String(source.name||'品項').replace(/_副本$/,'')}_副本`;
+    clone.originalName=clone.name;
+    clone.normalizedName=standardizeErpText(clone.name);
+    clone.aiImported=false;
+    clone.aiMissingFields=[];
+    clone._aiConfidenceLow=false;
+    clone._missingFields=[];
+    recalculateEstimateItem(clone);
+    const targetIndex=sourceIndex+1;
+    state.estimateDraftItems.splice(targetIndex,0,clone);
+    renderEstimateDraft();
+    requestAnimationFrame(()=>{
+      const card=$('estimateItemRows')?.querySelector(`[data-estimate-index="${targetIndex}"]`);
+      const details=card?.querySelector('[data-estimate-edit-details]');
+      if(details)details.open=true;
+      const field=card?.querySelector('[data-estimate-field="heightMm"]')||card?.querySelector('[data-estimate-field="widthMm"]');
+      card?.scrollIntoView({behavior:'smooth',block:'center'});
+      setTimeout(()=>{field?.focus();field?.select?.();},180);
+    });
+    showNotice(`已複製「${source.name||'品項'}」，請修改尺寸。`,'success');
+    return;
+  }
+
   const btn=event.target.closest('[data-remove-estimate]');
   if(!btn)return;
   state.estimateDraftItems.splice(Number(btn.dataset.removeEstimate),1);
   renderEstimateDraft();
+}
+
+let estimateMachineCreationResolver=null;
+function requestEstimateMachineCreation(defaultName=''){
+  const dialog=$('estimateQuickCreateMachineDialog');
+  const form=$('estimateQuickCreateMachineForm');
+  const category=$('estimateQuickMachineCategory');
+  if(!dialog||!form||!category)return Promise.resolve({cancelled:true});
+  form.reset();
+  category.innerHTML=$('machineCategory')?.innerHTML||FALLBACK_CATEGORIES.map((value)=>`<option value="${escapeHTML(value)}">${escapeHTML(value)}</option>`).join('');
+  if($('estimateQuickMachineName'))$('estimateQuickMachineName').value=String(defaultName||'').replace(/\s*估價.*$/,'').trim();
+  dialog.showModal();
+  setTimeout(()=>$('estimateQuickMachineCode')?.focus(),60);
+  return new Promise((resolve)=>{estimateMachineCreationResolver=resolve;});
+}
+function closeEstimateQuickCreateMachineDialog(result={cancelled:true}){
+  const dialog=$('estimateQuickCreateMachineDialog');
+  if(dialog?.open)dialog.close();
+  const resolve=estimateMachineCreationResolver;estimateMachineCreationResolver=null;
+  if(resolve)resolve(result);
+}
+async function handleEstimateQuickCreateMachine(event){
+  event.preventDefault();
+  const code=$('estimateQuickMachineCode').value.trim().toUpperCase();
+  const name=$('estimateQuickMachineName').value.trim();
+  const category=$('estimateQuickMachineCategory').value.trim();
+  if(!code||!name||!category){showNotice('請填寫機台代碼、機台名稱與機台分類。','warn');return;}
+  const duplicate=state.machines.find((machine)=>norm(machine.code)===norm(code));
+  if(duplicate){
+    $('estimateTargetType').value='existing';updateEstimateTargetMode();$('estimateMachine').value=duplicate.id;
+    closeEstimateQuickCreateMachineDialog({cancelled:false,machine:duplicate});
+    showNotice(`機台代碼「${code}」已存在，已改用「${duplicate.name}」。`,'warn');
+    return;
+  }
+  const button=$('saveEstimateQuickMachine');
+  const original=button.textContent;button.disabled=true;button.textContent='建立中…';
+  try{
+    const response=await secureApiRequest({action:'createMachine',machine:{code,name,category,image:null,note:'由快速估價同步成本時建立'}},{timeoutMs:60000});
+    const raw=response.result?.machine||{};
+    const createdId=String(firstValue(raw,['機台ID','machineId','id']));
+    await loadData();
+    const created=state.machines.find((machine)=>machine.id===createdId)||state.machines.find((machine)=>norm(machine.code)===norm(code));
+    if(!created)throw new Error('機台已建立，但重新讀取後找不到該機台。');
+    $('estimateTargetType').value='existing';updateEstimateTargetMode();$('estimateMachine').value=created.id;
+    closeEstimateQuickCreateMachineDialog({cancelled:false,machine:created});
+    showNotice(`已建立機台「${created.name}」，將繼續儲存估價與成本。`,'success');
+  }catch(error){showNotice(`建立機台失敗：${error.message}`,'error');}
+  finally{button.disabled=false;button.textContent=original;}
+}
+async function ensureEstimateSyncMachine(){
+  if($('estimateTargetType').value==='existing'){
+    const machine=machineById($('estimateMachine').value);
+    if(!machine){showNotice('請先選擇要寫入成本紀錄的既有機台。','warn');return null;}
+    return machine;
+  }
+  const result=await requestEstimateMachineCreation($('estimateName').value.trim());
+  return result.cancelled?null:result.machine;
+}
+function estimateSyncUnitPrice(item){
+  const qty=Math.max(1,toNumber(item?.qty)||1);
+  return Math.round((toNumber(item?.baselineCost)/qty)*100)/100;
+}
+function findEstimateCostConflicts(item,machineId){
+  if(!machineId)return[];
+  const targetDims={widthMm:toNumber(item.widthMm),heightMm:toNumber(item.heightMm)};
+  const orderMap=new Map(state.costOrders.map((order)=>[order.id,order]));
+  const targetPrice=estimateSyncUnitPrice(item);
+  return state.costItems.map((costItem)=>({item:costItem,order:orderMap.get(costItem.costOrderId)}))
+    .filter(({item:costItem,order})=>order&&order.machineId===machineId&&order.type==='打樣版費用'&&costItem.itemType!=='附加費用')
+    .filter(({item:costItem})=>levenshteinSimilarity(item.name,costItem.name)>=0.8)
+    .filter(({item:costItem})=>strictMaterialCompatibility(item.material,costItem.material))
+    .filter(({item:costItem})=>dimensionsWithinFiveMm(targetDims,costItemDimensions(costItem)))
+    .map(({item:costItem,order})=>({item:costItem,order,sameAmount:Math.abs(toNumber(costItem.price)-targetPrice)<0.01}));
+}
+async function buildEstimateSyncDecisions(items,machineId){
+  const decisions=[];
+  for(let index=0;index<items.length;index+=1){
+    const item=items[index];
+    const conflicts=findEstimateCostConflicts(item,machineId);
+    if(!conflicts.length){decisions.push({index,action:'add',conflictItemId:''});continue;}
+    const choice=await resolvePriceConflict({itemName:item.name,unitPrice:estimateSyncUnitPrice(item)},conflicts);
+    if(choice.action==='cancel')return null;
+    decisions.push({index,action:choice.action,conflictItemId:choice.itemId||conflicts[0].item.id});
+  }
+  return decisions;
+}
+async function syncEstimateProjectToMachineCost(project,items,machineId){
+  const decisions=await buildEstimateSyncDecisions(items,machineId);
+  if(!decisions)return{cancelled:true};
+  const syncItems=items.map((item)=>({...item,processSummary:item.processSummary||estimateProcessSummaryText(item)}));
+  const response=await secureApiRequest({
+    action:'syncEstimateToMachineCost',
+    estimate:{id:project.id,machineId,name:project.name,date:project.date||todayValue(),version:project.version||'v1'},
+    items:syncItems,
+    decisions
+  },{timeoutMs:120000});
+  await loadData();
+  const result=response.result||{};
+  const ids=(result.costOrderIds||[]).filter(Boolean);
+  showNotice(`估價已同步機台成本：新增 ${result.addedCount||0} 筆、更新 ${result.updatedCount||0} 筆、跳過 ${result.skippedCount||0} 筆${ids.length?`｜成本單 ${ids.join('、')}`:''}。`,'success');
+  return{cancelled:false,result};
 }
 
 function updateEstimateTargetMode(){
@@ -9035,17 +9285,28 @@ function showSaveSuccessToast(savedItem){
   },5000);
 }
 
-function resetEstimateEditor(){state.currentEstimateId='';state.estimateDraftItems=[];clearEstimateTextInput();$('estimateProjectForm').reset();$('estimateId').value='';$('estimateTargetType').value='new';$('estimatePriceBasis').value='sampleTwd';$('estimateOrderType').value='auto';$('estimateVersion').value='v1';$('estimateDate').value=todayValue();$('estimateStatus').value='草稿';clearEstimateSourceDocument();updateEstimateTargetMode();renderEstimateDraft();}
-function loadEstimateProject(id){const project=state.estimateProjects.find((p)=>p.id===id);if(!project)return;state.currentEstimateId=id;$('estimateId').value=id;$('estimateTargetType').value=project.machineId?'existing':'new';$('estimateMachine').value=project.machineId;$('estimateName').value=project.name;$('estimateVersion').value=project.version;$('estimateDate').value=project.date;$('estimateStatus').value=project.status;$('estimateNote').value=project.note;state.estimateDraftItems=state.estimateItems.filter((i)=>i.estimateId===id).map((i)=>({...i,usageManuallySet:true,marketManuallySet:true}));updateEstimateTargetMode();renderEstimateDraft();activateView('smartEstimate', '快速估價');}
+function resetEstimateEditor(){state.currentEstimateId='';state.estimateDraftItems=[];clearEstimateTextInput();$('estimateProjectForm').reset();$('estimateId').value='';$('estimateTargetType').value='new';$('estimatePriceBasis').value='sampleTwd';$('estimateOrderType').value='auto';$('estimateVersion').value='v1';$('estimateDate').value=todayValue();$('estimateStatus').value='草稿';if($('estimateSyncCost'))$('estimateSyncCost').checked=false;clearEstimateSourceDocument();updateEstimateTargetMode();renderEstimateDraft();}
+function loadEstimateProject(id){const project=state.estimateProjects.find((p)=>p.id===id);if(!project)return;state.currentEstimateId=id;$('estimateId').value=id;$('estimateTargetType').value=project.machineId?'existing':'new';$('estimateMachine').value=project.machineId;$('estimateName').value=project.name;$('estimateVersion').value=project.version;$('estimateDate').value=project.date;$('estimateStatus').value=project.status;$('estimateNote').value=project.note;if($('estimateSyncCost'))$('estimateSyncCost').checked=false;state.estimateDraftItems=state.estimateItems.filter((i)=>i.estimateId===id).map((i)=>({...i,usageManuallySet:true,marketManuallySet:true}));updateEstimateTargetMode();renderEstimateDraft();activateView('smartEstimate', '快速估價');}
 
 async function saveCurrentEstimate(){
   const name=$('estimateName').value.trim();
   if(!name){showNotice('請填寫估價名稱。','warn');return null;}
+  recalculateAllEstimateItems();
   const valid=state.estimateDraftItems.filter((i)=>i.name.trim());
   if(!valid.length){showNotice('至少需要一筆有品項名稱的估價明細。','warn');return null;}
+  const syncRequested=Boolean($('estimateSyncCost')?.checked);
+  if(syncRequested&&valid.length>180){showNotice('單張機台成本單最多同步 180 筆明細，請拆成兩個估價版本。','warn');return null;}
+  if(syncRequested&&valid.some((item)=>!(toNumber(item.baselineCost)>0))){
+    showNotice('有品項仍缺少有效價格，請補齊後再同步機台成本。','warn');
+    return null;
+  }
+  let syncMachine=null;
+  if(syncRequested){
+    syncMachine=await ensureEstimateSyncMachine();
+    if(!syncMachine){showNotice('已取消建立機台，本次尚未儲存估價。','warn');return null;}
+  }
   const button=$('saveEstimate');button.disabled=true;button.textContent='儲存中…';
   try{
-    recalculateAllEstimateItems();
     const machineId=$('estimateTargetType').value==='existing'?$('estimateMachine').value:'';
     if(!state.currentEstimateId){
       const autoVersion=nextEstimateVersionForContext(name,machineId);
@@ -9056,6 +9317,16 @@ async function saveCurrentEstimate(){
     state.estimateProjects=state.estimateProjects.filter((p)=>p.id!==project.id);state.estimateProjects.push(project);
     state.estimateItems=state.estimateItems.filter((i)=>i.estimateId!==project.id);state.estimateItems.push(...(response.result.items||[]).map(normalizeEstimateItem));
     state.currentEstimateId=project.id;$('estimateId').value=project.id;renderEstimateProjects();renderEstimateDraft();populateOptimizationEstimateOptions();showSaveSuccessToast({item:valid[0],total:project.baselineTotal,itemCount:valid.length});
+    if(syncRequested){
+      try{
+        const syncResult=await syncEstimateProjectToMachineCost(project,valid,syncMachine.id);
+        if(syncResult.cancelled)showNotice('估價版本已儲存；機台成本同步已取消。','warn');
+        else if($('estimateSyncCost'))$('estimateSyncCost').checked=false;
+      }catch(syncError){
+        await loadData();
+        showNotice(`估價版本已儲存，但機台成本同步失敗：${syncError.message}。資料已重新整理，請再試一次。`,'error');
+      }
+    }
     return project;
   }catch(error){showNotice(`估價儲存失敗：${error.message}`,'error');return null;}
   finally{button.disabled=false;button.textContent='儲存估價版本';}

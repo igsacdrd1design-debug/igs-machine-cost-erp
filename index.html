@@ -8,7 +8,7 @@
   <meta name="googlebot" content="noindex, nofollow, noarchive, nosnippet">
   <meta name="referrer" content="no-referrer">
   <title>IGS 機台材料成本 ERP｜快速估價</title>
-  <link rel="stylesheet" href="style.css?v=20260626-igs-v3-28-estimate-accuracy-export">
+  <link rel="stylesheet" href="style.css?v=20260626-igs-v3-29-estimate-workflow">
 </head>
 <body class="authLocked">
   <section id="authGate" class="authGate" aria-labelledby="loginTitle">
@@ -1012,7 +1012,7 @@
     <section id="smartEstimate" class="view">
       <div class="quickIntro estimateIntro">
         <div>
-          <span class="eyebrow">v3.28 · 估價準確度與報價匯出</span>
+          <span class="eyebrow">v3.29 · 估價工作流程補齊</span>
           <h2>快速估價：掃描、貼文字或手動輸入都能立即試算</h2>
           <p>小件特殊加工費採 30%，1–5 才耗損率減半；已儲存估價可匯出 PDF／Excel，明細也可直接複製摘要。</p>
         </div>
@@ -1227,6 +1227,10 @@
             <div><span>整體信心度</span><strong id="estimateConfidence">0%</strong></div>
           </div>
           <div class="estimateSaveActions">
+            <label class="checkboxField estimateSyncCostOption" title="勾選後，儲存估價時會同步建立或更新機台的打樣版費用成本紀錄。">
+              <input id="estimateSyncCost" type="checkbox">
+              <span>同時建立機台成本紀錄</span>
+            </label>
             <button id="saveEstimate" class="button primary" type="button">儲存估價版本</button>
             <button id="saveEstimateAndOptimize" class="button secondary" type="button" hidden>儲存並進行美術降本</button>
           </div>
@@ -1407,6 +1411,55 @@
     </form>
   </dialog>
 
+  <dialog id="estimateImportChoiceDialog" class="quickMachineDialog estimateImportChoiceDialog">
+    <div class="quickMachineDialogForm">
+      <div class="dialogHead">
+        <div>
+          <span class="eyebrow">查價帶入估價</span>
+          <h2>要加入哪一份估價？</h2>
+          <p id="estimateImportChoiceMessage">目前已有進行中的估價。</p>
+        </div>
+        <button class="dialogClose" type="button" data-estimate-import-choice="cancel" aria-label="關閉">×</button>
+      </div>
+      <div class="formActions estimateImportChoiceActions">
+        <button class="button primary" type="button" data-estimate-import-choice="current">加入目前估價</button>
+        <button class="button secondary" type="button" data-estimate-import-choice="new">建立新估價</button>
+        <button class="button ghost" type="button" data-estimate-import-choice="cancel">取消</button>
+      </div>
+    </div>
+  </dialog>
+
+  <dialog id="estimateQuickCreateMachineDialog" class="quickMachineDialog">
+    <form id="estimateQuickCreateMachineForm" class="quickMachineDialogForm">
+      <div class="dialogHead">
+        <div>
+          <span class="eyebrow">儲存估價｜同步成本</span>
+          <h2>先建立歸屬機台</h2>
+          <p>勾選「同時建立機台成本紀錄」時，新專案必須先建立機台。建立完成後會自動寫入成本紀錄。</p>
+        </div>
+        <button id="closeEstimateQuickCreateMachine" class="dialogClose" type="button" aria-label="關閉">×</button>
+      </div>
+      <div class="quickMachineDialogGrid">
+        <label>
+          <span>機台代碼 *</span>
+          <input id="estimateQuickMachineCode" type="text" required maxlength="60" autocomplete="off" placeholder="例如：SF6">
+        </label>
+        <label>
+          <span>機台名稱 *</span>
+          <input id="estimateQuickMachineName" type="text" required maxlength="120" autocomplete="off" placeholder="例如：街霸6">
+        </label>
+        <label class="wide">
+          <span>機台分類 *</span>
+          <select id="estimateQuickMachineCategory" required></select>
+        </label>
+      </div>
+      <div class="formActions">
+        <button id="saveEstimateQuickMachine" class="button primary" type="submit">建立機台並繼續儲存</button>
+        <button id="cancelEstimateQuickCreateMachine" class="button ghost" type="button">取消</button>
+      </div>
+    </form>
+  </dialog>
+
   <dialog id="quotationQuickCreateMachineDialog" class="quickMachineDialog">
     <form id="quotationQuickCreateMachineForm" class="quickMachineDialogForm">
       <div class="dialogHead">
@@ -1453,6 +1506,6 @@
   <script src="https://cdn.jsdelivr.net/npm/jspdf@4.2.1/dist/jspdf.umd.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/jspdf-autotable@5.0.8/dist/jspdf.plugin.autotable.min.js"></script>
   <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
-  <script src="app.js?v=20260626-igs-v3-28-estimate-accuracy-export"></script>
+  <script src="app.js?v=20260626-igs-v3-29-estimate-workflow"></script>
 </body>
 </html>

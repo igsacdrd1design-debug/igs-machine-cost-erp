@@ -3511,3 +3511,52 @@ dialog .panelActions .button {
     min-width: 260px;
   }
 }
+
+/* v3.29｜查價帶入估價、品項複製與估價同步成本 */
+.homePriceRow{
+  display:grid;
+  grid-template-columns:minmax(220px,1fr) minmax(190px,auto) auto;
+  align-items:center;
+}
+.homePriceMain{min-width:0}
+.homePriceEstimateButton{justify-self:end}
+
+.estimateSummaryActions{
+  display:flex;
+  flex-direction:column;
+  align-items:stretch;
+  gap:7px;
+  min-width:92px;
+}
+.estimateSummaryActions .button,
+.estimateSummaryActions .removeRow{width:100%;white-space:nowrap}
+
+.estimateSaveActions{align-items:center;flex-wrap:wrap}
+.estimateSyncCostOption{
+  min-height:42px;
+  padding:8px 11px;
+  border:1px solid #cbd9d7;
+  border-radius:12px;
+  background:#f4faf8;
+  color:#315b55;
+  font-size:13px;
+  font-weight:850;
+  white-space:nowrap;
+}
+.estimateSyncCostOption input{accent-color:#2f7d73}
+
+.estimateImportChoiceDialog{width:min(560px,calc(100vw - 32px))}
+.estimateImportChoiceActions{justify-content:flex-end;flex-wrap:wrap}
+
+@media(max-width:760px){
+  .homePriceRow{grid-template-columns:1fr;align-items:stretch}
+  .homePriceMeta{text-align:left;white-space:normal}
+  .homePriceEstimateButton{justify-self:stretch;width:100%}
+  .estimateSummaryActions{grid-column:1/-1;flex-direction:row;justify-content:flex-end;min-width:0}
+  .estimateSummaryActions .button,
+  .estimateSummaryActions .removeRow{width:auto;min-width:96px}
+  .estimateSaveActions{align-items:stretch}
+  .estimateSyncCostOption{width:100%;justify-content:center;white-space:normal;text-align:center}
+  .estimateImportChoiceActions{flex-direction:column}
+  .estimateImportChoiceActions .button{width:100%}
+}
