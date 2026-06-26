@@ -1,6 +1,6 @@
-/* IGS ERP app.js — v3.31 材質基價＋加工費疊加版 */
+/* IGS ERP app.js — v3.31.1 AI 掃描歷史價修正版 */
 // =====================================================
-// IGS 機台材料成本 ERP — 前端 v3.31 材質基價＋加工費疊加版
+// IGS 機台材料成本 ERP — 前端 v3.31.1 AI 掃描歷史價修正版
 // 1. ERP 密碼登入
 // 2. 工作階段驗證
 // 3. 私人 Google Sheet 安全讀取
@@ -6126,7 +6126,8 @@ function bestApprovedHistoricalPriceForItem(item) {
     .filter((entry)=>entry.score>=70)
     .sort((a,b)=>b.score-a.score);
   if (!candidates.length) return null;
-  const maxScore = candidates[0].score;
+  const best = candidates[0];
+  const maxScore = best.score;
   const peers = candidates.filter((entry)=>entry.score>=maxScore-5).slice(0,8);
   return {
     unitPrice: medianNumber(peers.map((entry)=>entry.row.unitPrice)),
