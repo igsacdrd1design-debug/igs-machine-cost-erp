@@ -3832,3 +3832,34 @@ dialog .panelActions .button {
   .estimateTargetPrimary { grid-template-columns: 1fr; }
   .estimatePriceComparison { justify-content: flex-start; white-space: normal; }
 }
+
+
+/* v3.37 最終版：快速估價首屏簡化 */
+.quickEstimateSimplified{display:grid;gap:20px}
+.estimateCaptureHero{min-height:calc(100vh - 150px);display:grid;align-content:start;gap:12px}
+.estimateCapturePanel{min-height:66vh;display:grid;align-content:center;gap:16px;padding:clamp(18px,4vw,48px);border:1px solid var(--line);border-radius:24px;background:linear-gradient(145deg,#ffffff,#f1f8f8);box-shadow:0 16px 48px rgba(27,62,72,.08)}
+.estimateUploadHero{min-height:clamp(340px,52vh,560px);border-width:3px;border-radius:24px;background:rgba(255,255,255,.76)}
+.estimateUploadHeroIcon{font-size:clamp(52px,8vw,88px);line-height:1}
+.estimateUploadHero strong{font-size:clamp(28px,4vw,48px);letter-spacing:.02em}
+.estimateUploadHero span:last-child{font-size:13px}
+.estimateCaptureLinks{display:flex;align-items:center;justify-content:center;gap:10px;color:var(--muted)}
+.estimateCaptureLinks .linkButton{font-size:14px;font-weight:800}
+.estimateCaptureStatusRow{display:flex;align-items:center;justify-content:center;gap:12px;min-height:34px;flex-wrap:wrap}
+.estimateCaptureStatusRow .photoStatus{margin:0}
+.estimateRawCompact{max-width:760px;width:100%;margin:0 auto}
+.estimateTextCompact{max-width:900px;width:100%;margin:0 auto;border:1px solid var(--line);border-radius:14px;background:#fff}
+.estimateTextCompact>summary{cursor:pointer;padding:12px 16px;color:var(--blue);font-weight:800;list-style:none}
+.estimateTextCompact>summary::-webkit-details-marker{display:none}
+.estimateTextCompactBody{display:grid;gap:12px;padding:0 16px 16px}
+.estimateWorkspacePanel[hidden]{display:none!important}
+.estimateSavedPanel{margin-top:6px}
+.estimateSaveSettingsDialog{width:min(760px,calc(100vw - 28px));max-height:calc(100vh - 28px)}
+.estimateSaveSettingsDialog .estimateProjectQuickForm{padding:4px 0}
+@media(max-width:760px){
+  .estimateCaptureHero{min-height:calc(100vh - 112px)}
+  .estimateCapturePanel{min-height:72vh;padding:16px;border-radius:18px}
+  .estimateUploadHero{min-height:52vh;border-radius:18px;padding:20px 12px}
+  .estimateCaptureStatusRow{align-items:flex-start;flex-direction:column}
+  .estimateCaptureLinks{flex-wrap:wrap}
+}
+.estimateTextCompact>summary{display:none}

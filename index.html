@@ -949,201 +949,74 @@
     </dialog>
 
 
-    <section id="smartEstimate" class="view">
-      <div class="quickIntro estimateIntro">
-        <div>
-          <span class="eyebrow">快速估價</span>
-          <h2>快速估價：掃描、貼文字或手動輸入都能立即試算</h2>
-        </div>
-        <div id="estimateStatusBadge" class="apiBadge">尚未建立估價</div>
-      </div>
-
-      <div class="estimateQuickGrid">
-        <div class="panel estimateProjectPanel">
-          <div class="panelHead">
-            <div><h2>1. 估價對象</h2></div>
-            <button id="newEstimate" class="button ghost" type="button">清空重建</button>
-          </div>
-
-          <form id="estimateProjectForm" class="estimateProjectQuickForm">
-            <input id="estimateId" type="hidden">
-
-            <div class="estimateTargetPrimary">
-              <label>
-                <span>估價對象</span>
-                <select id="estimateTargetType">
-                  <option value="new" selected>新機台／新專案</option>
-                  <option value="existing">既有機台</option>
-                </select>
-              </label>
-
-              <label id="estimateMachineField" hidden>
-                <span>既有機台</span>
-                <select id="estimateMachine"></select>
-              </label>
-            </div>
-
-            <div class="estimateProjectActions">
-              <button id="loadMachineActualItems" class="button secondary" type="button" hidden>載入既有機台實際品項</button>
-            </div>
-
-            <details class="estimateAdvancedProject">
-              <summary>⋯ 進階設定</summary>
-              <div class="estimateAdvancedProjectGrid">
-                <label>
-                  <span>估價名稱</span>
-                  <input id="estimateName" type="text">
-                </label>
-                <label>
-                  <span>估價日期</span>
-                  <input id="estimateDate" type="date">
-                </label>
-                <label>
-                  <span>內部估價基準</span>
-                  <select id="estimatePriceBasis">
-                    <option value="sampleTwd">台灣打樣 TWD</option>
-                    <option value="sampleTwdFloor">台灣打樣 TWD（相容舊選項）</option>
-                    <option value="productionTwd">台灣量產 TWD</option>
-                    <option value="sampleRmb">中國打樣 RMB → TWD</option>
-                    <option value="productionRmb">中國量產 RMB → TWD</option>
-                    <option value="rawTwd">原材料 TWD</option>
-                  </select>
-                </label>
-                <label>
-                  <span>估價類型</span>
-                  <select id="estimateOrderType">
-                    <option value="auto">自動判斷</option>
-                    <option value="prototype">打樣</option>
-                    <option value="smallBatch">小批</option>
-                    <option value="production">量產</option>
-                    <option value="newProcess">新工藝</option>
-                  </select>
-                </label>
-                <label><span>版本</span><input id="estimateVersion" type="text" value="v1"></label>
-                <label><span>狀態</span><select id="estimateStatus"><option selected>草稿</option><option>待確認</option><option>已核准</option><option>已作廢</option></select></label>
-                <label>
-                  <span>打樣除數</span>
-                  <input id="estimateSampleTwdRmbDivisor" type="number" min="0.01" step="0.01" value="4.5">
-                </label>
-                <label>
-                  <span>量產除數</span>
-                  <input id="estimateProductionRmbDivisor" type="number" min="0.01" step="0.01" value="3.3">
-                </label>
-                <label class="wide"><span>備註</span><textarea id="estimateNote" rows="3"></textarea></label>
-              </div>
-            </details>
-          </form>
-        </div>
-
-        <div class="panel estimateAiPanel">
-          <div class="panelHead">
-            <div>
-              <h2>2. AI 掃描匯入</h2>
-            </div>
-            <span id="estimateAiBadge" class="apiBadge">尚未分析</span>
-          </div>
-
-          <label class="estimateUploadZone" for="estimateSourceFile">
+    <section id="smartEstimate" class="view quickEstimateSimplified">
+      <span id="estimateStatusBadge" class="apiBadge" hidden>尚未建立估價</span>
+      <div class="estimateCaptureHero">
+        <div class="estimateCapturePanel">
+          <label class="estimateUploadZone estimateUploadHero" for="estimateSourceFile">
             <input id="estimateSourceFile" type="file" accept=".jpg,.jpeg,.png,.webp,.pdf,image/jpeg,image/png,image/webp,application/pdf">
-            <strong>點選或拖入圖片／PDF</strong>
+            <span class="estimateUploadHeroIcon" aria-hidden="true">📷</span>
+            <strong>拍照或上傳</strong>
             <span id="estimateSourceFileName">支援 JPG、JPEG、PNG、WebP、PDF；不支援 Word</span>
           </label>
-
-          <div class="estimateAiOptions">
-            <label>
-              <span>價格策略</span>
-              <select id="estimatePriceStrategy">
-                <option value="company_first">公司價格優先，缺價時採文件單價</option>
-                <option value="document_first">文件單價優先</option>
-                <option value="company_only">只使用公司價格主檔</option>
-              </select>
-            </label>
-            <label>
-              <span>匯入方式</span>
-              <select id="estimateImportMode">
-                <option value="replace">取代目前明細</option>
-                <option value="append">附加到目前明細</option>
-              </select>
-            </label>
-            <label class="checkboxField estimateAutoPriceOption">
-              <input id="estimateAutoPriceMissing" type="checkbox" checked>
-              <span>先用公司與內部規則試算；仍缺價才用免費 AI 依內部資料補估</span>
-            </label>
+          <div class="estimateCaptureLinks">
+            <button id="quickManualEstimate" class="linkButton" type="button">沒有圖片？手動輸入</button>
+            <span aria-hidden="true">·</span>
+            <button id="toggleEstimateTextImport" class="linkButton" type="button">貼上文字匯入</button>
           </div>
-
-          <div class="formActions estimateAiActions">
-            <button id="analyzeEstimateSource" class="button primary" type="button" disabled>AI 掃描並帶入試算</button>
-            <button id="clearEstimateSource" class="button ghost" type="button">清除檔案</button>
+          <div class="estimateCaptureStatusRow">
+            <span id="estimateAiBadge" class="apiBadge">尚未分析</span>
+            <p id="estimateAiStatus" class="photoStatus muted">尚未選擇檔案。</p>
+            <button id="clearEstimateSource" class="linkButton" type="button">清除檔案</button>
           </div>
-          <p id="estimateAiStatus" class="photoStatus muted">尚未選擇檔案。</p>
-
-          <details class="estimateRawDetails">
-            <summary>查看 AI 辨識原文與提醒</summary>
-            <textarea id="estimateAiRawText" rows="5" readonly placeholder="AI 辨識後會顯示原文與提醒"></textarea>
+          <button id="analyzeEstimateSource" class="button primary" type="button" hidden disabled>AI 掃描並帶入試算</button>
+          <div class="estimateAiOptions" hidden>
+            <label><span>價格策略</span><select id="estimatePriceStrategy"><option value="company_first">公司價格優先，缺價時採文件單價</option><option value="document_first">文件單價優先</option><option value="company_only">只使用公司價格主檔</option></select></label>
+            <label><span>匯入方式</span><select id="estimateImportMode"><option value="replace">取代目前明細</option><option value="append">附加到目前明細</option></select></label>
+            <label class="checkboxField estimateAutoPriceOption"><input id="estimateAutoPriceMissing" type="checkbox" checked><span>自動 AI 補估</span></label>
+          </div>
+          <details class="estimateRawDetails estimateRawCompact">
+            <summary>查看 AI 辨識內容</summary>
+            <textarea id="estimateAiRawText" rows="5" readonly></textarea>
           </details>
         </div>
 
-        <div class="panel estimateTextPanel">
-          <div class="panelHead">
-            <div>
-              <h2>3. 貼上文字匯入</h2>
+        <details id="estimateTextImportDetails" class="estimateTextCompact">
+          <summary>貼上文字匯入</summary>
+          <div class="estimateTextCompactBody">
+            <textarea id="estimateTextInput" class="estimateTextInput" rows="7" placeholder="貼上品項、材質、尺寸與製程"></textarea>
+            <div class="estimateTextOptions">
+              <label><span>匯入方式</span><select id="estimateTextImportMode"><option value="replace">取代目前明細</option><option value="append">附加到目前明細</option></select></label>
+              <label><span>人民幣匯率</span><input id="estimateCnyRate" type="number" min="0.01" step="0.01" value="4.61"></label>
+              <label class="checkboxField"><input id="estimateTextAutoTraditional" type="checkbox" checked><span>自動轉繁體</span></label>
             </div>
-            <span id="estimateTextBadge" class="apiBadge">尚未解析</span>
+            <div class="formActions estimateTextActions"><button id="parseEstimateText" class="button primary" type="button">解析文字並估價</button><button id="clearEstimateText" class="button ghost" type="button">清除文字</button></div>
+            <p id="estimateTextStatus" class="photoStatus muted">尚未解析</p>
           </div>
-
-          <textarea id="estimateTextInput" class="estimateTextInput" rows="7" placeholder="例如：&#10;B01_立體字（發光字），674.1mm × 207.3mm，需裁切，不透光銀底印刷，四色直噴&#10;B02_透明壓克力，719.7mm × 307.3mm，厚度5mm，需裁切，四色直噴，白色直噴"></textarea>
-
-          <div class="estimateTextOptions">
-            <label>
-              <span>匯入方式</span>
-              <select id="estimateTextImportMode">
-                <option value="replace">取代目前明細</option>
-                <option value="append">附加到目前明細</option>
-              </select>
-            </label>
-            <label>
-              <span>人民幣匯率（1 CNY = TWD）</span>
-              <input id="estimateCnyRate" type="number" min="0.01" step="0.01" value="4.61">
-            </label>
-            <label class="checkboxField">
-              <input id="estimateTextAutoTraditional" type="checkbox" checked>
-              <span>自動轉繁體並套用公司標準用語</span>
-            </label>
-          </div>
-
-          <div class="formActions estimateTextActions">
-            <button id="parseEstimateText" class="button primary" type="button">解析文字並估價</button>
-            <button id="clearEstimateText" class="button ghost" type="button">清除文字</button>
-          </div>
-          <p id="estimateTextStatus" class="photoStatus muted">尚未解析</p>
-        </div>
+        </details>
       </div>
 
-      <div class="panel estimateWorkspacePanel">
+      <div id="estimateWorkspacePanel" class="panel estimateWorkspacePanel" hidden>
         <div class="panelHead estimateWorkspaceHead">
-          <div>
-            <h2>4. 快速估價明細</h2>
-          </div>
+          <div><h2>估價明細</h2></div>
           <div class="panelActions">
             <input id="quickEstimateAiScanFile" type="file" hidden accept=".jpg,.jpeg,.png,.webp,.pdf,image/jpeg,image/png,image/webp,application/pdf">
-            <button id="quickEstimateAiScan" class="button primary" type="button">🤖 AI 掃描報價單/圖片自動填入</button>
-            <button id="addEstimateItem" class="button secondary" type="button">＋ 手動新增品項</button>
-            <button id="estimateMissingPrices" class="button secondary" type="button" disabled>AI 依內部資料補估</button>
+            <button id="quickEstimateAiScan" class="button primary" type="button">📷 再拍一張</button>
+            <button id="addEstimateItem" class="button secondary" type="button">＋ 新增品項</button>
+            <button id="estimateMissingPrices" class="button secondary" type="button" disabled>AI 補估</button>
             <button id="recalculateEstimate" class="button ghost" type="button">重新計算</button>
             <button id="copyEstimateSummary" class="button ghost" type="button">📋 複製摘要</button>
-            <label class="estimateDeveloperToggle" title="顯示精確才數、長寬比與除錯欄位"><input id="estimateDeveloperMode" type="checkbox"> 開發者資料</label>
+            <button id="newEstimate" class="button ghost" type="button">清空重建</button>
+            <label class="estimateDeveloperToggle"><input id="estimateDeveloperMode" type="checkbox"> 開發者資料</label>
           </div>
         </div>
-
         <div class="estimateQuickMetrics" aria-label="估價明細摘要">
           <div><span>品項</span><strong id="estimateItemCount">0</strong></div>
           <div><span>已取得價格</span><strong id="estimateMatchedCount">0</strong></div>
           <div class="warning"><span>待補價格</span><strong id="estimateMissingCount">0</strong></div>
           <div class="warning"><span>待補製程</span><strong id="estimateMissingProcessCount">0</strong></div>
         </div>
-
         <div id="estimateItemRows" class="estimateQuickList"></div>
-
         <div class="estimateActionBar">
           <div class="estimateTotals">
             <div><span>樂觀估價</span><strong id="estimateOptimistic">$0</strong><small id="estimateOptimisticCny">¥0</small></div>
@@ -1152,17 +1025,14 @@
             <div><span>整體信心度</span><strong id="estimateConfidence">0%</strong></div>
           </div>
           <div class="estimateSaveActions">
-            <label class="checkboxField estimateSyncCostOption" title="勾選後，儲存估價時會同步建立或更新機台的打樣版費用成本紀錄。">
-              <input id="estimateSyncCost" type="checkbox">
-              <span>同時建立機台成本紀錄</span>
-            </label>
+            <label class="checkboxField estimateSyncCostOption"><input id="estimateSyncCost" type="checkbox"><span>同時建立機台成本紀錄</span></label>
             <button id="saveEstimate" class="button primary" type="button">儲存估價版本</button>
             <button id="saveEstimateAndOptimize" class="button secondary" type="button" hidden>儲存並進行美術降本</button>
           </div>
         </div>
       </div>
 
-      <div class="panel">
+      <div class="panel estimateSavedPanel">
         <div class="panelHead"><div><h2>已儲存估價</h2></div></div>
         <div class="tableWrap"><table class="v20Table"><thead><tr><th>日期</th><th>估價名稱</th><th>機台</th><th>版本</th><th>樂觀</th><th>基準</th><th>保守</th><th>信心</th><th>狀態</th><th>操作</th></tr></thead><tbody id="estimateProjectRows"></tbody></table></div>
       </div>
@@ -1332,6 +1202,38 @@
         <button id="savePersonalGeminiKey" class="button primary" type="submit">驗證並使用個人額度</button>
         <button id="clearPersonalGeminiKey" class="button ghost" type="button">改用公司額度</button>
       </div>
+    </form>
+  </dialog>
+
+  <dialog id="estimateSaveSettingsDialog" class="quickMachineDialog estimateSaveSettingsDialog">
+    <form id="estimateSaveSettingsForm" class="quickMachineDialogForm">
+      <div class="dialogHead">
+        <div><span class="eyebrow">儲存估價</span><h2>選擇估價對象</h2></div>
+        <button id="closeEstimateSaveSettings" class="dialogClose" type="button" aria-label="關閉">×</button>
+      </div>
+      <input id="estimateId" type="hidden">
+      <div class="estimateProjectQuickForm">
+        <div class="estimateTargetPrimary">
+          <label><span>估價對象</span><select id="estimateTargetType"><option value="new" selected>新機台／新專案</option><option value="existing">既有機台</option></select></label>
+          <label id="estimateMachineField" hidden><span>既有機台</span><select id="estimateMachine"></select></label>
+        </div>
+        <div class="estimateProjectActions"><button id="loadMachineActualItems" class="button secondary" type="button" hidden>載入既有機台實際品項</button></div>
+        <details class="estimateAdvancedProject">
+          <summary>⋯ 進階設定</summary>
+          <div class="estimateAdvancedProjectGrid">
+            <label><span>估價名稱</span><input id="estimateName" type="text"></label>
+            <label><span>估價日期</span><input id="estimateDate" type="date"></label>
+            <label><span>內部估價基準</span><select id="estimatePriceBasis"><option value="sampleTwd">台灣打樣 TWD</option><option value="sampleTwdFloor">台灣打樣 TWD（相容舊選項）</option><option value="productionTwd">台灣量產 TWD</option><option value="sampleRmb">中國打樣 RMB → TWD</option><option value="productionRmb">中國量產 RMB → TWD</option><option value="rawTwd">原材料 TWD</option></select></label>
+            <label><span>估價類型</span><select id="estimateOrderType"><option value="auto">自動判斷</option><option value="prototype">打樣</option><option value="smallBatch">小批</option><option value="production">量產</option><option value="newProcess">新工藝</option></select></label>
+            <label><span>版本</span><input id="estimateVersion" type="text" value="v1"></label>
+            <label><span>狀態</span><select id="estimateStatus"><option selected>草稿</option><option>待確認</option><option>已核准</option><option>已作廢</option></select></label>
+            <label><span>打樣除數</span><input id="estimateSampleTwdRmbDivisor" type="number" min="0.01" step="0.01" value="4.5"></label>
+            <label><span>量產除數</span><input id="estimateProductionRmbDivisor" type="number" min="0.01" step="0.01" value="3.3"></label>
+            <label class="wide"><span>備註</span><textarea id="estimateNote" rows="3"></textarea></label>
+          </div>
+        </details>
+      </div>
+      <div class="formActions stickyDialogActions"><button class="button primary" type="submit">確認並儲存</button><button id="cancelEstimateSaveSettings" class="button ghost" type="button">取消</button></div>
     </form>
   </dialog>
 
