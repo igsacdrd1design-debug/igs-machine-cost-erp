@@ -9,7 +9,7 @@
   <meta name="googlebot" content="noindex, nofollow, noarchive, nosnippet">
   <meta name="referrer" content="no-referrer">
   <title>IGS 機台材料成本 ERP｜快速估價</title>
-  <link rel="stylesheet" href="style.css?v=20260626-igs-v3-33-ui-flow-fix">
+  <link rel="stylesheet" href="style.css?v=20260629-igs-v3-35-project-a-cleanup">
 </head>
 <body class="authLocked">
   <section id="authGate" class="authGate" aria-labelledby="loginTitle">
@@ -64,7 +64,6 @@
     <section class="topbar">
       <div>
         <h1 id="pageTitle">首頁</h1>
-        <p id="pageDescription">選擇今天要執行的工作。</p>
       </div>
       <div class="topbarActions">
         <button id="aiAccountButton" class="aiAccountButton missing" type="button">AI 額度：檢查中</button>
@@ -114,7 +113,6 @@
       <section id="homePriceResultsSection" class="homePriceResultsSection" aria-live="polite" hidden>
         <div class="homePriceResultsHead">
           <h2>查價結果</h2>
-          <p class="muted">結果會依認證狀態與報價日期排序。</p>
         </div>
         <div id="homePriceSearchResults" class="homePriceSearchResults"></div>
       </section>
@@ -124,7 +122,6 @@
       <div class="panel filterPanel">
         <div>
           <h2>機台總覽與搜尋</h2>
-          <p class="muted">未輸入關鍵字時會顯示全部機台；也可用機台名稱、代碼、分類或材料品項篩選。</p>
         </div>
         <div class="filterControls machineOverviewControls">
           <label for="categoryFilter">機台分類</label>
@@ -173,7 +170,6 @@
         <div class="panelHead">
           <div>
             <h2>每台機台的個別成本總和</h2>
-            <p class="muted">分別顯示打樣版、測試台與實際費用，不依月份統計。</p>
           </div>
         </div>
         <div class="tableWrap">
@@ -238,7 +234,6 @@
           <div class="panelHead">
             <div>
               <h2>2. 成本歸屬</h2>
-              <p class="muted">這裡只選擇成本要歸入哪一台既有機台，不會重複建立機台主檔。</p>
             </div>
             <span id="quotationAiBadge" class="analysisBadge">尚未辨識</span>
           </div>
@@ -306,7 +301,6 @@
         <div class="panelHead">
           <div>
             <h2>3. 品項與附加費用</h2>
-            <p class="muted">材料可上傳圖片並指定安裝區域；運費、版費、加工費等請用「新增附加費用」建立。</p>
           </div>
           <div class="panelActions">
             <button id="addDraftItem" class="button ghost" type="button">新增材料</button>
@@ -353,7 +347,6 @@
         <div>
           <span class="eyebrow">快速建立機台</span>
           <h2>先加入待送清單，確認後再批次寫入</h2>
-          <p>操作方式與開辦 ERP 相同：逐筆整理、集中檢查，最後一次寫入私人 Google Sheet。</p>
         </div>
         <div class="apiBadge connected">批次寫入已連接</div>
       </div>
@@ -437,7 +430,6 @@
         <div>
           <span class="eyebrow">機台資料與圖片管理</span>
           <h2>修改機台資料、替換主圖，並視需要管理多角度圖片</h2>
-          <p>日常只需在這裡修改機台名稱、代碼、分類、備註或主圖；原本的多角度／360° 功能保留在下方進階圖片設定。</p>
         </div>
         <div id="machine360CompletionBadge" class="apiBadge">尚未選擇機台</div>
       </div>
@@ -446,7 +438,6 @@
         <div class="panelHead">
           <div>
             <h2>1. 選擇要管理的機台</h2>
-            <p class="muted">也可以從「機台總覽」按下「⚙ 編輯機台」直接帶入。</p>
           </div>
           <button class="button ghost" type="button" data-open-view="machines" data-open-title="機台總覽">返回機台總覽</button>
         </div>
@@ -463,7 +454,6 @@
         <div class="panelHead">
           <div>
             <h2>2. 基本資料與主圖</h2>
-            <p class="muted">儲存後會立即更新首頁、機台總覽及機台成本對話框中的名稱與代表圖片。</p>
           </div>
         </div>
         <form id="machineManageForm" class="machineManageForm">
@@ -499,14 +489,13 @@
 
       <details id="machineAdvancedImageSettings" class="machineAdvancedImageSettings">
         <summary>
-          <span><strong>進階圖片設定</strong><small>多角度／360°、AI 補角度與成本位置標記</small></span>
+          <span><strong>進階圖片設定</strong></span>
           <span class="machineAdvancedToggleText">展開設定</span>
         </summary>
         <div class="panel machine360SelectorPanel machineAdvancedProgressPanel">
           <div class="machine360SelectorRow">
             <div>
               <strong>多角度圖片完成度</strong>
-              <p class="muted">可只保留一張正面圖，也能逐步補齊其他角度。</p>
             </div>
             <div class="machine360Progress">
               <span>基準圖完成度</span>
@@ -519,7 +508,6 @@
               <div class="panelHead">
                 <div>
                   <h2>A. 上傳一至四張基準角度圖</h2>
-                  <p class="muted">可分次儲存，不必一次備齊。格式支援 JPG、PNG、WebP；建議所有圖片尺寸與機台中心一致。</p>
                 </div>
               </div>
               <div id="machine360UploadGrid" class="machine360UploadGrid">
@@ -594,7 +582,6 @@
               <div class="machine360Actions">
                 <div>
                   <strong>可分次完成</strong>
-                  <p class="muted">上傳 1 張即可使用單圖偵測；2 張可使用雙圖交叉偵測。其餘角度可之後補上。</p>
                 </div>
                 <button id="saveMachine360Views" class="button primary" type="button">儲存基準角度圖</button>
               </div>
@@ -605,7 +592,6 @@
               <div class="panelHead">
                 <div>
                   <h2>B. 多角度旋轉預覽</h2>
-                  <p class="muted">顯示目前已儲存的基準角度圖。1 張為單圖檢視，2 張以上可左右拖曳切換。</p>
                 </div>
                 <div class="viewerHeadActions">
                   <span id="machine360ViewerBadge" class="apiBadge">尚無可預覽圖片</span>
@@ -659,7 +645,6 @@
               <div class="panelHead">
                 <div>
                   <h2>D. 建立可點擊成本位置</h2>
-                  <p class="muted">選擇已核准的角度圖，點擊圖片建立區域，並綁定該費用階段的材料品項。</p>
                 </div>
               </div>
               <div class="machineMarkerLayout">
@@ -707,7 +692,6 @@
         <div>
           <span class="eyebrow">資料安全匯入</span>
           <h2>先檢查四份 CSV，再依固定順序一次匯入</h2>
-          <p>系統會先驗證欄位與資料列，再依「材料主檔 → 製程規則 → 歷史報價 → 量產參考」寫入。重複匯入相同資料時會更新原紀錄，不會建立第二筆。</p>
         </div>
         <div class="apiBadge connected">可安全重試｜量產資料獨立保存</div>
       </div>
@@ -727,7 +711,6 @@
           <article class="importStepCard" data-import-kind="material">
             <span class="importStepNumber">1</span>
             <h3>材料價格主檔</h3>
-            <p>寫入「材料價格主檔」，提供包價與材料基準。</p>
             <label class="button secondary fileButton">選擇材料 CSV<input id="bulkMaterialPriceCsv" type="file" accept=".csv,text/csv" hidden></label>
             <strong id="bulkMaterialPriceName">尚未選擇</strong>
             <small id="bulkMaterialPriceStatus">等待檔案</small>
@@ -735,7 +718,6 @@
           <article class="importStepCard" data-import-kind="process">
             <span class="importStepNumber">2</span>
             <h3>製程／印刷規則</h3>
-            <p>寫入「內部估價規則」，未定義價格維持待補。</p>
             <label class="button secondary fileButton">選擇製程 CSV<input id="bulkProcessRuleCsv" type="file" accept=".csv,text/csv" hidden></label>
             <strong id="bulkProcessRuleName">尚未選擇</strong>
             <small id="bulkProcessRuleStatus">等待檔案</small>
@@ -743,7 +725,6 @@
           <article class="importStepCard" data-import-kind="history">
             <span class="importStepNumber">3</span>
             <h3>歷史報價待認證</h3>
-            <p>寫入「價格待認證」，不會直接覆蓋正式估價基準。</p>
             <label class="button secondary fileButton">選擇歷史 CSV<input id="bulkPriceReviewCsv" type="file" accept=".csv,text/csv" hidden></label>
             <strong id="bulkPriceReviewName">尚未選擇</strong>
             <small id="bulkPriceReviewStatus">等待檔案</small>
@@ -751,7 +732,6 @@
           <article class="importStepCard" data-import-kind="production">
             <span class="importStepNumber">4</span>
             <h3>量產價格參考</h3>
-            <p>寫入獨立「量產價格參考」分頁，只在量產估價情境使用。</p>
             <label class="button secondary fileButton">選擇量產 CSV<input id="bulkProductionPriceCsv" type="file" accept=".csv,text/csv" hidden></label>
             <strong id="bulkProductionPriceName">尚未選擇</strong>
             <small id="bulkProductionPriceStatus">等待檔案</small>
@@ -762,7 +742,7 @@
 
       <div class="panel">
         <div class="panelHead">
-          <div><h2>目前資料量</h2><p class="muted">重新讀取資料後會顯示 Google Sheet 中的實際筆數。</p></div>
+          <div><h2>目前資料量</h2></div>
           <button id="openAdvancedPriceCenter" class="button ghost" type="button" data-open-view="priceCenter">開啟進階價格中心</button>
         </div>
         <div class="priceReviewMetrics importMetrics">
@@ -774,7 +754,7 @@
       </div>
 
       <div class="panel">
-        <div class="panelHead"><div><h2>量產價格參考預覽</h2><p class="muted">量產資料與台灣打樣歷史分開保存，避免互相覆蓋。</p></div></div>
+        <div class="panelHead"><div><h2>量產價格參考預覽</h2></div></div>
         <div class="tableWrap"><table class="v20Table"><thead><tr><th>品項</th><th>專案／機台</th><th>材質</th><th>尺寸</th><th>RMB</th><th>TWD</th><th>製程</th></tr></thead><tbody id="productionPriceReferenceRows"></tbody></table></div>
       </div>
     </section>
@@ -794,7 +774,6 @@
         <div>
           <span class="eyebrow">低頻工具</span>
           <h2>資料匯入</h2>
-          <p class="muted">材料主檔、製程規則、歷史報價與量產參考統一從這裡匯入，避免佔用日常主導覽。</p>
         </div>
         <button class="button secondary" type="button" data-open-view="dataImport" data-open-title="資料匯入">開啟資料匯入</button>
       </div>
@@ -802,7 +781,7 @@
       <div class="v20Grid twoCol">
         <div class="panel">
           <div class="panelHead">
-            <div><h2>1. 材料價格主檔</h2><p class="muted">新增、修改、刪除或匯入公司材料主檔。近期歷史報價請使用下方「待認證歷史價格」。</p></div>
+            <div><h2>1. 材料價格主檔</h2></div>
             <div class="panelActions">
               <label class="button secondary fileButton">匯入材料主檔 CSV<input id="materialPriceCsv" type="file" accept=".csv,text/csv" hidden></label>
               <button id="exportMaterialPrices" class="button ghost" type="button">匯出材料主檔 CSV</button>
@@ -856,7 +835,6 @@
         <div class="panelHead">
           <div>
             <h2>2. 製程／印刷價格規則</h2>
-            <p class="muted">智能估價會直接同步 Google Sheet「內部估價規則」中的印刷與加工價格；沒有規則的製程會顯示待補，不會算成 0 元。</p>
           </div>
           <div class="panelActions">
             <label class="button secondary fileButton">匯入製程規則 CSV<input id="processRuleCsv" type="file" accept=".csv,text/csv" hidden></label>
@@ -870,7 +848,6 @@
         <div class="panelHead">
           <div>
             <h2>4. 待認證歷史價格</h2>
-            <p class="muted">新取得的估價先匯入這裡；可直接使用「IGS_近期價格待認證匯入.csv」。只有「已認證＋納入基準」才會參與智能估價。</p>
           </div>
           <div class="panelActions">
             <label class="button secondary fileButton">匯入近期價格待認證 CSV<input id="priceReviewCsv" type="file" accept=".csv,text/csv" hidden></label>
@@ -904,7 +881,7 @@
         <div id="priceReviewRows" class="priceReviewRows"><div class="empty">尚未匯入待認證歷史價格。</div></div>
       </div>
       <div class="panel">
-        <div class="panelHead"><div><h2>市場指數紀錄</h2><p class="muted">經人工確認後保存的市場參考。</p></div></div>
+        <div class="panelHead"><div><h2>市場指數紀錄</h2></div></div>
         <div class="tableWrap"><table class="v20Table"><thead><tr><th>日期</th><th>分類</th><th>指數</th><th>變動率</th><th>來源</th><th>自動</th><th>摘要</th><th></th></tr></thead><tbody id="marketIndexRows"></tbody></table></div>
       </div>
     </section>
@@ -924,7 +901,7 @@
         <div class="priceReviewFormGrid">
           <label class="wide"><span>品項名稱 *</span><input id="priceReviewItemName" type="text" required></label>
           <label><span>品項代碼</span><input id="priceReviewItemCode" type="text"></label>
-          <label class="wide"><span>歸屬機台</span><select id="priceReviewMachine"><option value="">未指定機台</option></select><small>選取後，這筆歷史價格會立即出現在該機台的總覽中。</small></label>
+          <label class="wide"><span>歸屬機台</span><select id="priceReviewMachine"><option value="">未指定機台</option></select></label>
           <label><span>專案名稱</span><input id="priceReviewProject" type="text"></label>
           <label><span>費用類型</span><select id="priceReviewCostType"><option>打樣版費用</option><option>測試台費用</option><option>實際費用</option></select></label>
           <label><span>標準材質</span><select id="priceReviewMaterial"></select></label>
@@ -932,7 +909,7 @@
           <label><span>寬 mm</span><input id="priceReviewWidth" type="number" min="0" step="0.1"></label>
           <label><span>高 mm</span><input id="priceReviewHeight" type="number" min="0" step="0.1"></label>
           <label><span>數量</span><input id="priceReviewQty" type="number" min="0" step="0.01" value="1"></label>
-          <label class="automaticUnitField"><span>自動計價單位</span><input id="priceReviewUnit" type="hidden" value="件"><strong id="priceReviewAutoUnit">件</strong><small>依材質自動判斷；板材＝才、貼紙＝件、燈條＝公尺。</small></label>
+          <label class="automaticUnitField"><span>自動計價單位</span><input id="priceReviewUnit" type="hidden" value="件"><strong id="priceReviewAutoUnit">件</strong></label>
           <label><span>實際單價 TWD</span><input id="priceReviewUnitPrice" type="number" min="0" step="0.01"></label>
           <label><span>正式報價日期</span><input id="priceReviewQuoteDate" type="date"></label>
           <label><span>供應商</span><input id="priceReviewSupplier" type="text" list="supplierOptions"></label>
@@ -977,7 +954,6 @@
         <div>
           <span class="eyebrow">快速估價</span>
           <h2>快速估價：掃描、貼文字或手動輸入都能立即試算</h2>
-          <p>小件特殊加工費採 30%，1–5 才耗損率減半；已儲存估價可匯出 PDF／Excel，明細也可直接複製摘要。</p>
         </div>
         <div id="estimateStatusBadge" class="apiBadge">尚未建立估價</div>
       </div>
@@ -985,84 +961,74 @@
       <div class="estimateQuickGrid">
         <div class="panel estimateProjectPanel">
           <div class="panelHead">
-            <div>
-              <h2>1. 估價對象</h2>
-              <p class="muted">新機台不必先建立主檔；既有機台也可載入實際品項。</p>
-            </div>
+            <div><h2>1. 估價對象</h2></div>
             <button id="newEstimate" class="button ghost" type="button">清空重建</button>
           </div>
 
           <form id="estimateProjectForm" class="estimateProjectQuickForm">
             <input id="estimateId" type="hidden">
 
-            <label>
-              <span>估價對象</span>
-              <select id="estimateTargetType">
-                <option value="new">新機台／新專案</option>
-                <option value="existing">既有機台</option>
-              </select>
-            </label>
+            <div class="estimateTargetPrimary">
+              <label>
+                <span>估價對象</span>
+                <select id="estimateTargetType">
+                  <option value="new" selected>新機台／新專案</option>
+                  <option value="existing">既有機台</option>
+                </select>
+              </label>
 
-            <label id="estimateMachineField" hidden>
-              <span>既有機台</span>
-              <select id="estimateMachine"></select>
-            </label>
-
-            <label class="estimateNameField">
-              <span>估價名稱（選填）</span>
-              <input id="estimateName" type="text" placeholder="未填時自動使用 YYYY-MM-DD 估價">
-            </label>
-
-            <label>
-              <span>估價日期</span>
-              <input id="estimateDate" type="date">
-            </label>
-
-
-
-
+              <label id="estimateMachineField" hidden>
+                <span>既有機台</span>
+                <select id="estimateMachine"></select>
+              </label>
+            </div>
 
             <div class="estimateProjectActions">
               <button id="loadMachineActualItems" class="button secondary" type="button" hidden>載入既有機台實際品項</button>
             </div>
 
             <details class="estimateAdvancedProject">
-              <summary>進階設定：基準、類型、版本與狀態</summary>
+              <summary>⋯ 進階設定</summary>
               <div class="estimateAdvancedProjectGrid">
-            <label>
-              <span>內部估價基準</span>
-              <select id="estimatePriceBasis">
-                <option value="sampleTwd">台灣打樣 TWD（統一包價公式）</option>
-                <option value="sampleTwdFloor">台灣打樣 TWD（相容舊選項）</option>
-                <option value="productionTwd">台灣量產 TWD（公司量產價）</option>
-                <option value="sampleRmb">中國打樣 RMB → TWD（經驗係數）</option>
-                <option value="productionRmb">中國量產 RMB → TWD（經驗係數）</option>
-                <option value="rawTwd">原材料 TWD（不套打樣倍率）</option>
-              </select>
-              <small>材料以才數計價，印刷與加工費逐項獨立計算。</small>
-            </label>
-            <label>
-              <span>估價類型</span>
-              <select id="estimateOrderType">
-                <option value="auto">自動判斷</option>
-                <option value="prototype">打樣</option>
-                <option value="smallBatch">小批</option>
-                <option value="production">量產</option>
-                <option value="newProcess">新工藝</option>
-              </select>
-              <small>影響樂觀／基準／保守區間；打樣與新工藝的上緣較高。</small>
-            </label>
-            <label>
-              <span>打樣 TWD → 打樣 RMB 除數</span>
-              <input id="estimateSampleTwdRmbDivisor" type="number" min="0.01" step="0.01" value="4.5">
-            </label>
-            <label>
-              <span>打樣 RMB → 量產 RMB 除數</span>
-              <input id="estimateProductionRmbDivisor" type="number" min="0.01" step="0.01" value="3.3">
-              <small>為符合既有 200 TWD → 44 RMB → 13 RMB 的歷史基準，量產係數套在打樣 RMB 上。</small>
-            </label>
-                <label><span>版本（自動 v1 起算）</span><input id="estimateVersion" type="text" value="v1"></label>
+                <label>
+                  <span>估價名稱</span>
+                  <input id="estimateName" type="text">
+                </label>
+                <label>
+                  <span>估價日期</span>
+                  <input id="estimateDate" type="date">
+                </label>
+                <label>
+                  <span>內部估價基準</span>
+                  <select id="estimatePriceBasis">
+                    <option value="sampleTwd">台灣打樣 TWD</option>
+                    <option value="sampleTwdFloor">台灣打樣 TWD（相容舊選項）</option>
+                    <option value="productionTwd">台灣量產 TWD</option>
+                    <option value="sampleRmb">中國打樣 RMB → TWD</option>
+                    <option value="productionRmb">中國量產 RMB → TWD</option>
+                    <option value="rawTwd">原材料 TWD</option>
+                  </select>
+                </label>
+                <label>
+                  <span>估價類型</span>
+                  <select id="estimateOrderType">
+                    <option value="auto">自動判斷</option>
+                    <option value="prototype">打樣</option>
+                    <option value="smallBatch">小批</option>
+                    <option value="production">量產</option>
+                    <option value="newProcess">新工藝</option>
+                  </select>
+                </label>
+                <label><span>版本</span><input id="estimateVersion" type="text" value="v1"></label>
                 <label><span>狀態</span><select id="estimateStatus"><option selected>草稿</option><option>待確認</option><option>已核准</option><option>已作廢</option></select></label>
+                <label>
+                  <span>打樣除數</span>
+                  <input id="estimateSampleTwdRmbDivisor" type="number" min="0.01" step="0.01" value="4.5">
+                </label>
+                <label>
+                  <span>量產除數</span>
+                  <input id="estimateProductionRmbDivisor" type="number" min="0.01" step="0.01" value="3.3">
+                </label>
                 <label class="wide"><span>備註</span><textarea id="estimateNote" rows="3"></textarea></label>
               </div>
             </details>
@@ -1070,11 +1036,9 @@
         </div>
 
         <div class="panel estimateAiPanel">
-          <p class="estimateMethodHint">以下三種方式擇一使用，不需要全部填寫。</p>
           <div class="panelHead">
             <div>
               <h2>2. AI 掃描匯入</h2>
-              <p class="muted">上傳 JPG、PNG、WebP 或 PDF，辨識品項、材質、尺寸、厚度、製程與可見價格，並直接帶入快速試算。</p>
             </div>
             <span id="estimateAiBadge" class="apiBadge">尚未分析</span>
           </div>
@@ -1120,11 +1084,9 @@
         </div>
 
         <div class="panel estimateTextPanel">
-          <p class="estimateMethodHint">以下三種方式擇一使用，不需要全部填寫。</p>
           <div class="panelHead">
             <div>
               <h2>3. 貼上文字匯入</h2>
-              <p class="muted">直接貼入「編號＋材質／尺寸／厚度／製程」，不需呼叫 AI 也能解析並套用內部價格。</p>
             </div>
             <span id="estimateTextBadge" class="apiBadge">尚未解析</span>
           </div>
@@ -1153,7 +1115,7 @@
             <button id="parseEstimateText" class="button primary" type="button">解析文字並估價</button>
             <button id="clearEstimateText" class="button ghost" type="button">清除文字</button>
           </div>
-          <p id="estimateTextStatus" class="photoStatus muted">可一次貼入多筆，每筆以編號開頭；換行內容會自動接到上一筆。</p>
+          <p id="estimateTextStatus" class="photoStatus muted">尚未解析</p>
         </div>
       </div>
 
@@ -1161,7 +1123,6 @@
         <div class="panelHead estimateWorkspaceHead">
           <div>
             <h2>4. 快速估價明細</h2>
-            <p class="muted">先確認品名、材質、尺寸與數量；計價單位會依材質自動判斷：板材用「才」、貼紙用「件」、燈條用「公尺」。小於 1 才會套用四段平滑計價，不會直接跳成整才高價。</p>
           </div>
           <div class="panelActions">
             <input id="quickEstimateAiScanFile" type="file" hidden accept=".jpg,.jpeg,.png,.webp,.pdf,image/jpeg,image/png,image/webp,application/pdf">
@@ -1186,7 +1147,7 @@
         <div class="estimateActionBar">
           <div class="estimateTotals">
             <div><span>樂觀估價</span><strong id="estimateOptimistic">$0</strong><small id="estimateOptimisticCny">¥0</small></div>
-            <div class="highlight"><span>基準估價</span><strong id="estimateBaseline">$0</strong><small id="estimateBaselineCny">¥0</small></div>
+            <div class="highlight"><span>基準估價</span><strong id="estimateBaseline">$0</strong><small id="estimateBaselineCny">¥0</small><small id="estimateAiTotalReference" class="estimateAiTotalReference" hidden></small></div>
             <div><span>保守估價</span><strong id="estimateConservative">$0</strong><small id="estimateConservativeCny">¥0</small></div>
             <div><span>整體信心度</span><strong id="estimateConfidence">0%</strong></div>
           </div>
@@ -1202,7 +1163,7 @@
       </div>
 
       <div class="panel">
-        <div class="panelHead"><div><h2>已儲存估價</h2><p class="muted">可載入、複製、匯出 PDF／Excel 或刪除。</p></div></div>
+        <div class="panelHead"><div><h2>已儲存估價</h2></div></div>
         <div class="tableWrap"><table class="v20Table"><thead><tr><th>日期</th><th>估價名稱</th><th>機台</th><th>版本</th><th>樂觀</th><th>基準</th><th>保守</th><th>信心</th><th>狀態</th><th>操作</th></tr></thead><tbody id="estimateProjectRows"></tbody></table></div>
       </div>
     </section>
@@ -1214,7 +1175,7 @@
       </div>
       <div class="v20Grid twoCol">
         <div class="panel">
-          <div class="panelHead"><div><h2>1. 建立降本分析</h2><p class="muted">可使用已儲存估價，或直接分析機台的實際費用品項。</p></div></div>
+          <div class="panelHead"><div><h2>1. 建立降本分析</h2></div></div>
           <form id="optimizationForm" class="entryForm compactForm">
             <label><span>分析來源 *</span><select id="optimizationSource"><option value="estimate">智能估價案</option><option value="actual">既有機台實際費用</option></select></label>
             <label id="optimizationEstimateField"><span>估價版本 *</span><select id="optimizationEstimate"><option value="">請選擇估價版本</option></select></label>
@@ -1227,7 +1188,7 @@
           <p id="optimizationStatus" class="photoStatus muted">請先選擇機台。</p>
         </div>
         <div class="panel">
-          <div class="panelHead"><div><h2>2. 視覺概念模擬</h2><p class="muted">使用機台基準圖產生材質／印刷優化概念圖，不是正式完稿。</p></div></div>
+          <div class="panelHead"><div><h2>2. 視覺概念模擬</h2></div></div>
           <label class="fieldLabel"><span>模擬視角</span><select id="simulationView"></select></label>
           <div id="simulationPreview" class="simulationPreview empty">尚未產生模擬圖。</div>
           <div class="formActions"><button id="generateSimulation" class="button secondary" type="button" disabled>產生目前方案概念圖</button></div>
@@ -1239,7 +1200,7 @@
         <div id="optimizationRecommendations" class="recommendationGrid"><div class="empty">尚未產生建議。</div></div>
       </div>
       <div class="panel">
-        <div class="panelHead"><div><h2>歷史建議與追蹤</h2><p class="muted">記錄接受、送美術打樣、送採購詢價或忽略。</p></div></div>
+        <div class="panelHead"><div><h2>歷史建議與追蹤</h2></div></div>
         <div class="tableWrap"><table class="v20Table"><thead><tr><th>機台</th><th>品項</th><th>類型</th><th>原始成本</th><th>優化區間</th><th>節省區間</th><th>信心</th><th>狀態</th><th></th></tr></thead><tbody id="optimizationHistoryRows"></tbody></table></div>
       </div>
     </section>
@@ -1249,7 +1210,6 @@
         <div class="panelHead">
           <div>
             <h2>供應商</h2>
-            <p class="muted">查看供應商及其成本單金額。</p>
           </div>
         </div>
         <div id="supplierCards" class="machineGrid"></div>
@@ -1430,7 +1390,6 @@
         <div>
           <span class="eyebrow">估價單建檔｜快速建立</span>
           <h2>新增歸屬機台</h2>
-          <p>只填必要資料。建立成功後會自動加入「歸屬機台」下拉並選取。</p>
         </div>
         <button id="closeQuotationQuickCreateMachine" class="dialogClose" type="button" aria-label="關閉">×</button>
       </div>
@@ -1470,6 +1429,6 @@
   <script src="https://cdn.jsdelivr.net/npm/jspdf@4.2.1/dist/jspdf.umd.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/jspdf-autotable@5.0.8/dist/jspdf.plugin.autotable.min.js"></script>
   <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
-  <script src="app.js?v=20260626-igs-v3-33-ui-flow-fix"></script>
+  <script src="app.js?v=20260629-igs-v3-35-project-a-cleanup"></script>
 </body>
 </html>
