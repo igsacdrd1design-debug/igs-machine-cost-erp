@@ -7012,7 +7012,11 @@ function unifiedQuantityDiscount(qty){
 function unifiedHasIrregularShape(processTags,item){
   const irregularTags=new Set(['異形切割','異型切割','異形裁切']);
   const tags=Array.isArray(processTags)?processTags:normalizeProcessTags(processTags||item?.processTags||item?.processes||'');
-  return tags.some((tag)=>irregularTags.has(standardizeErpText(tag)));
+  return tags.some((tag)=>{
+    const normalized=standardizeErpText(tag).trim();
+    const canonical=canonicalProcessTag(normalized);
+    return irregularTags.has(normalized)||irregularTags.has(canonical);
+  });
 }
 
 // 1–5 才同時有整才進位，耗損率減半，避免兩種加成疊加過高。
@@ -8211,8 +8215,9 @@ function unifiedProcessCost(item, tag, basisKey, context) {
   const displayName = processTagDisplayLabel(canonicalProcessTag(tag)) || key;
 
   if (rule.type === '每才') {
-    const unitAmount = billingCai * stagePrice;
-    return { amount: unitAmount * qty, unitAmount, label: `${displayName}｜${billingCai}才/件`, source: '統一加工價', billingCai };
+    const processCai = Math.max(0, exactCai);
+    const unitAmount = processCai * stagePrice;
+    return { amount: unitAmount * qty, unitAmount, label: `${displayName}｜${roundDisplay(processCai)}才/件`, source: '統一加工價', billingCai: processCai };
   }
   if (rule.type === '每件') {
     return { amount: stagePrice * qty, unitAmount: stagePrice, label: `${displayName}｜每件`, source: '統一加工價' };
@@ -8540,8 +8545,8 @@ function estimateByUnifiedPricingModel(item) {
     let unitAmount=0;
     let label='';
     if(rule.type==='每才'){
-      unitAmount=isTiny?50:billingCai*stagePrice;
-      label=isTiny?`${display}｜極小件開機費 50/件`:`${display}｜${billingCai}才 × ${roundDisplay(stagePrice)}/才`;
+      unitAmount=isTiny?50:exactCai*stagePrice;
+      label=isTiny?`${display}｜極小件開機費 50/件`:`${display}｜${roundDisplay(exactCai)}才 × ${roundDisplay(stagePrice)}/才`;
     }else if(rule.type==='每件'){
       unitAmount=stagePrice;
       label=`${display}｜每件 ${roundDisplay(stagePrice)}`;
