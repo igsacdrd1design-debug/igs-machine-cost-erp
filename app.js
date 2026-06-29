@@ -1345,7 +1345,14 @@ function activateView(viewId, title = "") {
     if (isAdvancedView) advancedMenu.open = true;
   }
 
-  document.querySelectorAll(".view").forEach((view) => view.classList.toggle("active", view.id === viewId));
+  // 嚴格維持單一作用中的頁面：先清除所有 view，再只啟用目標 view。
+  const targetView = document.getElementById(viewId);
+  document.querySelectorAll(".view").forEach((view) => view.classList.remove("active"));
+  if (targetView?.classList.contains("view")) {
+    targetView.classList.add("active");
+  } else {
+    console.warn(`[activateView] 找不到 view：${viewId}`);
+  }
   const primaryNav = document.querySelector(`.nav[data-view="${viewId}"]`);
   const advancedNav = document.querySelector(`.sideToolAction[data-open-view="${viewId}"]`);
   const viewTrigger = primaryNav || advancedNav;
@@ -8864,10 +8871,9 @@ function recalculateEstimateItem(item){
   let costBeforeRange=0;
 
   if(internalEstimate){
-    const materialLine=toNumber(internalEstimate.materialLineTotal);
-    const materialWithWaste=internalEstimate.wasteHandled?materialLine:materialLine*wasteFactor;
-    const processLine=toNumber(internalEstimate.processLineTotal);
-    costBeforeRange=(materialWithWaste+processLine)*marketFactor+manualExtras;
+    // internalEstimate.unitPrice 已包含數量折扣、異形加成與情境修正係數。
+    // 基準估價必須直接採用折扣後單價，避免再以未修正的材料／加工小計重算。
+    costBeforeRange=toNumber(internalEstimate.unitPrice)*qty;
     item.costBreakdown=internalEstimate.wasteHandled
       ? (internalEstimate.breakdown||[])
       : (internalEstimate.breakdown||[]).map((part)=>part.type==='材料'?{...part,label:`${part.label}｜含損耗 ${toNumber(item.wasteRate)}%`,amount:toNumber(part.amount)*wasteFactor}:part);
