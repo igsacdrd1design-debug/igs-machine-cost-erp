@@ -1,6 +1,6 @@
-/* IGS ERP app.js — 三層估價 fallback 與動態修正係數版 */
+/* IGS ERP app.js — AI 同品項多工序精準合併修正版 */
 // =====================================================
-// IGS 機台材料成本 ERP — 三層估價 fallback 與動態修正係數版
+// IGS 機台材料成本 ERP — AI 同品項多工序精準合併修正版
 // 1. ERP 密碼登入
 // 2. 工作階段驗證
 // 3. 私人 Google Sheet 安全讀取
@@ -7273,13 +7273,189 @@ function mapAiEstimateItem(raw, strategy, fileName) {
   return item;
 }
 
+function estimateAiComparableText(value) {
+  return norm(standardizeErpText(value || '').replace(/\d+(?:\.\d+)?\s*mm/gi, ''));
+}
+
+function estimateAiDimensionPair(item) {
+  return [
+    Math.max(0, toNumber(item?.widthMm)),
+    Math.max(0, toNumber(item?.heightMm)),
+  ];
+}
+
+function estimateAiSameDimension(left, right, tolerance = 0.01) {
+  const a = estimateAiDimensionPair(left);
+  const b = estimateAiDimensionPair(right);
+  if (!(a[0] > 0 && a[1] > 0 && b[0] > 0 && b[1] > 0)) return false;
+  return Math.abs(a[0] - b[0]) <= tolerance && Math.abs(a[1] - b[1]) <= tolerance;
+}
+
+function estimateAiSameThickness(left, right, tolerance = 0.01) {
+  const leftThickness = numericThickness(left?.thickness);
+  const rightThickness = numericThickness(right?.thickness);
+  if (!(leftThickness > 0) && !(rightThickness > 0)) return true;
+  if (!(leftThickness > 0) || !(rightThickness > 0)) return false;
+  return Math.abs(leftThickness - rightThickness) <= tolerance;
+}
+
+function estimateAiSameMaterial(left, right) {
+  const leftFamily = canonicalAiMaterialName(left?.material || left?.originalMaterial || '') || estimateAiComparableText(left?.material);
+  const rightFamily = canonicalAiMaterialName(right?.material || right?.originalMaterial || '') || estimateAiComparableText(right?.material);
+  if (!leftFamily || !rightFamily || leftFamily !== rightFamily) return false;
+
+  const leftOriginal = estimateAiComparableText(left?.originalMaterial || left?.material);
+  const rightOriginal = estimateAiComparableText(right?.originalMaterial || right?.material);
+  if (leftOriginal && rightOriginal && leftOriginal !== rightOriginal && !leftOriginal.includes(rightOriginal) && !rightOriginal.includes(leftOriginal)) {
+    return false;
+  }
+  return true;
+}
+
+function estimateAiProcessOnlyName(value) {
+  const text = standardizeErpText(value || '').replace(/[\s　_\-－—–/／()（）【】\[\]]+/g, '');
+  if (!text) return true;
+  const stripped = text
+    .replace(/正面|背面|雙面|单面|單面|局部|滿版|满版/g, '')
+    .replace(/四色直噴|四色印刷|四色|白色直噴|白色印刷|白墨|黑色直噴|黑色印刷|黑墨/g, '')
+    .replace(/切割外型|裁切外型|異形切割|異型切割|異形裁切|切割|裁切/g, '')
+    .replace(/雕刻|折彎|導C角|燒光|3D膜|鏡面貼紙|背膠|印刷|直噴|噴印|加工|製程/g, '')
+    .replace(/[＋+、,，;；]/g, '');
+  return stripped.length === 0;
+}
+
+function estimateAiNameCore(value) {
+  return standardizeErpText(value || '')
+    .replace(/\d+(?:\.\d+)?\s*[×xX＊*]\s*\d+(?:\.\d+)?\s*mm/gi, '')
+    .replace(/正面|背面|雙面|单面|單面|局部|滿版|满版/g, '')
+    .replace(/四色直噴|四色印刷|四色|白色直噴|白色印刷|白墨|黑色直噴|黑色印刷|黑墨/g, '')
+    .replace(/切割外型|裁切外型|異形切割|異型切割|異形裁切|切割|裁切/g, '')
+    .replace(/雕刻|折彎|導C角|燒光|3D膜|鏡面貼紙|背膠|印刷|直噴|噴印|加工|製程/g, '')
+    .replace(/[\s　_\-－—–/／()（）【】\[\]＋+、,，;；]/g, '')
+    .toLowerCase();
+}
+
+function estimateAiNameMaterialKeywords(value) {
+  const text = standardizeErpText(value || '').replace(/[\s　_\-－—–/／()（）【】\[\]]+/g, '').toLowerCase();
+  const keywords = [];
+  if (/pvc/.test(text)) keywords.push('pvc');
+  if (/壓克力|压克力|亞克力|亚克力/.test(text)) keywords.push('壓克力');
+  if (/安迪板|發泡板|发泡板/.test(text)) keywords.push('安迪板');
+  if (/(^|[^a-z])pc([^a-z]|$)|聚碳酸酯/.test(text)) keywords.push('pc');
+  if (/(^|[^a-z])pet([^a-z]|$)/.test(text)) keywords.push('pet');
+  if (/貼紙|贴纸|透貼|透贴|銀貼|银贴|地板貼|地板贴/.test(text)) keywords.push('貼紙');
+  return unique(keywords);
+}
+
+function estimateAiNamesAreSimilar(left, right) {
+  const leftValue = left?.name || left?.originalName || '';
+  const rightValue = right?.name || right?.originalName || '';
+  const leftName = estimateAiComparableText(leftValue);
+  const rightName = estimateAiComparableText(rightValue);
+  if (leftName && rightName && leftName === rightName) return true;
+
+  const leftProcessOnly = estimateAiProcessOnlyName(leftValue);
+  const rightProcessOnly = estimateAiProcessOnlyName(rightValue);
+  if (leftProcessOnly || rightProcessOnly) return true;
+
+  const leftCore = estimateAiNameCore(leftValue);
+  const rightCore = estimateAiNameCore(rightValue);
+  if (leftCore && rightCore && (leftCore === rightCore || leftCore.includes(rightCore) || rightCore.includes(leftCore))) return true;
+
+  const leftKeywords = new Set(estimateAiNameMaterialKeywords(leftValue));
+  return estimateAiNameMaterialKeywords(rightValue).some((keyword) => leftKeywords.has(keyword));
+}
+
+function shouldMergeAiEstimateItems(left, right) {
+  if (!left?.aiImported || !right?.aiImported) return false;
+  if (!estimateAiSameMaterial(left, right)) return false;
+  if (!estimateAiSameDimension(left, right)) return false;
+  if (!estimateAiSameThickness(left, right)) return false;
+
+  const leftCode = estimateAiComparableText(left.code);
+  const rightCode = estimateAiComparableText(right.code);
+  if (leftCode && rightCode && leftCode !== rightCode) return false;
+
+  return estimateAiNamesAreSimilar(left, right);
+}
+
+function mergeEstimateTextValues(...values) {
+  return unique(values.flatMap((value) => String(value || '').split(/[｜\n]/)).map((value) => value.trim()).filter(Boolean)).join('｜');
+}
+
+function mergeAiEstimateItemPair(target, source) {
+  const targetTags = extractEstimateProcessTags(target);
+  const sourceTags = extractEstimateProcessTags(source);
+  const mergedTags = unique([...targetTags, ...sourceTags]);
+  applyEstimateProcessSummary(target, mergedTags.join('、'));
+
+  if (!target.code && source.code) target.code = source.code;
+  if (!target.thickness && source.thickness) target.thickness = source.thickness;
+  if (!target.originalMaterial && source.originalMaterial) target.originalMaterial = source.originalMaterial;
+  if (!target.spec && source.spec) target.spec = source.spec;
+  if (!target.originalSpec && source.originalSpec) target.originalSpec = source.originalSpec;
+  if (!target.unit && source.unit) target.unit = source.unit;
+
+  // 合併後保留第一筆名稱；數量依規格取較大值，避免工序列重複累加數量。
+  target.qty = Math.max(1, toNumber(target.qty) || 1, toNumber(source.qty) || 1);
+
+  target.constraints = mergeEstimateTextValues(target.constraints, source.constraints);
+  target.specialEffect = mergeEstimateTextValues(target.specialEffect, source.specialEffect).replace(/｜/g, '＋');
+  target.confidenceScore = Math.max(toNumber(target.confidenceScore), toNumber(source.confidenceScore));
+  target.dimensionConfidence = Math.max(toNumber(target.dimensionConfidence), toNumber(source.dimensionConfidence));
+  target._missingFields = unique([...(target._missingFields || []), ...(source._missingFields || [])]);
+  target._aiConfidenceLow = Boolean(target._aiConfidenceLow && source._aiConfidenceLow);
+
+  const targetDocumentPrice = target.manualPrice && /AI辨識文件單價/.test(target.priceSource || '');
+  const sourceDocumentPrice = source.manualPrice && /AI辨識文件單價/.test(source.priceSource || '');
+  if (targetDocumentPrice || sourceDocumentPrice) {
+    const combinedVisiblePrice = (targetDocumentPrice ? toNumber(target.baseUnitPrice) : 0) + (sourceDocumentPrice ? toNumber(source.baseUnitPrice) : 0);
+    if (combinedVisiblePrice > 0) {
+      target.manualPrice = true;
+      target.baseUnitPrice = combinedVisiblePrice;
+      target.manualPriceConfidence = Math.max(toNumber(target.manualPriceConfidence), toNumber(source.manualPriceConfidence), 75);
+      target.priceSource = mergeEstimateTextValues(target.priceSource, source.priceSource);
+    }
+  } else {
+    target.manualPrice = false;
+    target.baseUnitPrice = 0;
+    target.priceId = '';
+    target.priceManuallySelected = false;
+  }
+
+  target.formulaPrice = 0;
+  target.formulaConfidence = 0;
+  target.aiPrice = 0;
+  target.aiConfidence = 0;
+  target._needsAiFallback = false;
+  target._autoAiAttempted = false;
+  target._autoAiPending = false;
+  target.estimateFailReason = '';
+  applyEstimateDimensionNormalization(target);
+  recalculateEstimateItem(target);
+  refreshEstimateAiMissingFields(target);
+  return target;
+}
+
+function mergeAiEstimateItems(items) {
+  const merged = [];
+  (Array.isArray(items) ? items : []).forEach((item) => {
+    const existing = merged.find((candidate) => shouldMergeAiEstimateItems(candidate, item));
+    if (existing) mergeAiEstimateItemPair(existing, item);
+    else merged.push(item);
+  });
+  return merged;
+}
+
 function applyEstimateSourceAnalysis(result) {
   const strategy = $('estimatePriceStrategy').value;
   const mode = $('estimateImportMode').value;
   const fileName = state.estimateDocumentPayload?.name || '';
-  const imported = (Array.isArray(result.items) ? result.items : [])
+  const mappedItems = (Array.isArray(result.items) ? result.items : [])
     .map((raw) => mapAiEstimateItem(raw, strategy, fileName))
     .filter((item) => item.name || item.material || item.spec || item.baseUnitPrice || item.widthMm || item.heightMm);
+  const imported = mergeAiEstimateItems(mappedItems);
+  const mergedRowCount = Math.max(0, mappedItems.length - imported.length);
 
   if (!imported.length) throw new Error('AI 沒有辨識到可用的估價品項');
 
@@ -7314,10 +7490,10 @@ function applyEstimateSourceAnalysis(result) {
   const missingFieldCount=imported.reduce((sum,item)=>sum+(item.aiMissingFields?.length||0),0);
   $('estimateAiBadge').textContent = missingFieldCount ? `待補 ${missingFieldCount} 欄` : 'AI 已帶入';
   setEstimateAiStatus(
-    `已帶入 ${imported.length} 筆：公司價格 ${companyMatched} 筆、內部規則 ${internalPriced} 筆、文件單價 ${documentPriced} 筆、缺價 ${missing} 筆、紅色待補欄位 ${missingFieldCount} 個（${missingFieldRows} 筆）。`,
+    `已帶入 ${imported.length} 筆${mergedRowCount ? `（已自動合併 ${mergedRowCount} 筆同材質／尺寸製程列）` : ''}：公司價格 ${companyMatched} 筆、內部規則 ${internalPriced} 筆、文件單價 ${documentPriced} 筆、缺價 ${missing} 筆、紅色待補欄位 ${missingFieldCount} 個（${missingFieldRows} 筆）。`,
     (missing||missingFieldCount) ? 'warn' : 'success'
   );
-  return { imported: imported.length, companyMatched, internalPriced, documentPriced, missing, missingFieldCount };
+  return { imported: imported.length, mergedRowCount, companyMatched, internalPriced, documentPriced, missing, missingFieldCount };
 }
 
 async function analyzeEstimateSourceDocument() {
