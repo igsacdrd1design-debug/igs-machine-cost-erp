@@ -3835,7 +3835,8 @@ dialog .panelActions .button {
 
 
 /* v3.37 最終版：快速估價首屏簡化 */
-.quickEstimateSimplified{display:grid;gap:20px}
+.quickEstimateSimplified{gap:20px}
+.view.quickEstimateSimplified.active{display:grid}
 .estimateCaptureHero{min-height:calc(100vh - 150px);display:grid;align-content:start;gap:12px}
 .estimateCapturePanel{min-height:66vh;display:grid;align-content:center;gap:16px;padding:clamp(18px,4vw,48px);border:1px solid var(--line);border-radius:24px;background:linear-gradient(145deg,#ffffff,#f1f8f8);box-shadow:0 16px 48px rgba(27,62,72,.08)}
 .estimateUploadHero{min-height:clamp(340px,52vh,560px);border-width:3px;border-radius:24px;background:rgba(255,255,255,.76)}
